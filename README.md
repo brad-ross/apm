@@ -1,3 +1,5 @@
+This repository contains the code to implement the methods and simulations described in ["Estimating Counterfactual Matrix Means with Short Panel Data"](https://arxiv.org/abs/2312.07520) by Lihua Lei and Brad Ross
+
 ## Setup
 
 The code in this repository is written in a mix of `julia` and `R`, so both need to be installed to be able to run it.
