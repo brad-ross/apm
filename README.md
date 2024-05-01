@@ -4,7 +4,7 @@ The code in this repository is written in a mix of `julia` and `R`, so both need
 
 Unfortunately, we have not yet put together a setup script that automatically installs all required `julia` and `R` packages, so for now, make sure to install the packages listed at the top of each file before running anything. 
 
-The scripts that execute the empirical application based on the Veneto Worker Histories (VWH) data (see the next section for a list) require the creation of `data` and `output` directories in the root directory of this repository, as well as `data/raw_data` and `data/clean_data` subdirectories. The raw Veneto Worker Histories `.dta` files must also be downloaded and placed in the `data/raw_data` directory.
+The scripts that execute the empirical application based on the Veneto Worker Histories (VWH) data (see the next section for a list) require the creation of `data` and `output` directories in the root directory of this repository, as well as `data/raw_data` and `data/clean_data` subdirectories. The raw Veneto Worker Histories `.dta` files obtained via the instructions [here](https://www.frdb.org/en/dati/dati-inps-carriere-lavorative-in-veneto/) must also be downloaded and placed in the `data/raw_data` directory.
 
 ## Scripts for the Empirical Application
 
