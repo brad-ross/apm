@@ -1,0 +1,4 @@
+data/**
+output/**
+**/*.pdf
+**/.DS_Store
