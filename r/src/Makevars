@@ -1,0 +1,12 @@
+# Makevars for apm R package
+# This tells R how to compile and link the core C++ library
+
+# Additional include directories
+PKG_CPPFLAGS = -I../../core/src -I/opt/homebrew/include
+PKG_CXXFLAGS = -std=c++17
+
+# Additional library paths and libraries
+PKG_LIBS = -L/opt/homebrew/lib -larmadillo -llapack -lblas
+
+# Object files (including the core library)
+OBJECTS = r_bindings.o RcppExports.o ../../core/src/apm.o 

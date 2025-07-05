@@ -1,0 +1,122 @@
+# C++ build artifacts
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+.vscode/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+*.cmake
+Makefile
+compile_commands.json
+
+# R package artifacts
+r/src/*.o
+r/src/*.so
+r/src/*.dll
+r/src-i386/
+r/src-x64/
+r/man/
+r/Meta/
+r/doc/
+r/R/RcppExports.R
+r/src/RcppExports.cpp
+r/NAMESPACE
+r/revdep/
+r/docs/
+r/pkgdown/
+r/inst/doc/
+r/*.tar.gz
+r/*.Rcheck/
+r/.Rproj.user/
+r/*.Rproj
+r/vignettes/*.html
+r/vignettes/*.pdf
+r/vignettes/*.R
+
+# Python artifacts (for future development)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.egg-info/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Documentation
+docs/_build/
+docs/site/
+*.pdf
+*.aux
+*.log
+*.out
+*.toc
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+
+# Testing
+coverage/
+.coverage
+.nyc_output/
+junit.xml
+test-results.xml
+
+# Package managers
+node_modules/
+vendor/
+.bundle/
+
+# CI/CD
+.github/secrets/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.log
+*.cache
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+
+# Backup files
+*~
+*.bak
+*.orig
+*.swp

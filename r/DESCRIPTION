@@ -1,0 +1,31 @@
+Package: apm
+Type: Package
+Title: The Aggregated Projection Matrix Method
+Version: 0.1.0
+Authors@R: c(
+    person("Brad", "Ross", email = "rossb@nber.org", role = c("aut", "cre")),
+    person("Lihua", "Lei", email = "lihualei@stanford.edu", role = c("aut"))
+    )
+Description: Implements the Aggregated Projection Matrix (APM) method for 
+    identifying and estimating average counterfactual outcomes under a low-rank 
+    factor model with short panel data and general outcome missingness patterns.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: 
+    R (>= 3.5.0)
+Imports: 
+    Rcpp (>= 1.0.0),
+    RcppArmadillo (>= 0.9.000.0.0)
+LinkingTo: 
+    Rcpp,
+    RcppArmadillo
+SystemRequirements: 
+    C++17,
+    Armadillo (>= 9.000),
+    Boost (>= 1.70.0)
+Suggests: 
+    testthat (>= 3.0.0)
+RoxygenNote: 7.2.0
+BugReports: https://github.com/brad-ross/apm/issues
+URL: https://github.com/brad-ross/apm 
