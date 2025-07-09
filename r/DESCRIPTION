@@ -26,6 +26,6 @@ SystemRequirements:
     Boost (>= 1.70.0)
 Suggests: 
     testthat (>= 3.0.0)
-RoxygenNote: 7.2.0
+RoxygenNote: 7.3.2
 BugReports: https://github.com/brad-ross/apm/issues
 URL: https://github.com/brad-ross/apm 

@@ -25,7 +25,7 @@ r/Meta/
 r/doc/
 r/R/RcppExports.R
 r/src/RcppExports.cpp
-r/NAMESPACE
+# r/NAMESPACE # TODO: figure out how to automatically generate a NAMESPACE file when using Rcpp
 r/revdep/
 r/docs/
 r/pkgdown/
