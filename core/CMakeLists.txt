@@ -32,6 +32,16 @@ target_link_libraries(apm_core PUBLIC
     Boost::boost
 )
 
+# On macOS, link against the Accelerate framework for BLAS/LAPACK
+if(APPLE)
+    find_library(ACCELERATE_LIBRARY Accelerate)
+    if(ACCELERATE_LIBRARY)
+        target_link_libraries(apm_core PUBLIC ${ACCELERATE_LIBRARY})
+    else()
+        message(WARNING "Accelerate framework not found on Apple system.")
+    endif()
+endif()
+
 # Add compiler flags for Armadillo
 target_compile_definitions(apm_core PUBLIC
     ARMA_DONT_USE_WRAPPER=1
