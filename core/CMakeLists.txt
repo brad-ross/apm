@@ -18,6 +18,7 @@ find_package(Boost REQUIRED COMPONENTS graph)
 # Create the core library
 add_library(apm_core STATIC
     src/apm.cpp
+    src/linear_algebra_utils.cpp
 )
 
 target_include_directories(apm_core PUBLIC
@@ -58,5 +59,9 @@ install(TARGETS apm_core
 )
 
 install(FILES src/apm.h
+    DESTINATION include/apm
+)
+
+install(FILES src/linear_algebra_utils.h
     DESTINATION include/apm
 ) 
