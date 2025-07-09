@@ -7,6 +7,7 @@ find_package(GTest REQUIRED)
 # Create test executable
 add_executable(test_apm_core
     test_apm.cpp
+    test_linear_algebra_utils.cpp
 )
 
 # Link with the core library and Google Test
