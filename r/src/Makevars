@@ -1,12 +1,12 @@
 # Makevars for apm R package
 # This tells R how to compile and link the core C++ library
 
-# Additional include directories
-PKG_CPPFLAGS = -I../../core/src -I/opt/homebrew/include
+# Use RcppArmadillo flags for consistent compilation and define USING_R flag
+PKG_CPPFLAGS = $(shell $(R_HOME)/bin/Rscript -e "RcppArmadillo:::CxxFlags()") -I../../core/src -DUSING_R
 PKG_CXXFLAGS = -std=c++17
 
-# Additional library paths and libraries
-PKG_LIBS = -L/opt/homebrew/lib -larmadillo -llapack -lblas
+# RcppArmadillo is header-only, no special linking needed
+PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
 # Object files (including the core library)
-OBJECTS = r_bindings.o RcppExports.o ../../core/src/apm.o 
+OBJECTS = r_bindings.o RcppExports.o ../../core/src/apm.o ../../core/src/linear_algebra_utils.o 

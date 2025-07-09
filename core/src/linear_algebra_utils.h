@@ -1,7 +1,11 @@
 #ifndef LINEAR_ALGEBRA_UTILS_H
 #define LINEAR_ALGEBRA_UTILS_H
 
+#ifdef USING_R
+#include <RcppArmadillo.h>
+#else
 #include <armadillo>
+#endif
 
 namespace apm {
 namespace internal {

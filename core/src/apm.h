@@ -1,7 +1,11 @@
 #ifndef APM_H
 #define APM_H
 
+#ifdef USING_R
+#include <RcppArmadillo.h>
+#else
 #include <armadillo>
+#endif
 #include <string>
 #include <vector>
 
