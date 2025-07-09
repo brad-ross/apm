@@ -70,8 +70,4 @@ install(TARGETS apm_core
 
 install(FILES src/apm.h
     DESTINATION include/apm
-)
-
-install(FILES src/linear_algebra_utils.h
-    DESTINATION include/apm
 ) 

@@ -1,6 +1,7 @@
 #include "linear_algebra_utils.h"
 
 namespace apm {
+namespace internal {
 
 arma::mat projection_matrix(const arma::mat& X) {
     if (X.n_cols == 0) {
@@ -25,4 +26,5 @@ arma::mat projection_matrix(const arma::mat& X) {
     return U_r * U_r.t();
 }
 
+} // namespace internal
 } // namespace apm 

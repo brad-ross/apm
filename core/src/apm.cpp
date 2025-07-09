@@ -53,10 +53,12 @@ arma::mat compute_aggregated_projection_matrix(
         arma::mat padded_G_c(dims.T, dims.r, arma::fill::zeros);
         padded_G_c.rows(T_c) = G_c;
         
-        arma::mat P_c = projection_matrix(padded_G_c);
+        arma::mat P_c = apm::internal::projection_matrix(padded_G_c);
         
         arma::mat P_c_perp = -P_c;
-        P_c_perp.diag().elem(T_c) -= 1.0;
+        for (const arma::uword& idx : T_c) {
+            P_c_perp(idx, idx) += 1.0;
+        }
         
         agg_proj_mat += P_c_perp / cohort_factor_matrices.size();
     }

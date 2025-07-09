@@ -4,6 +4,7 @@
 #include <armadillo>
 
 namespace apm {
+namespace internal {
 
 /**
  * @brief Computes the projection matrix onto the column space of a matrix.
@@ -17,6 +18,7 @@ namespace apm {
  */
 arma::mat projection_matrix(const arma::mat& X);
 
+} // namespace internal
 } // namespace apm
 
 #endif // LINEAR_ALGEBRA_UTILS_H 
