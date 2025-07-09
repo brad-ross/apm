@@ -15,4 +15,4 @@ std::string get_version();
 
 } // namespace apm
 
-#endif // APM_H 
+#endif // APM_H
