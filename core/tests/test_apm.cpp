@@ -37,6 +37,37 @@ std::vector<arma::mat> generate_rotation_matrices(size_t C, arma::uword size) {
 
 void run_alignment_test(
     const arma::mat& true_factors,
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    const arma::vec& cohort_weights) {
+    
+    // Create differentially rotated cohort-specific factor matrices 
+    // by right-multiplying the true factors by arbitrary full-rank matrices.
+    const size_t C = observed_outcome_indices.size();
+    const arma::uword r = true_factors.n_cols;
+    std::vector<arma::mat> rotation_matrices = generate_rotation_matrices(C, r);
+    
+    std::vector<arma::mat> cohort_factor_matrices;
+    for (size_t c = 0; c < C; ++c) {
+        cohort_factor_matrices.push_back(
+            true_factors.rows(observed_outcome_indices[c]) * rotation_matrices[c]);
+    }
+
+    // Run the alignment function.
+    arma::mat aligned_factors = apm::align_factors_using_apm(cohort_factor_matrices, observed_outcome_indices, cohort_weights);
+
+    // Check the result. The column space of the aligned factors should be the
+    // same as the true factors. We test this by comparing their projection matrices.
+    arma::mat proj_aligned = apm::internal::projection_matrix(aligned_factors);
+    arma::mat proj_true = apm::internal::projection_matrix(true_factors);
+
+    ASSERT_TRUE(arma::approx_equal(proj_aligned, proj_true, "absdiff", 1e-9))
+        << "Projection matrix of aligned factors does not match projection matrix of true factors." << std::endl
+        << "proj_aligned:" << std::endl << proj_aligned << std::endl
+        << "proj_true:" << std::endl << proj_true;
+}
+
+void run_alignment_test(
+    const arma::mat& true_factors,
     const std::vector<arma::uvec>& observed_outcome_indices) {
     
     // Create differentially rotated cohort-specific factor matrices 
@@ -88,6 +119,25 @@ TEST(APMTest, AlignFactorsAPMStaircasePattern) {
     };
 
     run_alignment_test(true_factors, observed_outcome_indices);
+}
+
+TEST(APMTest, AlignFactorsAPMStaircasePatternWeighted) {
+    arma::mat true_factors = {
+        {0.1, 0.6},
+        {0.2, 0.7},
+        {0.3, 0.8},
+        {0.4, 0.9},
+        {0.5, 1.0}
+    };
+
+    std::vector<arma::uvec> observed_outcome_indices = {
+        {0, 1, 2},
+        {1, 2, 3},
+        {2, 3, 4}
+    };
+
+    arma::vec cohort_weights = {1.0, 2.0, 1.0};
+    run_alignment_test(true_factors, observed_outcome_indices, cohort_weights);
 }
 
 TEST(APMTest, AlignFactorsAPMNonContiguousPattern) {

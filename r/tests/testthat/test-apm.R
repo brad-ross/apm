@@ -32,7 +32,9 @@ generate_symmetric_rotation_matrices <- function(C, r) {
 }
 
 # Helper function to run the core alignment test logic
-run_alignment_test_r <- function(true_factors, observed_outcome_indices) {
+run_alignment_test_r <- function(true_factors, 
+                                 observed_outcome_indices,
+                                 cohort_weights = NULL) {
   # Generate deterministic, full-rank rotation matrices
   C <- length(observed_outcome_indices)
   r <- ncol(true_factors)
@@ -46,7 +48,8 @@ run_alignment_test_r <- function(true_factors, observed_outcome_indices) {
   # Run the alignment function
   aligned_factors <- align_factors_using_apm(
     cohort_factor_matrices,
-    observed_outcome_indices
+    observed_outcome_indices,
+    cohort_weights = cohort_weights
   )
   
   # Check the result by comparing projection matrices
@@ -73,6 +76,30 @@ test_that("APM alignment works for a staircase pattern", {
   )
   
   run_alignment_test_r(true_factors, observed_outcome_indices)
+})
+
+test_that("APM alignment with weights works for a staircase pattern", {
+  true_factors <- matrix(c(
+    0.1, 0.6,
+    0.2, 0.7,
+    0.3, 0.8,
+    0.4, 0.9,
+    0.5, 1.0
+  ), nrow = 5, ncol = 2, byrow = TRUE)
+  
+  observed_outcome_indices <- list(
+    c(1, 2, 3),
+    c(2, 3, 4),
+    c(3, 4, 5)
+  )
+  
+  cohort_weights <- c(1.0, 2.0, 1.0)
+  
+  run_alignment_test_r(
+    true_factors, 
+    observed_outcome_indices, 
+    cohort_weights = cohort_weights
+  )
 })
 
 test_that("APM alignment works for a non-contiguous pattern", {
