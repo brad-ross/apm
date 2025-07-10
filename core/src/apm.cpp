@@ -92,6 +92,14 @@ arma::mat compute_aggregated_projection_matrix(
     return agg_proj_mat;
 }
 
+arma::mat compute_bridge_functions(
+    const arma::mat& G,
+    const arma::uvec& T_c) {
+    
+    const arma::mat G_c = G.rows(T_c);
+    return apm::internal::multi_min_norm_solve(G_c.t(), G.t()).t();
+}
+
 } // anonymous namespace
 
 namespace apm {
@@ -127,6 +135,36 @@ arma::mat align_factors_using_apm(
     return arma::null(agg_proj_mat);
 }
 
+//==============================================================================
+// Outcome Imputation
+//==============================================================================
+
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& a,
+    const arma::uvec& T_c,
+    const arma::vec& m_c,
+    const arma::mat& X_c) {
+    
+    const arma::mat B_c = compute_bridge_functions(G, T_c);
+    const arma::vec g_0_obs = g_0.rows(T_c);
+    const arma::mat X_c_obs = X_c.rows(T_c);
+    
+    return B_c * (m_c - g_0_obs - X_c_obs * a) + g_0 + X_c * a;
+}
+
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::uvec& T_c,
+    const arma::vec& m_c) {
+
+    const arma::mat B_c = compute_bridge_functions(G, T_c);
+    const arma::vec g_0_obs = g_0.rows(T_c);
+    return B_c * (m_c - g_0_obs) + g_0;
+}
+
 arma::vec impute_outcomes(
     const arma::mat& G,
     const arma::vec& a,
@@ -134,14 +172,86 @@ arma::vec impute_outcomes(
     const arma::vec& m_c,
     const arma::mat& X_c) {
     
-    if (T_c.empty()) {
-        return arma::vec(G.n_rows, arma::fill::zeros);
+    const arma::mat B_c = compute_bridge_functions(G, T_c);
+    const arma::mat X_c_obs = X_c.rows(T_c);
+    return B_c * (m_c - X_c_obs * a) + X_c * a;
+}
+
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::uvec& T_c,
+    const arma::vec& m_c) {
+    
+    const arma::mat B_c = compute_bridge_functions(G, T_c);
+    return B_c * m_c;
+}
+
+//==============================================================================
+// Outcome Mean Estimation Across Cohorts
+//==============================================================================
+
+arma::mat estimate_outcome_means_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& a,
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    const std::vector<arma::vec>& m_c_vec,
+    const std::vector<arma::mat>& X_c_vec) {
+
+    const arma::uword T = G.n_rows;
+    const arma::uword C = observed_outcome_indices.size();
+
+    if (g_0.n_elem != T) {
+        throw std::invalid_argument("The number of elements in g_0 must match the number of rows in G.");
+    }
+    if (observed_outcome_indices.size() != C || m_c_vec.size() != C || X_c_vec.size() != C) {
+        throw std::invalid_argument("Input vectors must have a size equal to the number of cohorts.");
     }
 
-    const arma::mat G_c = G.rows(T_c);
-    const arma::mat B_c = internal::multi_min_norm_solve(G_c.t(), G.t()).t();
+    arma::mat m(C, T, arma::fill::zeros);
+    for (arma::uword c = 0; c < C; ++c) {
+        if (observed_outcome_indices[c].size() != m_c_vec[c].n_elem) {
+            throw std::invalid_argument("The number of observed outcomes for each cohort must match the number of outcomes in the m_c vector.");
+        }
+        if (X_c_vec[c].n_rows != T) {
+            throw std::invalid_argument("The number of rows in X_c must match the number of rows in G.");
+        }
+        if (X_c_vec[c].n_cols != a.n_elem) {
+            throw std::invalid_argument("The number of columns in X_c must match the number of elements in a.");
+        }
+
+        const arma::uvec& T_c = observed_outcome_indices[c];
+        m.row(c) = impute_outcomes(G, g_0, a, T_c, m_c_vec[c], X_c_vec[c]).t();
+    }
+    return m;
+}
+
+arma::mat estimate_outcome_means_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    const std::vector<arma::vec>& m_c_vec) {
     
-    return B_c * (m_c - X_c.rows(T_c) * a) + X_c * a;
+    const arma::uword T = G.n_rows;
+    const arma::uword C = observed_outcome_indices.size();
+
+    if (g_0.n_elem != T) {
+        throw std::invalid_argument("The number of elements in g_0 must match the number of rows in G.");
+    }
+    if (observed_outcome_indices.size() != C || m_c_vec.size() != C) {
+        throw std::invalid_argument("Input vectors must have a size equal to the number of cohorts.");
+    }
+
+    arma::mat m(C, T, arma::fill::zeros);
+    for (arma::uword c = 0; c < C; ++c) {
+        if (observed_outcome_indices[c].size() != m_c_vec[c].n_elem) {
+            throw std::invalid_argument("The number of observed outcomes for each cohort must match the number of outcomes in the m_c vector.");
+        }
+
+        const arma::uvec& T_c = observed_outcome_indices[c];
+        m.row(c) = impute_outcomes(G, g_0, T_c, m_c_vec[c]).t();
+    }
+    return m;
 }
 
 arma::mat estimate_outcome_means_across_cohorts(
@@ -155,21 +265,45 @@ arma::mat estimate_outcome_means_across_cohorts(
     const arma::uword C = observed_outcome_indices.size();
 
     if (observed_outcome_indices.size() != C || m_c_vec.size() != C || X_c_vec.size() != C) {
-        throw std::invalid_argument("The number of observed outcome indices, m_c vectors, and X_c matrices must match the number of cohorts.");
+        throw std::invalid_argument("Input vectors must have a size equal to the number of cohorts.");
     }
 
-    arma::mat m(C, T);
-
+    arma::mat m(C, T, arma::fill::zeros);
     for (arma::uword c = 0; c < C; ++c) {
-        m.row(c) = impute_outcomes(
-            G,
-            a,
-            observed_outcome_indices[c],
-            m_c_vec[c],
-            X_c_vec[c]
-        ).t();
+        if (observed_outcome_indices[c].size() != m_c_vec[c].n_elem) {
+            throw std::invalid_argument("The number of observed outcomes for each cohort must match the number of outcomes in the m_c vector.");
+        }
+        if (X_c_vec[c].n_rows != T) {
+            throw std::invalid_argument("The number of rows in X_c must match the number of rows in G.");
+        }
+
+        const arma::uvec& T_c = observed_outcome_indices[c];
+        m.row(c) = impute_outcomes(G, a, T_c, m_c_vec[c], X_c_vec[c]).t();
+    }
+    return m;
+}
+
+arma::mat estimate_outcome_means_across_cohorts(
+    const arma::mat& G,
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    const std::vector<arma::vec>& m_c_vec) {
+
+    const arma::uword T = G.n_rows;
+    const arma::uword C = observed_outcome_indices.size();
+
+    if (observed_outcome_indices.size() != C || m_c_vec.size() != C) {
+        throw std::invalid_argument("Input vectors must have a size equal to the number of cohorts.");
     }
 
+    arma::mat m(C, T, arma::fill::zeros);
+    for (arma::uword c = 0; c < C; ++c) {
+        if (observed_outcome_indices[c].size() != m_c_vec[c].n_elem) {
+            throw std::invalid_argument("The number of observed outcomes for each cohort must match the number of outcomes in the m_c vector.");
+        }
+
+        const arma::uvec& T_c = observed_outcome_indices[c];
+        m.row(c) = impute_outcomes(G, T_c, m_c_vec[c]).t();
+    }
     return m;
 }
 
