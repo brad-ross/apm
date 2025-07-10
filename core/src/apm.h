@@ -70,6 +70,50 @@ arma::mat align_factors_using_apm(
     const std::vector<arma::uvec>& observed_outcome_indices,
     const arma::vec& cohort_weights);
 
+/**
+ * @brief Estimates outcomes for a representative unit, e.g. the average unit in a cohort.
+ *
+ * This function estimates the outcomes for all T time periods for a representative unit
+ * based on its observed outcomes and covariates. The representative unit is typically
+ * the average unit in a cohort.
+ *
+ * @param G A T x r matrix of factors.
+ * @param a A q-dimensional vector of covariate coefficients.
+ * @param T_c A vector of indices for the observed time periods for the cohort.
+ * @param m_c A vector containing the observed outcomes for the representative unit.
+ * @param X_c A T x q matrix containing the values of q covariates corresponding to each outcome.
+ * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
+ */
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& a,
+    const arma::uvec& T_c,
+    const arma::vec& m_c,
+    const arma::mat& X_c);
+
+/**
+ * @brief Estimates mean outcomes for each cohort.
+ *
+ * This function estimates the mean values of all T outcomes for each cohort
+ * based on average observed outcomes and covariates for each cohort.
+ *
+ * @param G A T x r matrix whose rows are estimated factor vectors.
+ * @param a A q-dimensional vector of estimated covariate coefficients.
+ * @param observed_outcome_indices A vector where each element is a vector of 
+ *                                 indices for the observed time periods for a cohort.
+ * @param m_c_vec A vector of arma::vec, where each vector m_c contains the 
+ *                observed outcomes for a cohort.
+ * @param X_c_vec A vector of T x q matrices, where each matrix X_c contains 
+ *                the average values of q covariates for each outcome within a cohort.
+ * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
+ */
+arma::mat estimate_outcome_means_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& a,
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    const std::vector<arma::vec>& m_c_vec,
+    const std::vector<arma::mat>& X_c_vec);
+
 } // namespace apm
 
 #endif // APM_H

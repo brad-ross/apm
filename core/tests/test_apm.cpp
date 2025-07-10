@@ -162,4 +162,46 @@ TEST(APMTest, AlignFactorsAPMNonContiguousPattern) {
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
-} 
+}
+
+TEST(APMTest, EstimateOutcomeMeansAcrossCohortsTest) {
+    const arma::uword T = 4, r = 2, C = 2, q = 2;
+    std::vector<arma::uvec> observed_outcome_indices = {{0, 1, 2}, {1, 2, 3}};
+    
+    const arma::mat G = {{1, 1}, {2, 4}, {3, 9}, {4, 16}};
+    const arma::vec a = {0.5, 1.0};
+
+    const std::vector<arma::vec> l_c = {
+        {1.0, 2.0},
+        {3.0, 4.0}
+    };
+
+    arma::mat X1 = {
+        {0.1, 0.5},
+        {0.2, 0.6},
+        {0.3, 0.7},
+        {0.4, 0.8}
+    };
+    arma::mat X2 = {
+        {1.1, 1.5},
+        {1.2, 1.6},
+        {1.3, 1.7},
+        {1.4, 1.8}
+    };
+    std::vector<arma::mat> X_c_vec = {X1, X2};
+
+    arma::mat m(C, T);
+    m.row(0) = (G * l_c[0] + X1 * a).t();
+    m.row(1) = (G * l_c[1] + X2 * a).t();
+    
+    const std::vector<arma::vec> m_c_vec = {
+        arma::vec(m.row(0).t()).elem(observed_outcome_indices[0]),
+        arma::vec(m.row(1).t()).elem(observed_outcome_indices[1])
+    };
+
+    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+        G, a, observed_outcome_indices, m_c_vec, X_c_vec
+    );
+    
+    ASSERT_TRUE(arma::approx_equal(estimated_m, m, "absdiff", 1e-9));
+}
