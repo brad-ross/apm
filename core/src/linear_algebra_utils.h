@@ -22,6 +22,20 @@ namespace internal {
  */
 arma::mat projection_matrix(const arma::mat& X);
 
+/**
+ * @brief Computes the minimum-norm solution to a system of linear equations.
+ *
+ * This function solves the system AX = B. If the system is overdetermined,
+ * it finds the solution that minimizes the Frobenius norm of the residual ||AX - B||_F.
+ * If the system is underdetermined, it finds the solution with the minimum Frobenius
+ * norm ||X||_F among all possible solutions.
+ *
+ * @param A The matrix of coefficients.
+ * @param B The matrix of dependent values.
+ * @return The minimum-frobenius norm solution matrix X.
+ */
+arma::mat multi_min_norm_solve(const arma::mat& A, const arma::mat& B);
+
 } // namespace internal
 } // namespace apm
 

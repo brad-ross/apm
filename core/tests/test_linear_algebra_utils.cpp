@@ -44,3 +44,22 @@ TEST(LinearAlgebraUtilsTest, ProjectionMatrixZeroCols) {
     ASSERT_EQ(P.n_cols, 3);
     ASSERT_TRUE(arma::all(arma::vectorise(P) == 0.0));
 } 
+
+TEST(LinearAlgebraUtilsTest, MinNormSolveUnderdetermined) {
+    // Underdetermined system: 2 equations, 3 unknowns.
+    arma::mat A = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    arma::mat B = {{7.0, 8.0}, {9.0, 10.0}};
+
+    arma::mat X = apm::internal::multi_min_norm_solve(A, B);
+
+    // 1. Check if the solution satisfies the equation.
+    ASSERT_TRUE(arma::approx_equal(A * X, B, "absdiff", 1e-9));
+
+    // 2. Check if the solution has the minimum norm.
+    // The min-norm solution must be orthogonal to the null space of A.
+    arma::mat null_space_basis = arma::null(A);
+    ASSERT_GT(null_space_basis.n_cols, 0) << "Null space should not be empty for an underdetermined system.";
+
+    ASSERT_TRUE(arma::approx_equal(X.t() * null_space_basis, 
+        arma::zeros(X.n_cols, null_space_basis.n_cols), "absdiff", 1e-9));
+} 

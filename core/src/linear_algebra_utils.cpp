@@ -26,5 +26,12 @@ arma::mat projection_matrix(const arma::mat& X) {
     return U_r * U_r.t();
 }
 
+arma::mat multi_min_norm_solve(const arma::mat& A, const arma::mat& B) {
+    if (A.n_rows != B.n_rows) {
+        throw std::invalid_argument("The number of rows in A must match the number of rows in B.");
+    }
+    return arma::pinv(A) * B;
+}
+
 } // namespace internal
 } // namespace apm 
