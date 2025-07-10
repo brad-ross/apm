@@ -3,3 +3,5 @@ useDynLib(apm, .registration = TRUE)
 
 export(get_version)
 export(align_factors_using_apm)
+export(impute_outcomes)
+export(estimate_outcome_means_across_cohorts)
