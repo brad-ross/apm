@@ -44,3 +44,63 @@ arma::mat align_factors_using_apm(
 
     return apm::align_factors_using_apm(cpp_factor_matrices, cpp_observed_indices);
 } 
+
+//' Impute outcomes for a representative unit
+//'
+//' @param G A T x r matrix of factors.
+//' @param a A q-dimensional vector of covariate coefficients.
+//' @param T_c A vector of 1-based indices for the observed time periods for the cohort.
+//' @param m_c A vector containing the observed outcomes for the representative unit.
+//' @param X_c A T x q matrix containing the values of q covariates corresponding to each outcome.
+//' @return A T-dimensional vector containing the estimated outcomes for the representative unit.
+//' @export
+// [[Rcpp::export]]
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& a,
+    const arma::uvec& T_c,
+    const arma::vec& m_c,
+    const arma::mat& X_c) {
+    
+    // R is 1-based, C++ is 0-based.
+    return apm::impute_outcomes(G, a, T_c - 1, m_c, X_c);
+}
+
+//' Estimate mean outcomes across cohorts
+//'
+//' @param G A T x r matrix whose rows are estimated factor vectors.
+//' @param a A q-dimensional vector of estimated covariate coefficients.
+//' @param observed_outcome_indices A list where each element is a vector of 
+//'                                 1-based indices for the observed time periods for a cohort.
+//' @param m_c_vec A list of arma::vec, where each vector m_c contains the 
+//'                observed outcomes for a cohort.
+//' @param X_c_vec A list of T x q matrices, where each matrix X_c contains 
+//'                the average values of q covariates for each outcome within a cohort.
+//' @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
+//' @export
+// [[Rcpp::export]]
+arma::mat estimate_outcome_means_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& a,
+    Rcpp::List observed_outcome_indices,
+    Rcpp::List m_c_vec,
+    Rcpp::List X_c_vec) {
+
+    std::vector<arma::uvec> cpp_observed_indices;
+    for (SEXP vec : observed_outcome_indices) {
+        // R is 1-based, C++ is 0-based.
+        cpp_observed_indices.push_back(Rcpp::as<arma::uvec>(vec) - 1);
+    }
+
+    std::vector<arma::vec> cpp_m_c_vec;
+    for (SEXP vec : m_c_vec) {
+        cpp_m_c_vec.push_back(Rcpp::as<arma::vec>(vec));
+    }
+
+    std::vector<arma::mat> cpp_X_c_vec;
+    for (SEXP mat : X_c_vec) {
+        cpp_X_c_vec.push_back(Rcpp::as<arma::mat>(mat));
+    }
+    
+    return apm::estimate_outcome_means_across_cohorts(G, a, cpp_observed_indices, cpp_m_c_vec, cpp_X_c_vec);
+} 

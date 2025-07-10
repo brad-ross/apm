@@ -119,3 +119,58 @@ test_that("APM alignment works for a non-contiguous pattern", {
   
   run_alignment_test_r(true_factors, observed_outcome_indices)
 }) 
+
+test_that("Outcome estimation and imputation functions work correctly", {
+  Tval <- 4
+  r <- 2
+  Cval <- 2
+  q <- 2
+  
+  # Note: R uses 1-based indexing
+  observed_outcome_indices <- list(c(1, 2, 3), c(2, 3, 4))
+  
+  G <- matrix(c(1, 1, 2, 4, 3, 9, 4, 16), nrow = Tval, ncol = r, byrow = TRUE)
+  a <- c(0.5, 1.0)
+  
+  l_c <- list(c(1.0, 2.0), c(3.0, 4.0))
+  
+  X1 <- matrix(c(
+    0.1, 0.5,
+    0.2, 0.6,
+    0.3, 0.7,
+    0.4, 0.8
+  ), nrow = Tval, ncol = q, byrow = TRUE)
+  
+  X2 <- matrix(c(
+    1.1, 1.5,
+    1.2, 1.6,
+    1.3, 1.7,
+    1.4, 1.8
+  ), nrow = Tval, ncol = q, byrow = TRUE)
+  
+  X_c_vec <- list(X1, X2)
+  
+  # Calculate true means
+  m <- matrix(0, nrow = Cval, ncol = Tval)
+  m[1, ] <- (G %*% l_c[[1]] + X1 %*% a)
+  m[2, ] <- (G %*% l_c[[2]] + X2 %*% a)
+  
+  m_c_vec <- list(
+    m[1, observed_outcome_indices[[1]]],
+    m[2, observed_outcome_indices[[2]]]
+  )
+  
+  # Test estimate_outcome_means_across_cohorts
+  estimated_m <- estimate_outcome_means_across_cohorts(
+    G, a, observed_outcome_indices, m_c_vec, X_c_vec
+  )
+  
+  expect_equal(estimated_m, m, tolerance = 1e-9)
+  
+  # Test impute_outcomes using the first cohort's data
+  estimated_m_cohort1 <- impute_outcomes(
+    G, a, observed_outcome_indices[[1]], m_c_vec[[1]], X_c_vec[[1]]
+  )
+  
+  expect_equal(as.vector(estimated_m_cohort1), m[1, ], tolerance = 1e-9)
+}) 
