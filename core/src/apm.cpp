@@ -240,56 +240,6 @@ arma::vec impute_outcomes(
 }
 
 //==============================================================================
-// Identification Verification Via the O^3 Algorithm
-//==============================================================================
-
-std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
-    const std::vector<arma::uvec>& observed_outcome_indices,
-    arma::uword r) {
-    
-    const arma::uword C = observed_outcome_indices.size();
-
-    // Iteration 0: Initial super cohorts are just the individual cohorts
-    std::vector<std::set<arma::uword>> current_super_cohorts(C);
-    for (arma::uword c = 0; c < C; ++c) {
-        current_super_cohorts[c] = {c};
-    }
-
-    std::vector<std::vector<std::set<arma::uword>>> all_iterations_super_cohorts;
-
-    // Repeat until convergence
-    while (true) {
-        const arma::uword num_super_cohorts = current_super_cohorts.size();
-        
-        // 1. Construct O3 graph
-        Graph o3_graph = construct_o3_graph(current_super_cohorts, observed_outcome_indices, r);
-
-        // 2. Find connected components
-        std::vector<int> component(num_super_cohorts);
-        int num_components = boost::connected_components(o3_graph, &component[0]);
-
-        // 3. Check for convergence
-        if (num_components == num_super_cohorts) {
-            break;
-        }
-
-        // 4. Form new super cohorts
-        std::vector<std::set<arma::uword>> next_super_cohorts(num_components);
-        for (arma::uword m = 0; m < num_super_cohorts; ++m) {
-            next_super_cohorts[component[m]].insert(
-                current_super_cohorts[m].begin(),
-                current_super_cohorts[m].end()
-            );
-        }
-
-        current_super_cohorts = next_super_cohorts;
-        all_iterations_super_cohorts.push_back(current_super_cohorts);
-    }
-
-    return all_iterations_super_cohorts;
-}
-
-//==============================================================================
 // Outcome Mean Estimation Across Cohorts
 //==============================================================================
 
@@ -408,6 +358,83 @@ arma::mat estimate_outcome_means_across_cohorts(
         m.row(c) = impute_outcomes(G, T_c, m_c_vec[c]).t();
     }
     return m;
+}
+
+//==============================================================================
+// Identification Verification Via the O^3 Algorithm
+//==============================================================================
+
+std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    arma::uword r) {
+    
+    const arma::uword C = observed_outcome_indices.size();
+
+    // Iteration 0: Initial super cohorts are just the individual cohorts
+    std::vector<std::set<arma::uword>> current_super_cohorts(C);
+    for (arma::uword c = 0; c < C; ++c) {
+        current_super_cohorts[c] = {c};
+    }
+
+    std::vector<std::vector<std::set<arma::uword>>> all_iterations_super_cohorts;
+    
+    // Repeat until convergence
+    while (true) {
+        const arma::uword num_super_cohorts = current_super_cohorts.size();
+        
+        // 1. Construct O3 graph
+        Graph o3_graph = construct_o3_graph(current_super_cohorts, observed_outcome_indices, r);
+
+        // 2. Find connected components
+        std::vector<int> component(num_super_cohorts);
+        int num_components = boost::connected_components(o3_graph, &component[0]);
+
+        // 3. Check for convergence
+        if (num_components == num_super_cohorts) {
+            break;
+        }
+
+        // 4. Form new super cohorts
+        std::vector<std::set<arma::uword>> next_super_cohorts(num_components);
+        for (arma::uword m = 0; m < num_super_cohorts; ++m) {
+            next_super_cohorts[component[m]].insert(
+                current_super_cohorts[m].begin(),
+                current_super_cohorts[m].end()
+            );
+        }
+
+        current_super_cohorts = next_super_cohorts;
+        all_iterations_super_cohorts.push_back(current_super_cohorts);
+    }
+
+    return all_iterations_super_cohorts;
+}
+
+bool aligned_factors_identified(
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    arma::uword r) {
+
+    const arma::uword C = observed_outcome_indices.size();
+
+    if (C <= 1) {
+        return true;
+    }
+
+    auto super_cohort_iterations = o3_algorithm(observed_outcome_indices, r);
+
+    // If no iterations were recorded, it means the cohorts did not merge at all.
+    // Since C > 1, this means it's not identified.
+    if (super_cohort_iterations.empty()) {
+        return false;
+    }
+    
+    // Check the final state of super-cohorts (the last element of the iterations vector).
+    const auto& final_super_cohorts = super_cohort_iterations.back();
+
+    // Identification requires that all cohorts merge into a single super-cohort.
+    // This means the final list of super-cohorts has size 1, and that single
+    // super-cohort contains all C original cohorts.
+    return final_super_cohorts.size() == 1 && final_super_cohorts[0].size() == C;
 }
 
 } // namespace apm

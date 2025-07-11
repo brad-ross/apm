@@ -33,7 +33,7 @@ std::string get_version();
  * of the factor model.
  * @param observed_outcome_indices A vector of the same length as cohort_factor_matrices.
  *                                 Each element is a vector of indices indicating
- *                                 which time periods were observed for the
+ *                                 which outcomes were observed for the
  *                                 corresponding cohort. The number of indices
  *                                 must match the number of rows in the cohort's
  *                                 factor matrix.
@@ -58,7 +58,7 @@ arma::mat align_factors_using_apm(
  * of the factor model.
  * @param observed_outcome_indices A vector of the same length as cohort_factor_matrices.
  *                                 Each element is a vector of indices indicating
- *                                 which time periods were observed for the
+ *                                 which outcomes were observed for the
  *                                 corresponding cohort. The number of indices
  *                                 must match the number of rows in the cohort's
  *                                 factor matrix.
@@ -80,7 +80,7 @@ arma::mat align_factors_using_apm(
  * @param G A T x r matrix of estimated factors.
  * @param g_0 A T-dimensional vector of estimated outcome fixed effects.
  * @param a A q-dimensional vector of estimated covariate coefficients.
- * @param T_c A vector of indices for the observed time periods for the cohort.
+ * @param T_c A vector of indices for the observed outcomes for the cohort.
  * @param m_c A vector containing the observed outcomes for the representative unit.
  * @param X_c A T x q matrix containing the values of q covariates corresponding to each outcome for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
@@ -97,7 +97,7 @@ arma::vec impute_outcomes(
  * @brief Estimates outcomes for a representative unit (factors and fixed effects).
  * @param G A T x r matrix of estimated factors.
  * @param g_0 A T-dimensional vector of estimated outcome fixed effects.
- * @param T_c A vector of indices for the observed time periods for the cohort.
+ * @param T_c A vector of indices for the observed outcomes for the cohort.
  * @param m_c A vector containing the observed outcomes for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
@@ -111,7 +111,7 @@ arma::vec impute_outcomes(
  * @brief Estimates outcomes for a representative unit (factors and covariates).
  * @param G A T x r matrix of estimated factors.
  * @param a A q-dimensional vector of estimated covariate coefficients.
- * @param T_c A vector of indices for the observed time periods for the cohort.
+ * @param T_c A vector of indices for the observed outcomes for the cohort.
  * @param m_c A vector containing the observed outcomes for the representative unit.
  * @param X_c A T x q matrix containing the values of q covariates corresponding to each outcome for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
@@ -126,7 +126,7 @@ arma::vec impute_outcomes(
 /**
  * @brief Estimates outcomes for a representative unit (factors only).
  * @param G A T x r matrix of estimated factors.
- * @param T_c A vector of indices for the observed time periods for the cohort.
+ * @param T_c A vector of indices for the observed outcomes for the cohort.
  * @param m_c A vector containing the observed outcomes for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
@@ -144,7 +144,7 @@ arma::vec impute_outcomes(
  * @param G A T x r matrix whose rows are estimated factor vectors.
  * @param g_0 A T-dimensional vector of estimated outcome fixed effects.
  * @param a A q-dimensional vector of estimated covariate coefficients.
- * @param observed_outcome_indices A vector where each element is a vector of indices for the observed time periods for a cohort.
+ * @param observed_outcome_indices A vector where each element is a vector of indices for the observed outcomes for a cohort.
  * @param m_c_vec A vector of arma::vec, where each vector m_c contains the observed outcomes for a cohort.
  * @param X_c_vec A vector of T x q matrices, where each matrix X_c contains the average values of q covariates for each outcome within a cohort.
  * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
@@ -161,7 +161,7 @@ arma::mat estimate_outcome_means_across_cohorts(
  * @brief Estimates mean outcomes for each cohort (factors and fixed effects).
  * @param G A T x r matrix whose rows are estimated factor vectors.
  * @param g_0 A T-dimensional vector of estimated outcome fixed effects.
- * @param observed_outcome_indices A vector where each element is a vector of indices for the observed time periods for a cohort.
+ * @param observed_outcome_indices A vector where each element is a vector of indices for the observed outcomes for a cohort.
  * @param m_c_vec A vector of arma::vec, where each vector m_c contains the observed outcomes for a cohort.
  * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
  */
@@ -175,7 +175,7 @@ arma::mat estimate_outcome_means_across_cohorts(
  * @brief Estimates mean outcomes for each cohort (factors and covariates).
  * @param G A T x r matrix whose rows are estimated factor vectors.
  * @param a A q-dimensional vector of estimated covariate coefficients.
- * @param observed_outcome_indices A vector where each element is a vector of indices for the observed time periods for a cohort.
+ * @param observed_outcome_indices A vector where each element is a vector of indices for the observed outcomes for a cohort.
  * @param m_c_vec A vector of arma::vec, where each vector m_c contains the observed outcomes for a cohort.
  * @param X_c_vec A vector of T x q matrices, where each matrix X_c contains the average values of q covariates for each outcome within a cohort.
  * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
@@ -190,7 +190,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 /**
  * @brief Estimates mean outcomes for each cohort (factors only).
  * @param G A T x r matrix whose rows are estimated factor vectors.
- * @param observed_outcome_indices A vector where each element is a vector of indices for the observed time periods for a cohort.
+ * @param observed_outcome_indices A vector where each element is a vector of indices for the observed outcomes for a cohort.
  * @param m_c_vec A vector of arma::vec, where each vector m_c contains the observed outcomes for a cohort.
  * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
  */
@@ -204,22 +204,39 @@ arma::mat estimate_outcome_means_across_cohorts(
 //==============================================================================
 
 /**
- * @brief Implements the Observed Outcome Overlap (O3) algorithm to identify super cohorts.
+ * @brief Implements the Observed Outcome Overlap (O^3) algorithm to assess factor identification.
  *
  * This algorithm iteratively groups cohorts based on the overlap of their
  * observed outcomes. Two super cohorts are merged if the number of their
- * shared outcomes meets or exceeds a specified threshold, `r`. The process
+ * shared outcomes meets or exceeds the model rank, `r`. The process
  * continues until no more cohorts can be merged.
  *
  * @param observed_outcome_indices A vector where each element is a vector of
- *                                 indices for the observed time periods for a cohort.
+ *                                 indices corresponding to the observed outcomes for a cohort.
  * @param r The model rank, used as the minimum overlap threshold for merging cohorts.
  * @return A vector containing the lists of super cohorts at each iteration of the
- *         algorithm. Each list of super cohorts is a vector of vectors, where the
- *         inner vectors contain the indices of the original cohorts forming a
- *         super cohort.
+ *         algorithm. Each list of super cohorts is a vector of sets of indices 
+ *         corresponding to the original cohorts together forming a super cohort.
  */
 std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    arma::uword r);
+
+/**
+ * @brief Checks if the factors are identified across all cohorts.
+ *
+ * This function uses the O^3 algorithm to determine if there is sufficient
+ * overlap in observed outcomes across all cohorts to uniquely identify all factor 
+ * vectors expressed with respect to a common basis. Identification is achieved if 
+ * the algorithm terminates with a single super cohort containing all of the 
+ * original cohorts.
+ *
+ * @param observed_outcome_indices A vector where each element is a vector of
+ *                                 indices for the observed outcomes for a cohort.
+ * @param r The model rank.
+ * @return `true` if the factors are identified, `false` otherwise.
+ */
+bool aligned_factors_identified(
     const std::vector<arma::uvec>& observed_outcome_indices,
     arma::uword r);
 

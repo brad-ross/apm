@@ -291,6 +291,8 @@ TEST(APMTest, O3Algorithm_StaircasePattern) {
     }
 
     ASSERT_EQ(super_cohort_iterations, expected_output);
+
+    ASSERT_TRUE(apm::aligned_factors_identified(observed_outcome_indices, r));
 }
 
 TEST(APMTest, O3Algorithm_NonContiguous) {
@@ -321,6 +323,30 @@ TEST(APMTest, O3Algorithm_NonContiguous) {
     }
 
     ASSERT_EQ(super_cohort_iterations, expected_output);
+
+    ASSERT_TRUE(apm::aligned_factors_identified(observed_outcome_indices, r));
+}
+
+TEST(APMTest, FactorsNotIdentifiedOneIteration) {
+    std::vector<arma::uvec> observed_outcome_indices = {
+        {0, 1},
+        {1, 2, 3},
+        {2, 3, 4}
+    };
+    arma::uword r = 2;
+
+    ASSERT_FALSE(apm::aligned_factors_identified(observed_outcome_indices, r));
+}
+
+TEST(APMTest, FactorsNotIdentifiedNoIterations) {
+    std::vector<arma::uvec> observed_outcome_indices = {
+        {0, 1},
+        {1, 2},
+        {2, 3, 4}
+    };
+    arma::uword r = 2;
+
+    ASSERT_FALSE(apm::aligned_factors_identified(observed_outcome_indices, r));
 }
 
 int main(int argc, char **argv) {
