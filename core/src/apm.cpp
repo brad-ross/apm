@@ -2,6 +2,11 @@
 #include "linear_algebra_utils.h"
 #include <stdexcept>
 #include <vector>
+#include <numeric>
+#include <set>
+
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/connected_components.hpp>
 
 namespace { // Anonymous namespace for helper functions
 
@@ -100,6 +105,54 @@ arma::mat compute_bridge_functions(
     return apm::internal::multi_min_norm_solve(G_c.t(), G.t()).t();
 }
 
+// Define the graph type using Boost Graph Library
+using Graph = boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS>;
+
+// Helper to compute the union of observed outcomes for a super cohort
+std::set<arma::uword> get_observed_outcomes_for_super_cohort(
+    const std::set<arma::uword>& super_cohort,
+    const std::vector<arma::uvec>& observed_outcome_indices) {
+    
+    std::set<arma::uword> all_indices;
+    for (const auto& cohort_idx : super_cohort) {
+        const arma::uvec& outcomes = observed_outcome_indices.at(cohort_idx);
+        all_indices.insert(outcomes.begin(), outcomes.end());
+    }
+
+    return all_indices;
+}
+
+Graph construct_o3_graph(
+    const std::vector<std::set<arma::uword>>& super_cohorts,
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    arma::uword r) {
+    
+    const arma::uword num_super_cohorts = super_cohorts.size();
+    Graph o3_graph(num_super_cohorts);
+
+    std::vector<std::set<arma::uword>> super_cohort_outcomes(num_super_cohorts);
+    for(arma::uword m = 0; m < num_super_cohorts; ++m) {
+        super_cohort_outcomes[m] = get_observed_outcomes_for_super_cohort(super_cohorts[m], observed_outcome_indices);
+    }
+
+    for (arma::uword m1 = 0; m1 < num_super_cohorts; ++m1) {
+        for (arma::uword m2 = m1 + 1; m2 < num_super_cohorts; ++m2) {
+            std::set<arma::uword> intersection;
+            std::set_intersection(
+                super_cohort_outcomes[m1].begin(), super_cohort_outcomes[m1].end(),
+                super_cohort_outcomes[m2].begin(), super_cohort_outcomes[m2].end(),
+                std::inserter(intersection, intersection.begin())
+            );
+
+            if (intersection.size() >= r) {
+                boost::add_edge(m1, m2, o3_graph);
+            }
+        }
+    }
+
+    return o3_graph;
+}
+
 } // anonymous namespace
 
 namespace apm {
@@ -184,6 +237,56 @@ arma::vec impute_outcomes(
     
     const arma::mat B_c = compute_bridge_functions(G, T_c);
     return B_c * m_c;
+}
+
+//==============================================================================
+// Identification Verification Via the O^3 Algorithm
+//==============================================================================
+
+std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    arma::uword r) {
+    
+    const arma::uword C = observed_outcome_indices.size();
+
+    // Iteration 0: Initial super cohorts are just the individual cohorts
+    std::vector<std::set<arma::uword>> current_super_cohorts(C);
+    for (arma::uword c = 0; c < C; ++c) {
+        current_super_cohorts[c] = {c};
+    }
+
+    std::vector<std::vector<std::set<arma::uword>>> all_iterations_super_cohorts;
+
+    // Repeat until convergence
+    while (true) {
+        const arma::uword num_super_cohorts = current_super_cohorts.size();
+        
+        // 1. Construct O3 graph
+        Graph o3_graph = construct_o3_graph(current_super_cohorts, observed_outcome_indices, r);
+
+        // 2. Find connected components
+        std::vector<int> component(num_super_cohorts);
+        int num_components = boost::connected_components(o3_graph, &component[0]);
+
+        // 3. Check for convergence
+        if (num_components == num_super_cohorts) {
+            break;
+        }
+
+        // 4. Form new super cohorts
+        std::vector<std::set<arma::uword>> next_super_cohorts(num_components);
+        for (arma::uword m = 0; m < num_super_cohorts; ++m) {
+            next_super_cohorts[component[m]].insert(
+                current_super_cohorts[m].begin(),
+                current_super_cohorts[m].end()
+            );
+        }
+
+        current_super_cohorts = next_super_cohorts;
+        all_iterations_super_cohorts.push_back(current_super_cohorts);
+    }
+
+    return all_iterations_super_cohorts;
 }
 
 //==============================================================================

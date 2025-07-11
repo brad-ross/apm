@@ -11,39 +11,35 @@ find_package(PkgConfig REQUIRED)
 # Configure Armadillo as header-only
 set(ARMA_DONT_USE_WRAPPER 1)
 find_package(Armadillo REQUIRED)
+include_directories(${ARMADILLO_INCLUDE_DIRS})
 
 # Find Boost (for Graph Library)
 find_package(Boost REQUIRED COMPONENTS graph)
+include_directories(${Boost_INCLUDE_DIRS})
 
 # Create the core library
-add_library(apm_core STATIC
-    src/apm.cpp
-    src/linear_algebra_utils.cpp
-)
+add_library(apm src/apm.cpp src/linear_algebra_utils.cpp)
+target_include_directories(apm PUBLIC src)
 
-target_include_directories(apm_core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${ARMADILLO_INCLUDE_DIRS}
-)
-
-target_link_libraries(apm_core PUBLIC
-    ${ARMADILLO_LIBRARIES}
-    Boost::boost
+# Link libraries
+target_link_libraries(apm
+    PUBLIC
+        ${ARMADILLO_LIBRARIES}
+        ${Boost_LIBRARIES}
 )
 
 # On macOS, link against the Accelerate framework for BLAS/LAPACK
 if(APPLE)
     find_library(ACCELERATE_LIBRARY Accelerate)
     if(ACCELERATE_LIBRARY)
-        target_link_libraries(apm_core PUBLIC ${ACCELERATE_LIBRARY})
+        target_link_libraries(apm PUBLIC ${ACCELERATE_LIBRARY})
     else()
         message(WARNING "Accelerate framework not found on Apple system.")
     endif()
 endif()
 
 # Add compiler flags for Armadillo
-target_compile_definitions(apm_core PUBLIC
+target_compile_definitions(apm PUBLIC
     ARMA_DONT_USE_WRAPPER=1
     ARMA_NO_DEBUG=1
     ARMA_USE_LAPACK=1
@@ -62,7 +58,7 @@ else()
 endif()
 
 # Installation
-install(TARGETS apm_core
+install(TARGETS apm
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin

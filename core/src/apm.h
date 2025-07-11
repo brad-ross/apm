@@ -8,6 +8,7 @@
 #endif
 #include <string>
 #include <vector>
+#include <set>
 
 namespace apm {
 
@@ -197,6 +198,30 @@ arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
     const std::vector<arma::uvec>& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec);
+
+//==============================================================================
+// Identification Verification Via the O^3 Algorithm
+//==============================================================================
+
+/**
+ * @brief Implements the Observed Outcome Overlap (O3) algorithm to identify super cohorts.
+ *
+ * This algorithm iteratively groups cohorts based on the overlap of their
+ * observed outcomes. Two super cohorts are merged if the number of their
+ * shared outcomes meets or exceeds a specified threshold, `r`. The process
+ * continues until no more cohorts can be merged.
+ *
+ * @param observed_outcome_indices A vector where each element is a vector of
+ *                                 indices for the observed time periods for a cohort.
+ * @param r The model rank, used as the minimum overlap threshold for merging cohorts.
+ * @return A vector containing the lists of super cohorts at each iteration of the
+ *         algorithm. Each list of super cohorts is a vector of vectors, where the
+ *         inner vectors contain the indices of the original cohorts forming a
+ *         super cohort.
+ */
+std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
+    const std::vector<arma::uvec>& observed_outcome_indices,
+    arma::uword r);
 
 } // namespace apm
 
