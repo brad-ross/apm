@@ -220,7 +220,7 @@ arma::mat estimate_outcome_means_across_cohorts(
  */
 std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
     const std::vector<arma::uvec>& observed_outcome_indices,
-    arma::uword r);
+    unsigned int r);
 
 /**
  * @brief Checks if the factors are identified across all cohorts.
@@ -238,7 +238,7 @@ std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
  */
 bool aligned_factors_identified(
     const std::vector<arma::uvec>& observed_outcome_indices,
-    arma::uword r);
+    unsigned int r);
 
 } // namespace apm
 

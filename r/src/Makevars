@@ -2,11 +2,11 @@
 # This tells R how to compile and link the core C++ library
 
 # Use RcppArmadillo flags for consistent compilation and define USING_R flag
-PKG_CPPFLAGS = $(shell $(R_HOME)/bin/Rscript -e "RcppArmadillo:::CxxFlags()") -I../../core/src -DUSING_R
+PKG_CPPFLAGS = $(shell $(R_HOME)/bin/Rscript -e "RcppArmadillo:::CxxFlags()") -I../../core/src -DUSING_R -I/opt/homebrew/include
 PKG_CXXFLAGS = -std=c++17
 
-# RcppArmadillo is header-only, no special linking needed
-PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+# RcppArmadillo is header-only, no special linking needed. Add Boost lib path.
+PKG_LIBS = -L/opt/homebrew/lib $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
 # Object files (including the core library)
 OBJECTS = r_bindings.o RcppExports.o ../../core/src/apm.o ../../core/src/linear_algebra_utils.o 

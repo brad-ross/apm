@@ -125,7 +125,7 @@ std::set<arma::uword> get_observed_outcomes_for_super_cohort(
 Graph construct_o3_graph(
     const std::vector<std::set<arma::uword>>& super_cohorts,
     const std::vector<arma::uvec>& observed_outcome_indices,
-    arma::uword r) {
+    unsigned int r) {
     
     const arma::uword num_super_cohorts = super_cohorts.size();
     Graph o3_graph(num_super_cohorts);
@@ -366,7 +366,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 
 std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
     const std::vector<arma::uvec>& observed_outcome_indices,
-    arma::uword r) {
+    unsigned int r) {
     
     const arma::uword C = observed_outcome_indices.size();
 
@@ -412,7 +412,7 @@ std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
 
 bool aligned_factors_identified(
     const std::vector<arma::uvec>& observed_outcome_indices,
-    arma::uword r) {
+    unsigned int r) {
 
     const arma::uword C = observed_outcome_indices.size();
 
