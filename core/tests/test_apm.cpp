@@ -251,10 +251,76 @@ TEST(APMTest, AlignFactorsAPMNonContiguousPattern) {
     std::vector<arma::uvec> observed_outcome_indices = {
         {0, 1, 2},
         {1, 2, 3},
-        {0, 2, 4} // Non-contiguous outcomes
+        {0, 3, 4} // Non-contiguous outcomes
     };
 
     run_alignment_test(true_factors, observed_outcome_indices);
+}
+
+//==============================================================================
+// O3 Algorithm Tests
+//==============================================================================
+
+TEST(APMTest, O3Algorithm_StaircasePattern) {
+    // This test uses a "staircase" pattern of observed outcomes where each
+    // cohort overlaps with the next, ensuring they all merge into a single
+    // super cohort in one step. We set r=2.
+    std::vector<arma::uvec> observed_outcome_indices = {
+        {0, 1, 2},
+        {1, 2, 3},
+        {2, 3, 4}
+    };
+    arma::uword r = 2;
+
+    auto super_cohort_iterations = apm::o3_algorithm(observed_outcome_indices, r);
+
+    // Expected output: The algorithm should converge in one step after the
+    // initial state, resulting in a single super cohort. The initial state
+    // is not included in the output.
+    std::vector<std::vector<std::set<arma::uword>>> expected_output = {
+        {{0, 1, 2}}
+    };
+
+    // The order of super-cohorts within an iteration is not guaranteed,
+    // so we sort both the actual and expected results before comparison.
+    for (auto& iteration : expected_output) {
+        std::sort(iteration.begin(), iteration.end());
+    }
+    for (auto& iteration : super_cohort_iterations) {
+        std::sort(iteration.begin(), iteration.end());
+    }
+
+    ASSERT_EQ(super_cohort_iterations, expected_output);
+}
+
+TEST(APMTest, O3Algorithm_NonContiguous) {
+    // This test uses a pattern designed to merge in two steps.
+    // Step 1: cohorts 0 and 1 merge.
+    // Step 2: cohort 2 merges with the new {0, 1} super cohort.
+    std::vector<arma::uvec> observed_outcome_indices = {
+        {0, 1, 2}, // Cohort 0
+        {1, 2, 3}, // Cohort 1
+        {0, 3, 4}  // Cohort 2
+    };
+    arma::uword r = 2;
+
+    auto super_cohort_iterations = apm::o3_algorithm(observed_outcome_indices, r);
+
+    // Expected output structure
+    std::vector<std::vector<std::set<arma::uword>>> expected_output = {
+        {{0, 1}, {2}}, // State after first merge
+        {{0, 1, 2}}    // Final converged state
+    };
+    
+    // For comparison, sort the sets within the nested vectors
+    for (auto& iteration : expected_output) {
+        std::sort(iteration.begin(), iteration.end());
+    }
+    for (auto& iteration : super_cohort_iterations) {
+        std::sort(iteration.begin(), iteration.end());
+    }
+
+    ASSERT_EQ(super_cohort_iterations, expected_output);
 }
 
 int main(int argc, char **argv) {
