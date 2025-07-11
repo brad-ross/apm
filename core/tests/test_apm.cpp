@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include <stdexcept>
+#include <algorithm>
 #include "apm.h"
 #include "linear_algebra_utils.h"
 
@@ -33,6 +34,25 @@ std::vector<arma::mat> generate_rotation_matrices(size_t C, arma::uword size) {
         matrices.push_back(R);
     }
     return matrices;
+}
+
+/**
+ * @brief Canonicalizes the nested list output from o3_algorithm for stable comparison.
+ *
+ * This function sorts the inner vectors of super-cohorts. The std::set
+ * within each super-cohort already guarantees sorted order of cohort indices.
+ * Sorting the vector of sets provides a canonical representation for each iteration's state.
+ *
+ * @param output The nested vector structure from o3_algorithm.
+ * @return A canonicalized copy of the input.
+ */
+std::vector<std::vector<std::set<arma::uword>>> canonicalize_o3_output(
+    std::vector<std::vector<std::set<arma::uword>>> output) {
+    for (auto& iteration : output) {
+        // std::set has operator<, so we can sort the vector of sets directly.
+        std::sort(iteration.begin(), iteration.end());
+    }
+    return output;
 }
 
 void run_alignment_test(
@@ -270,7 +290,7 @@ TEST(APMTest, O3Algorithm_StaircasePattern) {
         {1, 2, 3},
         {2, 3, 4}
     };
-    arma::uword r = 2;
+    unsigned int r = 2;
 
     auto super_cohort_iterations = apm::o3_algorithm(observed_outcome_indices, r);
 
@@ -281,16 +301,10 @@ TEST(APMTest, O3Algorithm_StaircasePattern) {
         {{0, 1, 2}}
     };
 
-    // The order of super-cohorts within an iteration is not guaranteed,
-    // so we sort both the actual and expected results before comparison.
-    for (auto& iteration : expected_output) {
-        std::sort(iteration.begin(), iteration.end());
-    }
-    for (auto& iteration : super_cohort_iterations) {
-        std::sort(iteration.begin(), iteration.end());
-    }
-
-    ASSERT_EQ(super_cohort_iterations, expected_output);
+    // The order of super-cohorts within an iteration is not guaranteed, so we
+    // canonicalize both the actual and expected results before comparison.
+    ASSERT_EQ(canonicalize_o3_output(super_cohort_iterations),
+              canonicalize_o3_output(expected_output));
 
     ASSERT_TRUE(apm::aligned_factors_identified(observed_outcome_indices, r));
 }
@@ -304,7 +318,7 @@ TEST(APMTest, O3Algorithm_NonContiguous) {
         {1, 2, 3}, // Cohort 1
         {0, 3, 4}  // Cohort 2
     };
-    arma::uword r = 2;
+    unsigned int r = 2;
 
     auto super_cohort_iterations = apm::o3_algorithm(observed_outcome_indices, r);
 
@@ -314,27 +328,32 @@ TEST(APMTest, O3Algorithm_NonContiguous) {
         {{0, 1, 2}}    // Final converged state
     };
     
-    // For comparison, sort the sets within the nested vectors
-    for (auto& iteration : expected_output) {
-        std::sort(iteration.begin(), iteration.end());
-    }
-    for (auto& iteration : super_cohort_iterations) {
-        std::sort(iteration.begin(), iteration.end());
-    }
-
-    ASSERT_EQ(super_cohort_iterations, expected_output);
+    // For comparison, canonicalize the nested vectors.
+    ASSERT_EQ(canonicalize_o3_output(super_cohort_iterations),
+              canonicalize_o3_output(expected_output));
 
     ASSERT_TRUE(apm::aligned_factors_identified(observed_outcome_indices, r));
 }
 
 TEST(APMTest, FactorsNotIdentifiedOneIteration) {
     std::vector<arma::uvec> observed_outcome_indices = {
-        {0, 1},
-        {1, 2, 3},
-        {2, 3, 4}
+        {0, 1},    // Cohort 0
+        {1, 2, 3}, // Cohort 1
+        {2, 3, 4}  // Cohort 2
     };
-    arma::uword r = 2;
+    unsigned int r = 2;
 
+    // With r=2, cohorts 1 and 2 merge because they share outcomes {2, 3}.
+    // Cohort 0 does not merge with {1, 2} because they only share outcome {1}.
+    auto super_cohort_iterations = apm::o3_algorithm(observed_outcome_indices, r);
+
+    std::vector<std::vector<std::set<arma::uword>>> expected_output = {
+        {{0}, {1, 2}}
+    };
+
+    // Canonicalize for stable comparison.
+    ASSERT_EQ(canonicalize_o3_output(super_cohort_iterations),
+              canonicalize_o3_output(expected_output));
     ASSERT_FALSE(apm::aligned_factors_identified(observed_outcome_indices, r));
 }
 
@@ -344,8 +363,13 @@ TEST(APMTest, FactorsNotIdentifiedNoIterations) {
         {1, 2},
         {2, 3, 4}
     };
-    arma::uword r = 2;
+    unsigned int r = 2;
 
+    // With r=2, no two cohorts share at least 2 outcomes, so no merges occur.
+    auto super_cohort_iterations = apm::o3_algorithm(observed_outcome_indices, r);
+
+    // The algorithm should produce no iterations.
+    ASSERT_TRUE(super_cohort_iterations.empty());
     ASSERT_FALSE(apm::aligned_factors_identified(observed_outcome_indices, r));
 }
 
