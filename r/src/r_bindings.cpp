@@ -24,15 +24,25 @@ std::string get_version() {
     return apm::get_version();
 }
 
-//' Align factors using the Aggregated Projection Matrix method
+//' Computes an aligned matrix of factor vectors from cohort-specific ones.
 //'
-//' @param cohort_factor_matrices A list of matrices, one for each cohort.
+//' This function constructs an Aggregated Projection Matrix (APM) from cohort-specific 
+//' factor matrices and then returns an orthonormal basis for the null space of the APM, 
+//' which also serves as a basis for the column space of the matrix whose rows are the 
+//' factor vectors corresponding to each outcome.
+//'
+//' @param cohort_factor_matrices A list of matrices, one for each cohort, 
+//' where the rows of the matrix corresponding to a given cohort contain the factor vectors for the observed outcomes for that cohort.
+//' Each matrix must have the same number of columns, equal to the rank of the factor model.
 //' @param observed_outcome_indices A list of integer vectors of the same length
 //'   as cohort_factor_matrices. Each vector contains the 1-based indices
-//'   indicating which time periods were observed for the corresponding cohort.
+//'   indicating which outcomes were observed for the corresponding cohort. The number of indices
+//'   must match the number of rows in the cohort's factor matrix.
 //' @param cohort_weights An optional numeric vector of weights for each cohort.
 //'   If not provided, cohorts are weighted equally. The weights are scaled to 
-//'   sum to one before use.
+//'   sum to one.
+//' @return A matrix whose columns form an orthonormal basis for the null space
+//'         of the aggregated projection matrix.
 //' @export
 // [[Rcpp::export]]
 arma::mat align_factors_using_apm(
@@ -55,16 +65,63 @@ arma::mat align_factors_using_apm(
     return apm::align_factors_using_apm(cpp_factor_matrices, cpp_observed_outcome_indices);
 } 
 
-//' Impute outcomes for a representative unit
+//' Aggregates cohort-specific covariate coefficient estimates.
+//'
+//' This function takes a vector of cohort-specific covariate coefficient estimates
+//' and returns their average.
+//'
+//' @param a_c_vec A list of numeric vectors, where each vector contains cohort-specific
+//'   covariate coefficient estimates.
+//' @return A numeric vector containing the aggregated covariate coefficient estimates.
+//' @export
+// [[Rcpp::export]]
+arma::vec aggregate_cohort_specific_covariate_coefs(Rcpp::List a_c_vec) {
+    std::vector<arma::vec> cpp_a_c_vec;
+    cpp_a_c_vec.reserve(a_c_vec.size());
+    for (SEXP vec : a_c_vec) {
+        cpp_a_c_vec.push_back(Rcpp::as<arma::vec>(vec));
+    }
+    return apm::aggregate_cohort_specific_covariate_coefs(cpp_a_c_vec);
+}
+
+//' Aggregates cohort-specific outcome fixed effect estimates.
+//'
+//' This function computes the average of outcome fixed effect estimates across cohorts
+//' for each outcome.
+//'
+//' @param g_0_c_vec A list of numeric vectors, where each vector contains cohort-specific estimates of outcome
+//'   fixed effects for the observed outcomes in those cohorts.
+//' @param observed_outcome_indices A list of integer vectors, where each
+//'   vector contains the 1-based indices of observed outcomes for a cohort.
+//' @return A numeric vector containing the aggregated outcome fixed effect
+//'   estimates for all outcomes.
+//' @export
+// [[Rcpp::export]]
+arma::vec aggregate_cohort_specific_outcome_fes(
+    Rcpp::List g_0_c_vec,
+    Rcpp::List observed_outcome_indices) {
+    
+    std::vector<arma::vec> cpp_g_0_c_vec;
+    cpp_g_0_c_vec.reserve(g_0_c_vec.size());
+    for (SEXP vec : g_0_c_vec) {
+        cpp_g_0_c_vec.push_back(Rcpp::as<arma::vec>(vec));
+    }
+
+    std::vector<arma::uvec> cpp_observed_outcome_indices = to_cpp_observed_outcome_indices(observed_outcome_indices);
+
+    return apm::aggregate_cohort_specific_outcome_fes(cpp_g_0_c_vec, cpp_observed_outcome_indices);
+} 
+
+//' Estimates outcomes for a representative unit.
 //'
 //' This function supports various combinations of factors, fixed effects, and covariates.
 //'
-//' @param G A T x r matrix of factors.
-//' @param T_c A vector of 1-based indices for the observed time periods for the cohort.
+//' @param G A T x r matrix of estimated factors.
+//' @param T_c A vector of 1-based indices for the observed outcomes for the cohort.
 //' @param m_c A vector containing the observed outcomes for the representative unit.
 //' @param g_0 An optional T-dimensional vector of estimated outcome fixed effects.
 //' @param a An optional q-dimensional vector of estimated covariate coefficients.
-//' @param X_c An optional T x q matrix of covariates. Required if 'a' is provided.
+//' @param X_c An optional T x q matrix containing the values of q covariates corresponding to each outcome for the representative unit.
 //' @return A T-dimensional vector containing the estimated outcomes for the representative unit.
 //' @export
 // [[Rcpp::export]]
@@ -105,18 +162,18 @@ arma::vec impute_outcomes(
     }
 }
 
-//' Estimate mean outcomes across cohorts
+//' Estimates mean outcomes for each cohort.
 //'
 //' This function supports various combinations of factors, fixed effects, and covariates.
 //'
 //' @param G A T x r matrix whose rows are estimated factor vectors.
 //' @param observed_outcome_indices A list where each element is a vector of 
-//'                                 1-based indices for the observed time periods for a cohort.
-//' @param m_c_vec A list of arma::vec, where each vector m_c contains the 
+//'                                 1-based indices for the observed outcomes for a cohort.
+//' @param m_c_vec A list of numeric vectors, where each vector m_c contains the 
 //'                observed outcomes for a cohort.
 //' @param g_0 An optional T-dimensional vector of estimated outcome fixed effects.
 //' @param a An optional q-dimensional vector of estimated covariate coefficients.
-//' @param X_c_vec An optional list of T x q matrices of covariates. Required if 'a' is provided.
+//' @param X_c_vec An optional list of T x q matrices, where each matrix X_c contains the average values of q covariates for each outcome within a cohort.
 //' @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
 //' @export
 // [[Rcpp::export]]
@@ -170,16 +227,19 @@ arma::mat estimate_outcome_means_across_cohorts(
     }
 } 
 
-//' Run the O^3 Algorithm for Identification Verification
+//' Implements the Observed Outcome Overlap (O^3) algorithm to assess factor identification.
 //'
 //' This function iteratively groups cohorts based on the overlap of their
-//' observed outcomes to assess if the factors are identified.
+//' observed outcomes. Two super cohorts are merged if the number of their
+//' shared outcomes meets or exceeds the model rank, `r`. The process
+//' continues until no more cohorts can be merged.
 //'
 //' @param observed_outcome_indices A list of integer vectors, where each
-//'   vector contains the 1-based indices for the observed outcomes for a cohort.
-//' @param r The model rank, used as the minimum overlap threshold.
+//'   vector contains the 1-based indices corresponding to the observed outcomes for a cohort.
+//' @param r The model rank, used as the minimum overlap threshold for merging cohorts.
 //' @return A list of lists of sets, representing the super cohorts at each
-//'   iteration of the algorithm. Indices are 1-based.
+//'   iteration of the algorithm. Each list of super cohorts is a list of integer vectors
+//'   corresponding to the original cohorts together forming a super cohort.
 //' @export
 // [[Rcpp::export]]
 Rcpp::List o3_algorithm(
@@ -205,15 +265,18 @@ Rcpp::List o3_algorithm(
     return all_iterations_list;
 }
 
-//' Check if Aligned Factors are Identified
+//' Checks if the factors are identified across all cohorts.
 //'
 //' This function uses the O^3 algorithm to determine if there is sufficient
-//' overlap in observed outcomes across all cohorts to uniquely identify the factors.
+//' overlap in observed outcomes across all cohorts to uniquely identify all factor 
+//' vectors expressed with respect to a common basis. Identification is achieved if 
+//' the algorithm terminates with a single super cohort containing all of the 
+//' original cohorts.
 //'
-//g' @param observed_outcome_indices A list of integer vectors, where each
+//' @param observed_outcome_indices A list of integer vectors, where each
 //'   vector contains the 1-based indices for the observed outcomes for a cohort.
 //' @param r The model rank.
-//' @return A boolean value: `TRUE` if factors are identified, `FALSE` otherwise.
+//' @return `TRUE` if the factors are identified, `FALSE` otherwise.
 //' @export
 // [[Rcpp::export]]
 bool aligned_factors_identified(

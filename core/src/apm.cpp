@@ -16,6 +16,21 @@ struct ProblemDimensions {
     arma::uword C; // Number of cohorts
 };
 
+arma::uword get_num_outcomes(
+    const std::vector<arma::uvec>& observed_outcome_indices) {
+    
+    arma::uword max_idx = 0;
+    bool has_observations = false;
+    for (const auto& T_c : observed_outcome_indices) {
+        if (!T_c.empty()) {
+            has_observations = true;
+            max_idx = std::max(max_idx, T_c.max());
+        }
+    }
+
+    return has_observations ? max_idx + 1 : 0;
+}
+
 ProblemDimensions get_problem_dimensions(
     const std::vector<arma::mat>& cohort_factor_matrices,
     const std::vector<arma::uvec>& observed_outcome_indices) {
@@ -27,7 +42,6 @@ ProblemDimensions get_problem_dimensions(
 
     const arma::uword r = cohort_factor_matrices[0].n_cols;
 
-    arma::uword max_idx = 0;
     for (arma::uword c = 0; c < C; ++c) {
         if (cohort_factor_matrices[c].n_cols != r) {
             throw std::invalid_argument("All factor matrices must have the same number of columns.");
@@ -35,12 +49,9 @@ ProblemDimensions get_problem_dimensions(
         if (cohort_factor_matrices[c].n_rows != observed_outcome_indices[c].n_elem) {
             throw std::invalid_argument("The number of rows in a cohort-specific factor matrix must match the number of observed outcomes for that cohort.");
         }
-        if (!observed_outcome_indices[c].empty()) {
-            max_idx = std::max(max_idx, observed_outcome_indices[c].max());
-        }
     }
 
-    const arma::uword T = max_idx + 1;
+    const arma::uword T = get_num_outcomes(observed_outcome_indices);
 
     return {r, T, C};
 }
@@ -161,6 +172,10 @@ std::string get_version() {
     return "0.1.0";
 }
 
+//==============================================================================
+// Aggregators of Cohort-Specific Parameter Estimates
+//==============================================================================
+
 arma::mat align_factors_using_apm(
     const std::vector<arma::mat>& cohort_factor_matrices,
     const std::vector<arma::uvec>& observed_outcome_indices) {
@@ -186,6 +201,66 @@ arma::mat align_factors_using_apm(
     );
 
     return arma::null(agg_proj_mat);
+}
+
+arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>& a_c_vec) {
+    if (a_c_vec.empty()) {
+        return arma::vec();
+    }
+
+    const arma::uword q = a_c_vec[0].n_elem;
+    arma::vec mean_a(q, arma::fill::zeros);
+
+    for (const auto& a_c : a_c_vec) {
+        if (a_c.n_elem != q) {
+            throw std::invalid_argument("All covariate coefficient vectors must have the same length.");
+        }
+        mean_a += a_c / a_c_vec.size();
+    }
+
+    return mean_a;
+}
+
+arma::vec aggregate_cohort_specific_outcome_fes(
+    const std::vector<arma::vec>& g_0_c_vec,
+    const std::vector<arma::uvec>& observed_outcome_indices) {
+
+    if (g_0_c_vec.size() != observed_outcome_indices.size()) {
+        throw std::invalid_argument("Number of fixed effect vectors must match number of observed outcome index vectors.");
+    }
+    
+    const arma::uword T = get_num_outcomes(observed_outcome_indices);
+
+    if (T == 0) {
+        return arma::vec();
+    }
+
+    arma::vec g_0_sum(T, arma::fill::zeros);
+    arma::uvec g_0_counts(T, arma::fill::zeros);
+
+    for (size_t c = 0; c < g_0_c_vec.size(); ++c) {
+        const arma::vec& g_0_c = g_0_c_vec[c];
+        const arma::uvec& T_c = observed_outcome_indices[c];
+        
+        if (g_0_c.n_elem != T_c.n_elem) {
+            throw std::invalid_argument("Length of fixed effect vector does not match number of observed outcomes for a cohort.");
+        }
+
+        for (arma::uword i = 0; i < T_c.n_elem; ++i) {
+            const arma::uword t = T_c(i);
+            g_0_sum(t) += g_0_c(i);
+            g_0_counts(t)++;
+        }
+    }
+
+    arma::vec g_0(T, arma::fill::zeros);
+    for (arma::uword t = 0; t < T; ++t) {
+        if (g_0_counts(t) > 0) {
+            g_0(t) = g_0_sum(t) / g_0_counts(t);
+        }
+    }
+
+    return g_0;
 }
 
 //==============================================================================

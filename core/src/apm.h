@@ -19,6 +19,10 @@ namespace apm {
  */
 std::string get_version();
 
+//==============================================================================
+// Aggregators of Cohort-Specific Parameter Estimates
+//==============================================================================
+
 /**
  * @brief Computes an aligned matrix of factor vectors from cohort-specific ones.
  *
@@ -47,9 +51,9 @@ arma::mat align_factors_using_apm(
 /**
  * @brief Computes an aligned matrix of factor vectors from cohort-specific ones using cohort-specific weights.
  *
- * This function constructs an Aggregated Projection Matrix from cohort-specific data and 
- * then returns an orthonormal basis for the null space of this matrix, which 
- * also serves as a basis for the column space of the matrix whose rows are the 
+ * This function constructs an Aggregated Projection Matrix (APM) from cohort-specific 
+ * factor matrices and then returns an orthonormal basis for the null space of the APM, 
+ * which also serves as a basis for the column space of the matrix whose rows are the 
  * factor vectors corresponding to each outcome.
  *
  * @param cohort_factor_matrices A vector of matrices, one for each cohort, 
@@ -70,6 +74,34 @@ arma::mat align_factors_using_apm(
     const std::vector<arma::mat>& cohort_factor_matrices,
     const std::vector<arma::uvec>& observed_outcome_indices,
     const arma::vec& cohort_weights);
+
+/**
+ * @brief Aggregates cohort-specific covariate coefficient estimates.
+ *
+ * This function takes a vector of cohort-specific covariate coefficient estimates
+ * and returns their average.
+ *
+ * @param a_c_vec A vector of arma::vec, where each vector contains cohort-specific
+ *                covariate coefficient estimates.
+ * @return An arma::vec containing the aggregated covariate coefficient estimates.
+ */
+arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>& a_c_vec);
+
+/**
+ * @brief Aggregates cohort-specific outcome fixed effect estimates.
+ *
+ * This function computes the average of outcome fixed effect estimates across cohorts
+ * for each outcome.
+ *
+ * @param g_0_c_vec A vector of arma::vec, where each vector contains cohort-specific estimates of outcome
+ *                  fixed effects for the observed outcomes in those cohorts.
+ * @param observed_outcome_indices A vector of arma::uvec, where each uvec contains
+ *                                 the 0-indexed indices of observed outcomes for a cohort.
+ * @return An arma::vec containing the aggregated outcome fixed effect estimates for all outcomes.
+ */
+arma::vec aggregate_cohort_specific_outcome_fes(
+    const std::vector<arma::vec>& g_0_c_vec,
+    const std::vector<arma::uvec>& observed_outcome_indices);
 
 //==============================================================================
 // Outcome Imputation
