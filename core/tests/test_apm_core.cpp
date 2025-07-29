@@ -2,7 +2,7 @@
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
-#include "apm.h"
+#include "apm_core.h"
 #include "linear_algebra_utils.h"
 
 namespace { // Anonymous namespace for test helpers

@@ -1,4 +1,4 @@
-#include "apm.h"
+#include "apm_core.h"
 #include "linear_algebra_utils.h"
 #include <stdexcept>
 #include <vector>

@@ -100,7 +100,7 @@ r/
 ├── tests/
 │   ├── testthat.R      # Test runner
 │   └── testthat/
-│       └── test-apm.R  # Test cases
+│       └── test-apm-core.R  # Test cases
 └── README.md           # This file
 ```
 
@@ -108,8 +108,8 @@ r/
 
 ### 1. Add to Core Library
 First, add your function to the core C++ library:
-- Declaration in `../core/src/apm.h`
-- Implementation in `../core/src/apm.cpp`
+- Declaration in `../core/src/apm_core.h`
+- Implementation in `../core/src/apm_core.cpp`
 
 ### 2. Add R Binding
 Add the R binding in `src/r_bindings.cpp`:
@@ -127,7 +127,7 @@ ReturnType your_function_name(InputType input) {
 ```
 
 ### 3. Add Tests
-Add tests in `tests/testthat/test-apm.R`:
+Add tests in `tests/testthat/test-apm-core.R`:
 
 ```r
 test_that("your_function_name works", {
@@ -162,8 +162,8 @@ install.packages(c("Rcpp", "RcppArmadillo", "testthat"))
 
 ### C++ Compilation Issues
 Ensure your core library files exist:
-- `../core/src/apm.h`
-- `../core/src/apm.cpp`
+- `../core/src/apm_core.h`
+- `../core/src/apm_core.cpp`
 
 The `Makevars` file tells R how to compile these external C++ files.
 

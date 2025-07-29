@@ -1,5 +1,5 @@
 #include <RcppArmadillo.h>
-#include "apm.h"
+#include "apm_core.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 

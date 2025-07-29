@@ -40,7 +40,7 @@ make -j$(nproc)
 
 ### Basic Example
 ```cpp
-#include "apm.h"
+#include "apm_core.h"
 #include <iostream>
 
 int main() {
