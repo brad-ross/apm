@@ -2,6 +2,7 @@
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
+#include <iostream>
 #include "apm_core.h"
 #include "linear_algebra_utils.h"
 

@@ -5,28 +5,39 @@ project(apm_core VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find required packages
-find_package(PkgConfig REQUIRED)
-
 # Configure Armadillo as header-only
 set(ARMA_DONT_USE_WRAPPER 1)
 find_package(Armadillo REQUIRED)
-include_directories(${ARMADILLO_INCLUDE_DIRS})
 
 # Find Boost (for Graph Library)
 find_package(Boost REQUIRED COMPONENTS graph)
-include_directories(${Boost_INCLUDE_DIRS})
+
+# Find Arrow using system installation (Homebrew)
+find_package(Arrow REQUIRED)
+
+# Arrow found successfully
 
 # Create the core library
-add_library(apm src/apm_core.cpp src/linear_algebra_utils.cpp)
+add_library(apm src/apm_core.cpp src/linear_algebra_utils.cpp src/process_panel.cpp)
 target_include_directories(apm PUBLIC src)
 
-# Link libraries
+# Link libraries using modern CMake targets
 target_link_libraries(apm
     PUBLIC
         ${ARMADILLO_LIBRARIES}
-        ${Boost_LIBRARIES}
+        Boost::graph
+        Arrow::arrow_shared
 )
+
+# Explicitly link Acero and Compute libraries (needed for Homebrew Arrow)
+find_library(ARROW_ACERO_LIB NAMES arrow_acero libarrow_acero)
+find_library(ARROW_COMPUTE_LIB NAMES arrow_compute libarrow_compute)
+if(ARROW_ACERO_LIB)
+    target_link_libraries(apm PUBLIC ${ARROW_ACERO_LIB})
+endif()
+if(ARROW_COMPUTE_LIB)
+    target_link_libraries(apm PUBLIC ${ARROW_COMPUTE_LIB})
+endif()
 
 # On macOS, link against the Accelerate framework for BLAS/LAPACK
 if(APPLE)
@@ -64,6 +75,6 @@ install(TARGETS apm
     RUNTIME DESTINATION bin
 )
 
-install(FILES src/apm_core.h
+install(FILES src/apm_core.h src/process_panel.h
     DESTINATION include/apm
 ) 
