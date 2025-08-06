@@ -462,7 +462,7 @@ std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
 
         // 2. Find connected components
         std::vector<int> component(num_super_cohorts);
-        int num_components = boost::connected_components(o3_graph, &component[0]);
+        const unsigned int num_components = boost::connected_components(o3_graph, &component[0]);
 
         // 3. Check for convergence
         if (num_components == num_super_cohorts) {
