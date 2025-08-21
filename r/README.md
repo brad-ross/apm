@@ -179,19 +179,9 @@ install.packages("path/to/apm/r", repos = NULL, type = "source")
 devtools::install("path/to/apm/r")
 ```
 
-## Key Benefits of This Setup
-
-- ✅ **No code duplication** - R package calls core C++ library
-- ✅ **Fast iteration** - `devtools::test()` handles compilation automatically
-- ✅ **Proper dependency management** - Armadillo/Boost linked automatically
-- ✅ **Development-friendly** - No manual package installation needed
-- ✅ **Easy testing** - Integrated with R's testing framework
-
 ## Development Tips
 
 1. **Always test after changes**: `devtools::test()`
 2. **Use interactive development**: `devtools::load_all()`
 3. **Check package regularly**: `devtools::check()`
 4. **Clean when changing C++**: `devtools::clean_dll()`
-
-This setup allows you to rapidly develop and test your R package with C++ bindings! 
