@@ -95,7 +95,7 @@ r/
 ├── DESCRIPTION          # Package metadata
 ├── NAMESPACE           # Exported functions
 ├── src/
-│   ├── r_bindings.cpp  # C++ bindings to core library
+│   ├── apm_core_bindings.cpp  # C++ bindings to core library
 │   └── Makevars        # Build configuration
 ├── tests/
 │   ├── testthat.R      # Test runner
@@ -112,7 +112,7 @@ First, add your function to the core C++ library:
 - Implementation in `../core/src/apm_core.cpp`
 
 ### 2. Add R Binding
-Add the R binding in `src/r_bindings.cpp`:
+Add the R binding in `src/apm_core_bindings.cpp`:
 
 ```cpp
 //' Your Function Description

@@ -1,21 +1,10 @@
 #include <RcppArmadillo.h>
 #include "apm_core.h"
+#include "r_utils.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
-namespace { // Anonymous namespace for R binding helpers
 
-// Converts an R list of 1-based integer vectors to a C++ vector of 0-based arma::uvecs.
-std::vector<arma::uvec> to_cpp_observed_outcome_indices(const Rcpp::List& r_list) {
-    std::vector<arma::uvec> cpp_vec;
-    cpp_vec.reserve(r_list.size());
-    for (SEXP vec : r_list) {
-        cpp_vec.push_back(Rcpp::as<arma::uvec>(vec) - 1); // R is 1-based, C++ is 0-based.
-    }
-    return cpp_vec;
-}
-
-} // anonymous namespace
 
 //' Get the version of the apm library
 //' @export
@@ -55,7 +44,7 @@ arma::mat align_factors_using_apm(
         cpp_factor_matrices.push_back(Rcpp::as<arma::mat>(mat));
     }
 
-    std::vector<arma::uvec> cpp_observed_outcome_indices = to_cpp_observed_outcome_indices(observed_outcome_indices);
+    std::vector<arma::uvec> cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
 
     if (cohort_weights.isNotNull()) {
         arma::vec cpp_cohort_weights = Rcpp::as<arma::vec>(cohort_weights);
@@ -107,7 +96,7 @@ arma::vec aggregate_cohort_specific_outcome_fes(
         cpp_g_0_c_vec.push_back(Rcpp::as<arma::vec>(vec));
     }
 
-    std::vector<arma::uvec> cpp_observed_outcome_indices = to_cpp_observed_outcome_indices(observed_outcome_indices);
+    std::vector<arma::uvec> cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
 
     return apm::aggregate_cohort_specific_outcome_fes(cpp_g_0_c_vec, cpp_observed_outcome_indices);
 } 
@@ -185,7 +174,7 @@ arma::mat estimate_outcome_means_across_cohorts(
     Rcpp::Nullable<Rcpp::NumericVector> a = R_NilValue,
     Rcpp::Nullable<Rcpp::List> X_c_vec = R_NilValue) {
 
-    std::vector<arma::uvec> cpp_observed_outcome_indices = to_cpp_observed_outcome_indices(observed_outcome_indices);
+    std::vector<arma::uvec> cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
 
     std::vector<arma::vec> cpp_m_c_vec;
     for (SEXP vec : m_c_vec) {
@@ -246,7 +235,7 @@ Rcpp::List o3_algorithm(
     Rcpp::List observed_outcome_indices,
     unsigned int r) {
 
-    std::vector<arma::uvec> cpp_observed_outcome_indices = to_cpp_observed_outcome_indices(observed_outcome_indices);
+    std::vector<arma::uvec> cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
 
     auto iterations = apm::o3_algorithm(cpp_observed_outcome_indices, r);
 
@@ -283,7 +272,7 @@ bool aligned_factors_identified(
     Rcpp::List observed_outcome_indices,
     unsigned int r) {
     
-    std::vector<arma::uvec> cpp_observed_outcome_indices = to_cpp_observed_outcome_indices(observed_outcome_indices);
+    std::vector<arma::uvec> cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
 
     return apm::aligned_factors_identified(cpp_observed_outcome_indices, r);
 } 
