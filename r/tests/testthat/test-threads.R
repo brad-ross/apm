@@ -1,7 +1,7 @@
 context("Testing multithreading functionality")
 
 test_that("set_apm_threads updates data.table thread count", {
-    library(data.table)
+    # data.table loaded in tests/testthat.R
 
     orig <- getDTthreads()
     on.exit(setDTthreads(orig), add = TRUE)

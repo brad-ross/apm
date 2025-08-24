@@ -1,8 +1,39 @@
 context("Testing functions used to process raw panel data")
 
-test_that("staircase missingness with two units per cohort (matching core test)", {
-    library(data.table)
+library(data.table)
 
+# Test helpers to avoid repetition ------------------------------------------------
+build_panel_from_indices <- function(outcomes, cohort_indices, units_by_cohort) {
+    rbindlist(lapply(seq_along(cohort_indices), function(k) {
+        idx <- cohort_indices[[k]]
+        unit_ids <- units_by_cohort[[k]]
+        rbindlist(lapply(unit_ids, function(u) {
+            data.table(unit_id = u, outcome_id = outcomes[idx])
+        }))
+    }))
+}
+
+build_expected_unit_map <- function(units_by_cohort) {
+    rbindlist(mapply(function(units, cid) {
+        data.table(unit_id = units, cohort_id = cid)
+    }, units_by_cohort, seq_along(units_by_cohort), SIMPLIFY = FALSE))
+}
+
+build_expected_processed_panel <- function(cohort_indices, units_by_cohort) {
+    rbindlist(lapply(seq_along(cohort_indices), function(cid) {
+        idxs <- cohort_indices[[cid]]
+        rbindlist(lapply(units_by_cohort[[cid]], function(u) {
+            data.table(
+                unit_id = u,
+                cohort_id = cid,
+                outcome_idx = idxs,
+                y = idxs
+            )
+        }))
+    }))
+}
+
+test_that("staircase missingness with two units per cohort (matching core test)", {
     # Outcomes and units
     outcomes <- c("A", "B", "C", "D", "E")
 
@@ -22,13 +53,7 @@ test_that("staircase missingness with two units per cohort (matching core test)"
     )
 
     # Build panel as data.table of (unit_id, outcome_id)
-    panel_dt <- rbindlist(lapply(seq_along(cohort_indices), function(k) {
-        idx <- cohort_indices[[k]]
-        unit_ids <- units_by_cohort[[k]]
-        rbindlist(lapply(unit_ids, function(u) {
-            data.table(unit_id = u, outcome_id = outcomes[idx])
-        }))
-    }))
+    panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort)
 
     # Call function under test
     res <- construct_cohorts_from_panel(
@@ -39,8 +64,8 @@ test_that("staircase missingness with two units per cohort (matching core test)"
         min_cohort_size = 2
     )
 
-    # 1) all_outcomes should be sorted unique outcomes
-    expect_equal(res$all_outcomes, outcomes)
+    # 1) outcome_names should be sorted unique outcomes
+    expect_equal(res$outcome_names, outcomes)
 
     # 2) observed_outcome_indices should match defined cohorts in cohort_id order
     expected_indices <- lapply(cohort_indices, as.integer)
@@ -51,9 +76,7 @@ test_that("staircase missingness with two units per cohort (matching core test)"
     expect_equal(sort(names(res$unit_cohorts)), sort(c("unit_id", "cohort_id")))
 
     # Build expected mapping
-    expected_map <- rbindlist(mapply(function(units, cid) {
-        data.table(unit_id = units, cohort_id = cid)
-    }, units_by_cohort, seq_along(units_by_cohort), SIMPLIFY = FALSE))
+    expected_map <- build_expected_unit_map(units_by_cohort)
 
     # Compare after ordering by unit_id
     setorder(res$unit_cohorts, unit_id)
@@ -61,8 +84,65 @@ test_that("staircase missingness with two units per cohort (matching core test)"
     expect_equal(res$unit_cohorts, expected_map)
 })
 
+test_that("UnbalancedPanel initializes and processes panel correctly", {
+    # Outcomes and units (staircase pattern like existing tests)
+    outcomes <- c("A", "B", "C", "D", "E")
+    cohort_indices <- list(1:3, 2:4, 3:5)
+    units_by_cohort <- list(
+        c("u1", "u2"),
+        c("u3", "u4"),
+        c("u5", "u6")
+    )
+
+    # Build panel with value column 'y' = match(outcome_id, outcomes)
+    panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort)
+    panel_dt[, y := match(outcome_id, outcomes)]
+
+    # Construct object
+    obj <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 2,
+        min_cohort_size = 2
+    )
+
+    # outcome_names should be sorted unique outcomes
+    expect_equal(obj$get_outcome_names(), outcomes)
+
+    # observed_outcome_indices should match defined cohorts
+    expected_indices <- lapply(cohort_indices, as.integer)
+    expect_equal(obj$get_observed_outcome_indices(), expected_indices)
+
+    # unit_cohorts should map two units per cohort correctly
+    unit_cohorts <- obj$get_unit_cohorts()
+    expect_true(is.data.table(unit_cohorts))
+    expect_equal(sort(names(unit_cohorts)), sort(c("unit_id", "cohort_id")))
+
+    expected_map <- build_expected_unit_map(units_by_cohort)
+    setorder(unit_cohorts, unit_id)
+    setorder(expected_map, unit_id)
+    expect_equal(unit_cohorts, expected_map)
+
+    # processed_panel should be correctly joined, indexed, and sorted
+    pp <- obj$get_processed_panel()
+    expect_true(is.data.table(pp))
+    expect_equal(names(pp), c("unit_id", "cohort_id", "outcome_idx", "y"))
+
+    # Check ordering: cohort_id, unit_id, outcome_idx
+    pp_copy <- copy(pp)
+    setorder(pp_copy, cohort_id, unit_id, outcome_idx)
+    expect_equal(pp, pp_copy)
+
+    # Build expected processed panel
+    expected_pp <- build_expected_processed_panel(cohort_indices, units_by_cohort)
+    setorder(expected_pp, cohort_id, unit_id, outcome_idx)
+
+    expect_equal(pp, expected_pp)
+})
+
 test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)", {
-    library(data.table)
 
     outcomes <- c("A", "B", "C")
 
@@ -97,7 +177,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
     )
 
     # all outcomes should be intact
-    expect_equal(res$all_outcomes, outcomes)
+    expect_equal(res$outcome_names, outcomes)
 
     # The small cohort has outcome_count=1 < 2 and num_units=1 < 2, so it's dropped
     expected_indices_size <- list(as.integer(c(1, 2)), as.integer(c(2, 3)))
@@ -157,8 +237,6 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
 })
 
 test_that("to_data_table converts base data.frame to data.table", {
-    library(data.table)
-
     # Build a simple panel as data.table
     dt0 <- data.table(
         unit_id = c("u1", "u1", "u2", "u3"),
@@ -176,6 +254,27 @@ test_that("to_data_table converts base data.frame to data.table", {
     setorder(dt0, unit_id, outcome_id)
     setorder(dt1, unit_id, outcome_id)
     expect_equal(dt1, dt0)
+})
+
+test_that("validate_required_panel_cols enforces required columns", {
+
+    dt <- data.table(unit_id = c("u1", "u2"), outcome_id = c("A", "B"), y = 1:2)
+
+    # Passes with required cols present
+    expect_silent(apm:::validate_required_panel_cols(dt, "unit_id", "outcome_id"))
+    expect_silent(apm:::validate_required_panel_cols(dt, "unit_id", "outcome_id", "y"))
+
+    # Fails when missing unit_id
+    expect_error(apm:::validate_required_panel_cols(dt[, .(outcome_id, y)], "unit_id", "outcome_id"),
+                 regexp = "missing required column")
+
+    # Fails when missing outcome_id
+    expect_error(apm:::validate_required_panel_cols(dt[, .(unit_id, y)], "unit_id", "outcome_id"),
+                 regexp = "missing required column")
+
+    # Fails when missing optional outcome_value_col
+    expect_error(apm:::validate_required_panel_cols(dt[, .(unit_id, outcome_id)], "unit_id", "outcome_id", "y"),
+                 regexp = "missing required column")
 })
 
 

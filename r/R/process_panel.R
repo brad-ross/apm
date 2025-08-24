@@ -17,6 +17,35 @@ to_data_table <- function(x) {
     data.table::as.data.table(x)
 }
 
+#' Validate required panel columns exist
+#'
+#' Checks that `unit_id_col`, `outcome_id_col`, and optionally
+#' `outcome_value_col` are present as columns in `panel_dt`.
+#'
+#' @param panel_dt A data.table representing the panel dataset
+#' @param unit_id_col Column name for unit identifier
+#' @param outcome_id_col Column name for outcome identifier
+#' @param outcome_value_col Optional column name for outcome value
+#' @return Invisibly returns TRUE if validation passes; otherwise errors
+#' @keywords internal
+validate_required_panel_cols <- function(panel_dt,
+                                        unit_id_col,
+                                        outcome_id_col,
+                                        outcome_value_col = NULL) {
+    required_cols <- c(unit_id_col, outcome_id_col)
+    if (!is.null(outcome_value_col)) {
+        required_cols <- c(required_cols, outcome_value_col)
+    }
+    missing_cols <- setdiff(required_cols, names(panel_dt))
+    if (length(missing_cols) > 0) {
+        stop(sprintf(
+            "validate_required_panel_cols(): missing required column(s): %s",
+            paste(missing_cols, collapse = ", ")
+        ))
+    }
+    invisible(TRUE)
+}
+
 # ------------------------------------------------------------------------------
 
 #' Construct cohorts from raw panel data
@@ -35,7 +64,7 @@ to_data_table <- function(x) {
 #' @param model_rank Integer model rank
 #' @param min_cohort_size Minimum units per cohort to keep (default: 0)
 #' @return list with:
-#'   - all_outcomes: sorted unique values of outcome_id_col
+#'   - outcome_names: sorted unique values of outcome_id_col
 #'   - outcome_to_index: named integer vector mapping outcome value -> index
 #'   - observed_outcome_indices: list of integer index vectors per cohort (ordered by cohort_id)
 #'   - unit_cohorts: data.table with columns unit_id_col, cohort_id
@@ -44,19 +73,12 @@ to_data_table <- function(x) {
 construct_cohorts_from_panel <- function(panel_df, unit_id_col, outcome_id_col, model_rank, min_cohort_size = 0) {
     panel_dt <- to_data_table(panel_df)
 
-    # Validate required columns exist
-    required_cols <- c(unit_id_col, outcome_id_col)
-    missing_cols <- setdiff(required_cols, names(panel_dt))
-    if (length(missing_cols) > 0) {
-        stop(sprintf(
-            "construct_cohorts_from_panel(): missing required column(s): %s",
-            paste(missing_cols, collapse = ", ")
-        ))
-    }
+    # Validate required columns exist using internal helper
+    validate_required_panel_cols(panel_dt, unit_id_col, outcome_id_col)
 
     # Build the globally sorted unique outcome vector and an inverse index map
-    all_outcomes <- sort(unique(panel_dt[[outcome_id_col]]))
-    outcome_to_index <- setNames(seq_along(all_outcomes), as.character(all_outcomes))
+    outcome_names <- sort(unique(panel_dt[[outcome_id_col]]))
+    outcome_to_index <- setNames(seq_along(outcome_names), as.character(outcome_names))
 
     # For each unit, compute sorted indices of its unique outcomes using the map
     # Also compute a canonical string key for grouping cohorts
@@ -93,7 +115,7 @@ construct_cohorts_from_panel <- function(panel_df, unit_id_col, outcome_id_col, 
     observed_outcome_indices <- cohorts_dt[order(cohort_id)][["observed_outcomes_list"]]
 
     return(list(
-        all_outcomes = all_outcomes,
+        outcome_names = outcome_names,
         outcome_to_index = outcome_to_index,
         observed_outcome_indices = observed_outcome_indices,
         unit_cohorts = unit_cohorts
@@ -101,3 +123,96 @@ construct_cohorts_from_panel <- function(panel_df, unit_id_col, outcome_id_col, 
 }
 
 
+# ------------------------------------------------------------------------------
+
+#' Unbalanced panel container and processor (stub)
+#'
+#' R6 class that holds panel data and related cohort artifacts. Constructor
+#' mirrors `construct_cohorts_from_panel` but adds `outcome_value_col` after
+#' `outcome_id_col`.
+#'
+#' @export
+UnbalancedPanel <- R6Class(
+    classname = "UnbalancedPanel",
+    public = list(
+        # Getters
+        get_original_panel = function() private$original_panel,
+        get_unit_id_col = function() private$unit_id_col,
+        get_outcome_id_col = function() private$outcome_id_col,
+        get_outcome_value_col = function() private$outcome_value_col,
+        get_model_rank = function() private$model_rank,
+        get_min_cohort_size = function() private$min_cohort_size,
+        get_outcome_names = function() private$outcome_names,
+        get_outcome_to_index = function() private$outcome_to_index,
+        get_observed_outcome_indices = function() private$observed_outcome_indices,
+        get_unit_cohorts = function() private$unit_cohorts,
+        get_processed_panel = function() private$processed_panel,
+
+        initialize = function(panel_df,
+                              unit_id_col,
+                              outcome_id_col,
+                              outcome_value_col,
+                              model_rank,
+                              min_cohort_size = 0) {
+            private$original_panel <- to_data_table(panel_df)
+            private$unit_id_col <- unit_id_col
+            private$outcome_id_col <- outcome_id_col
+            private$outcome_value_col <- outcome_value_col
+            private$model_rank <- as.integer(model_rank)
+            private$min_cohort_size <- as.integer(min_cohort_size)
+            validate_required_panel_cols(private$original_panel, private$unit_id_col, private$outcome_id_col, private$outcome_value_col)
+            
+            # Compute cohorts and save artifacts
+            coh <- construct_cohorts_from_panel(
+                private$original_panel,
+                private$unit_id_col,
+                private$outcome_id_col,
+                private$model_rank,
+                private$min_cohort_size
+            )
+            private$outcome_names <- coh$outcome_names
+            private$outcome_to_index <- coh$outcome_to_index
+            private$observed_outcome_indices <- coh$observed_outcome_indices
+            private$unit_cohorts <- coh$unit_cohorts
+
+            # Select only relevant columns from the original panel
+            orig_panel_only_relevant_cols <- private$original_panel[
+                , c(private$unit_id_col, private$outcome_id_col, private$outcome_value_col)
+                , with = FALSE
+            ]
+
+            # Inner join on unit id to attach cohort_id to each observation
+            processed <- private$unit_cohorts[orig_panel_only_relevant_cols, on = private$unit_id_col, nomatch = 0L]
+
+            # Map outcome ids to outcome indices and drop original outcome id column
+            processed[, outcome_idx := private$outcome_to_index[as.character(get(private$outcome_id_col))]]
+            processed[, (private$outcome_id_col) := NULL]
+
+            # Sort by cohort_id, unit id, then outcome index (explicit column names)
+            setorderv(processed, c("cohort_id", private$unit_id_col, "outcome_idx"))
+
+            # Ensure column order: unit_id, cohort_id, outcome_idx, outcome value
+            setcolorder(processed, c(private$unit_id_col, "cohort_id", "outcome_idx", private$outcome_value_col))
+
+            private$processed_panel <- processed
+
+            invisible(self)
+        }
+    ),
+    private = list(
+        original_panel = NULL,
+        unit_id_col = NULL,
+        outcome_id_col = NULL,
+        outcome_value_col = NULL,
+        model_rank = NULL,
+        min_cohort_size = 0L,
+
+        outcome_names = NULL,
+        outcome_to_index = NULL,
+        observed_outcome_indices = NULL,
+        unit_cohorts = NULL,
+        processed_panel = NULL
+    )
+)
+
+# ------------------------------------------------------------------------------
