@@ -1,3 +1,24 @@
+## Internal helpers ------------------------------------------------------------
+
+#' Convert various table types to a data.table
+#'
+#' Accepts a base data.frame, a tibble, Arrow objects (Table, RecordBatch,
+#' RecordBatchReader, Dataset), or a data.table, and returns a data.table.
+#' Arrow-backed inputs are materialized into R memory before conversion.
+#'
+#' @param x Table-like object to convert
+#' @return A data.table with the same rows/columns as the input
+#' @keywords internal
+to_data_table <- function(x) {
+    if (data.table::is.data.table(x)) return(x)
+    if (inherits(x, c("Table", "RecordBatch", "RecordBatchReader", "Dataset"))) {
+        return(data.table::as.data.table(as.data.frame(x)))
+    }
+    data.table::as.data.table(x)
+}
+
+# ------------------------------------------------------------------------------
+
 #' Construct cohorts from raw panel data
 #'
 #' Takes raw panel data with at least two columns: a unit identifier
@@ -20,7 +41,7 @@
 #' @importFrom data.table setorder
 #' @export
 construct_cohorts_from_panel <- function(panel_df, unit_id_col, outcome_id_col, model_rank, min_cohort_size = 0) {
-    panel_dt <- panel_df
+    panel_dt <- to_data_table(panel_df)
 
     # Validate required columns exist
     required_cols <- c(unit_id_col, outcome_id_col)
@@ -34,7 +55,7 @@ construct_cohorts_from_panel <- function(panel_df, unit_id_col, outcome_id_col, 
 
     # Build the globally sorted unique outcome vector and an inverse index map
     all_outcomes <- sort(unique(panel_dt[[outcome_id_col]]))
-    outcome_to_index <- stats::setNames(seq_along(all_outcomes), as.character(all_outcomes))
+    outcome_to_index <- setNames(seq_along(all_outcomes), as.character(all_outcomes))
 
     # For each unit, compute sorted indices of its unique outcomes using the map
     # Also compute a canonical string key for grouping cohorts
