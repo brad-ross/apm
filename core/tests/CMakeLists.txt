@@ -8,7 +8,6 @@ find_package(GTest REQUIRED)
 add_executable(test_apm
     test_apm_core.cpp
     test_linear_algebra_utils.cpp
-    test_process_panel.cpp
 )
 
 # Link with the core library and Google Test
@@ -17,6 +16,8 @@ target_link_libraries(test_apm
     apm
     GTest::gtest
     ${ARMADILLO_LIBRARIES}
+    ${BLAS_LIBRARIES}
+    ${LAPACK_LIBRARIES}
 )
 
 # Include directories

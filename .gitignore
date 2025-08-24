@@ -120,3 +120,7 @@ vendor/
 *.bak
 *.orig
 *.swp
+
+# coding agents 
+.claude/
+CLAUDE.md

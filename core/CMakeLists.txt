@@ -1,30 +1,45 @@
 cmake_minimum_required(VERSION 3.16)
 project(apm_core VERSION 0.1.0 LANGUAGES CXX)
 
+# Modern CMake policies
+cmake_policy(SET CMP0167 OLD)  # Keep using FindBoost for now
+
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Support conda/mamba environments
+if(DEFINED ENV{CONDA_PREFIX})
+    set(CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_PREFIX_PATH}")
+    message(STATUS "Using conda environment: $ENV{CONDA_PREFIX}")
+endif()
 
 # Configure Armadillo as header-only
 set(ARMA_DONT_USE_WRAPPER 1)
 find_package(Armadillo REQUIRED)
 
-# Find Boost (for Graph Library)
+# Find BLAS and LAPACK (required by Armadillo)
+find_package(BLAS REQUIRED)
+find_package(LAPACK REQUIRED)
+
+# Find Boost (for Graph Library) - conda-friendly
 find_package(Boost REQUIRED COMPONENTS graph)
 
-# Find Arrow using system installation (Homebrew)
+# Find Arrow - conda-friendly
 find_package(Arrow REQUIRED)
 
 # Arrow found successfully
 
 # Create the core library
-add_library(apm src/apm_core.cpp src/linear_algebra_utils.cpp src/process_panel.cpp)
+add_library(apm src/apm_core.cpp src/linear_algebra_utils.cpp)
 target_include_directories(apm PUBLIC src)
 
 # Link libraries using modern CMake targets
 target_link_libraries(apm
     PUBLIC
         ${ARMADILLO_LIBRARIES}
+        ${BLAS_LIBRARIES}
+        ${LAPACK_LIBRARIES}
         Boost::graph
         Arrow::arrow_shared
 )
@@ -75,6 +90,6 @@ install(TARGETS apm
     RUNTIME DESTINATION bin
 )
 
-install(FILES src/apm_core.h src/process_panel.h
+install(FILES src/apm_core.h src/linear_algebra_utils.h
     DESTINATION include/apm
 ) 

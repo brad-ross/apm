@@ -1,0 +1,52 @@
+[build-system]
+requires = [
+    "pybind11>=2.6.0",
+    "pybind11[global]",
+    "cmake>=3.16",
+    "ninja",
+]
+build-backend = "pybind11.setup_helpers.build_meta"
+
+[project]
+name = "apm"
+version = "0.1.0"
+description = "Python bindings for the Aggregated Projection Matrix method"
+authors = [
+    {name = "Brad Ross", email = "rossb@nber.org"},
+    {name = "Lihua Lei", email = "lihualei@stanford.edu"},
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.20.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=6.0",
+    "numpy",
+]
+dev = [
+    "pytest>=6.0", 
+    "numpy",
+    "black",
+    "ruff",
+]
+
+[project.urls]
+Homepage = "https://github.com/brad-ross/apm"
+Repository = "https://github.com/brad-ross/apm.git"
+Issues = "https://github.com/brad-ross/apm/issues"
+
+[tool.pybind11.cmake]
+args = ["-DCMAKE_BUILD_TYPE=Release"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.ruff]
+select = ["E", "F", "W", "I"]
+line-length = 88
+target-version = "py38"
