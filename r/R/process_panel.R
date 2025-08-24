@@ -36,6 +36,7 @@ to_data_table <- function(x) {
 #' @param min_cohort_size Minimum units per cohort to keep (default: 0)
 #' @return list with:
 #'   - all_outcomes: sorted unique values of outcome_id_col
+#'   - outcome_to_index: named integer vector mapping outcome value -> index
 #'   - observed_outcome_indices: list of integer index vectors per cohort (ordered by cohort_id)
 #'   - unit_cohorts: data.table with columns unit_id_col, cohort_id
 #' @importFrom data.table setorder
@@ -93,6 +94,7 @@ construct_cohorts_from_panel <- function(panel_df, unit_id_col, outcome_id_col, 
 
     return(list(
         all_outcomes = all_outcomes,
+        outcome_to_index = outcome_to_index,
         observed_outcome_indices = observed_outcome_indices,
         unit_cohorts = unit_cohorts
     ))

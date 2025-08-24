@@ -17,7 +17,8 @@ Depends:
 Imports: 
     Rcpp (>= 1.0.0),
     RcppArmadillo (>= 0.9.000.0.0),
-    data.table (>= 1.14.0)
+    data.table (>= 1.14.0),
+    parallel
 LinkingTo: 
     Rcpp,
     RcppArmadillo

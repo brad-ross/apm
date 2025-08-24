@@ -1,5 +1,3 @@
-library(testthat)
-
 # Helper function to compute a projection matrix in R
 # Uses QR decomposition for numerical stability, mirroring the C++ implementation.
 projection_matrix_r <- function(X) {
@@ -59,6 +57,7 @@ run_alignment_test_r <- function(true_factors,
   expect_equal(proj_aligned, proj_true, tolerance = 1e-9)
 }
 
+context("Testing apm core functionality")
 
 test_that("APM alignment works for a staircase pattern", {
   true_factors <- matrix(c(

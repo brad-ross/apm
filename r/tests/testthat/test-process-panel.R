@@ -1,4 +1,4 @@
-context("process_panel: construct_cohorts_from_panel")
+context("Testing functions used to process raw panel data")
 
 test_that("staircase missingness with two units per cohort (matching core test)", {
     library(data.table)
@@ -114,7 +114,6 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
 
     setorder(res$unit_cohorts, unit_id)
     setorder(expected_map, unit_id)
-    print(res$unit_cohorts)
     expect_equal(res$unit_cohorts, expected_map)
     # Case 2: Drop by rank only (third cohort has 2 units but only 1 outcome)
     units_by_cohort_rank <- list(
@@ -155,6 +154,28 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
     setorder(expected_map_rank, unit_id)
     expect_equal(res_rank$unit_cohorts, expected_map_rank)
     
+})
+
+test_that("to_data_table converts base data.frame to data.table", {
+    library(data.table)
+
+    # Build a simple panel as data.table
+    dt0 <- data.table(
+        unit_id = c("u1", "u1", "u2", "u3"),
+        outcome_id = c("A", "B", "B", "C")
+    )
+
+    # Convert to base data.frame
+    df <- as.data.frame(dt0, stringsAsFactors = FALSE)
+
+    # Use internal helper via triple-colon
+    dt1 <- apm:::to_data_table(df)
+
+    # Validate class and equality (order-insensitive)
+    expect_true(is.data.table(dt1))
+    setorder(dt0, unit_id, outcome_id)
+    setorder(dt1, unit_id, outcome_id)
+    expect_equal(dt1, dt0)
 })
 
 
