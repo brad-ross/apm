@@ -61,7 +61,8 @@ test_that("staircase missingness with two units per cohort (matching core test)"
         unit_id_col = "unit_id",
         outcome_id_col = "outcome_id",
         model_rank = 2,
-        min_cohort_size = 2
+        min_cohort_size = 2,
+        cohort_observed_outcomes_as_df = FALSE
     )
 
     # 1) outcome_names should be sorted unique outcomes
@@ -173,7 +174,8 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         unit_id_col = "unit_id",
         outcome_id_col = "outcome_id",
         model_rank = 1,         # only require at least 1 outcome
-        min_cohort_size = 2     # require at least 2 units per cohort
+        min_cohort_size = 2,    # require at least 2 units per cohort
+        cohort_observed_outcomes_as_df = FALSE
     )
 
     # all outcomes should be intact
@@ -215,7 +217,8 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         unit_id_col = "unit_id",
         outcome_id_col = "outcome_id",
         model_rank = 2,         # now require at least 2 outcomes
-        min_cohort_size = 1     # size condition met for all cohorts
+        min_cohort_size = 1,    # size condition met for all cohorts
+        cohort_observed_outcomes_as_df = FALSE
     )
 
     expected_indices_rank <- list(as.integer(c(1, 2)), as.integer(c(2, 3)))
@@ -277,4 +280,26 @@ test_that("validate_required_panel_cols enforces required columns", {
                  regexp = "missing required column")
 })
 
+
+test_that("construct_cohort_observed_outcomes_df builds long-form mapping", {
+    outcomes <- c("A", "B", "C", "D", "E")
+    cohort_indices <- list(1:3, 2:4, 3:5)
+
+    res_df <- apm:::construct_cohort_observed_outcomes_df(
+        outcome_names = outcomes,
+        observed_outcome_indices = cohort_indices
+    )
+
+    expect_true(is.data.frame(res_df))
+    expect_equal(names(res_df), c("cohort_id", "outcome_idx", "outcome_name"))
+
+    expected_df <- data.frame(
+        cohort_id = c(rep(1L, 3), rep(2L, 3), rep(3L, 3)),
+        outcome_idx = c(1L, 2L, 3L, 2L, 3L, 4L, 3L, 4L, 5L),
+        outcome_name = c("A", "B", "C", "B", "C", "D", "C", "D", "E"),
+        stringsAsFactors = FALSE
+    )
+
+    expect_equal(res_df, expected_df)
+})
 
