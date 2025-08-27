@@ -111,17 +111,21 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
 
     # outcome_names should be sorted unique outcomes
     expect_equal(obj$get_outcome_names(), outcomes)
+    # unit_names should be sorted unique unit ids
+    expect_equal(obj$get_unit_names(), sort(unique(unlist(units_by_cohort))))
 
     # observed_outcome_indices should match defined cohorts
     expected_indices <- lapply(cohort_indices, as.integer)
     expect_equal(obj$get_observed_outcome_indices(), expected_indices)
 
-    # unit_cohorts should map two units per cohort correctly
+    # unit_cohorts should map two units per cohort correctly and include unit_idx
     unit_cohorts <- obj$get_unit_cohorts()
     expect_true(is.data.table(unit_cohorts))
-    expect_equal(sort(names(unit_cohorts)), sort(c("unit_id", "cohort_id")))
+    expect_equal(sort(names(unit_cohorts)), sort(c("unit_id", "unit_idx", "cohort_id")))
 
     expected_map <- build_expected_unit_map(units_by_cohort)
+    unit_names <- sort(unique(unlist(units_by_cohort)))
+    expected_map[, unit_idx := match(unit_id, unit_names)]
     setorder(unit_cohorts, unit_id)
     setorder(expected_map, unit_id)
     expect_equal(unit_cohorts, expected_map)
@@ -129,16 +133,19 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
     # processed_panel should be correctly joined, indexed, and sorted
     pp <- obj$get_processed_panel()
     expect_true(is.data.table(pp))
-    expect_equal(names(pp), c("unit_id", "cohort_id", "outcome_idx", "y"))
+    expect_equal(names(pp), c("unit_idx", "cohort_id", "outcome_idx", "y"))
 
-    # Check ordering: cohort_id, unit_id, outcome_idx
+    # Check ordering: cohort_id, unit_idx, outcome_idx
     pp_copy <- copy(pp)
-    setorder(pp_copy, cohort_id, unit_id, outcome_idx)
+    setorder(pp_copy, cohort_id, unit_idx, outcome_idx)
     expect_equal(pp, pp_copy)
 
     # Build expected processed panel
-    expected_pp <- build_expected_processed_panel(cohort_indices, units_by_cohort)
-    setorder(expected_pp, cohort_id, unit_id, outcome_idx)
+    expected_pp0 <- build_expected_processed_panel(cohort_indices, units_by_cohort)
+    unit_names <- sort(unique(unlist(units_by_cohort)))
+    expected_pp0[, unit_idx := match(unit_id, unit_names)]
+    expected_pp <- expected_pp0[, .(unit_idx, cohort_id, outcome_idx, y)]
+    setorder(expected_pp, cohort_id, unit_idx, outcome_idx)
 
     expect_equal(pp, expected_pp)
 })

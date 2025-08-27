@@ -214,6 +214,7 @@ UnbalancedPanel <- R6Class(
         get_outcome_value_col = function() private$outcome_value_col,
         get_model_rank = function() private$model_rank,
         get_min_cohort_size = function() private$min_cohort_size,
+        get_unit_names = function() private$unit_names,
         get_outcome_names = function() private$outcome_names,
         get_outcome_to_index = function() private$outcome_to_index,
         get_observed_outcome_indices = function() private$observed_outcome_indices,
@@ -235,6 +236,11 @@ UnbalancedPanel <- R6Class(
             validate_required_panel_cols(private$original_panel, 
                 private$unit_id_col, private$outcome_id_col, private$outcome_value_col)
             
+            # Build sorted unit names and index map
+            unit_names <- sort(unique(private$original_panel[[private$unit_id_col]]))
+            private$unit_names <- unit_names
+            private$unit_to_index <- setNames(seq_along(unit_names), as.character(unit_names))
+
             # Compute cohorts and save artifacts
             coh <- construct_cohorts_from_panel(
                 private$original_panel,
@@ -248,6 +254,9 @@ UnbalancedPanel <- R6Class(
             private$outcome_to_index <- coh$outcome_to_index
             private$observed_outcome_indices <- coh$observed_outcome_indices
             private$unit_cohorts <- coh$unit_cohorts
+            
+            # Augment unit_cohorts with unit_idx
+            private$unit_cohorts[, unit_idx := private$unit_to_index[as.character(get(private$unit_id_col))]]
 
             # Select only relevant columns from the original panel
             orig_panel_only_relevant_cols <- private$original_panel[
@@ -261,12 +270,16 @@ UnbalancedPanel <- R6Class(
             # Map outcome ids to outcome indices and drop original outcome id column
             processed[, outcome_idx := private$outcome_to_index[as.character(get(private$outcome_id_col))]]
             processed[, (private$outcome_id_col) := NULL]
+            
+            # Map unit ids to unit indices and drop original unit id column
+            processed[, unit_idx := private$unit_to_index[as.character(get(private$unit_id_col))]]
+            processed[, (private$unit_id_col) := NULL]
 
-            # Sort by cohort_id, unit id, then outcome index (explicit column names)
-            setorderv(processed, c("cohort_id", private$unit_id_col, "outcome_idx"))
+            # Sort by cohort_id, unit_idx, then outcome index (explicit column names)
+            setorderv(processed, c("cohort_id", "unit_idx", "outcome_idx"))
 
-            # Ensure column order: unit_id, cohort_id, outcome_idx, outcome value
-            setcolorder(processed, c(private$unit_id_col, "cohort_id", "outcome_idx", private$outcome_value_col))
+            # Ensure column order: unit_idx, cohort_id, outcome_idx, outcome value
+            setcolorder(processed, c("unit_idx", "cohort_id", "outcome_idx", private$outcome_value_col))
 
             private$processed_panel <- processed
 
@@ -281,6 +294,8 @@ UnbalancedPanel <- R6Class(
         model_rank = NULL,
         min_cohort_size = 0L,
 
+        unit_names = NULL,
+        unit_to_index = NULL,
         outcome_names = NULL,
         outcome_to_index = NULL,
         observed_outcome_indices = NULL,
