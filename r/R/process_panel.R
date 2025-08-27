@@ -50,22 +50,22 @@ validate_required_panel_cols <- function(panel_dt,
 
 #' Construct long-form mapping of cohort observed outcomes
 #'
-#' Given the globally sorted `outcome_names` vector and the
+#' Given the globally sorted `outcome_ids` vector and the
 #' `observed_outcome_indices` list (each element is an integer vector of outcome
 #' indices observed in a cohort, ordered by `cohort_id`), build a data.frame
 #' where each row corresponds to one (cohort, outcome) pair.
 #'
 #' Columns:
 #'   - cohort_id: integer id of the cohort (1-based index into the list)
-#'   - outcome_idx: integer index of the outcome (position in `outcome_names`)
-#'   - outcome_name: character name of the outcome (`outcome_names[outcome_idx]`)
+#'   - outcome_idx: integer index of the outcome (position in `outcome_ids`)
+#'   - outcome_name: character name of the outcome (`outcome_ids[outcome_idx]`)
 #'
-#' @param outcome_names Character (or coercible) vector of outcome names
+#' @param outcome_ids Character (or coercible) vector of outcome ids
 #' @param observed_outcome_indices List of integer vectors, per cohort
 #' @return A base R data.frame with columns `cohort_id`, `outcome_idx`, `outcome_name`
 #' @export
-construct_cohort_observed_outcomes_df <- function(outcome_names, observed_outcome_indices) {
-    outcome_names_chr <- as.character(outcome_names)
+construct_cohort_observed_outcomes_df <- function(outcome_ids, observed_outcome_indices) {
+    outcome_ids_chr <- as.character(outcome_ids)
 
     if (!is.list(observed_outcome_indices)) {
         stop("construct_cohort_observed_outcomes_df(): observed_outcome_indices must be a list of integer vectors")
@@ -83,12 +83,12 @@ construct_cohort_observed_outcomes_df <- function(outcome_names, observed_outcom
 
     outcome_idx <- as.integer(unlist(observed_outcome_indices, use.names = FALSE))
 
-    if (any(is.na(outcome_idx)) || any(outcome_idx < 1L) || any(outcome_idx > length(outcome_names_chr))) {
+    if (any(is.na(outcome_idx)) || any(outcome_idx < 1L) || any(outcome_idx > length(outcome_ids_chr))) {
         stop("construct_cohort_observed_outcomes_df(): outcome index out of bounds for some cohort")
     }
 
     cohort_id <- rep.int(seq_along(observed_outcome_indices), times = lens)
-    outcome_name <- outcome_names_chr[outcome_idx]
+    outcome_name <- outcome_ids_chr[outcome_idx]
 
     data.frame(
         cohort_id = as.integer(cohort_id),
@@ -115,14 +115,15 @@ construct_cohort_observed_outcomes_df <- function(outcome_names, observed_outcom
 #' @param min_cohort_size Minimum units per cohort to keep (default: 0)
 #' @param cohort_observed_outcomes_as_df Logical; if TRUE (default), return a
 #'   single `cohort_observed_outcomes_df` (with columns `cohort_id`, `outcome_idx`,
-#'   `outcome_name`) instead of the triplet (`outcome_names`, `outcome_to_index`,
+#'   `outcome_name`) instead of the triplet (`outcome_ids`, `outcome_to_index`,
 #'   `observed_outcome_indices`). If FALSE, return the original triplet.
 #' @return list with either:
 #'   - when cohort_observed_outcomes_as_df = TRUE:
 #'       - cohort_observed_outcomes_df: long-form mapping of cohorts to outcomes
 #'       - unit_cohorts: data.table with columns unit_id_col, cohort_id
 #'   - when cohort_observed_outcomes_as_df = FALSE:
-#'       - outcome_names: sorted unique values of outcome_id_col
+#'       - outcome_ids: sorted unique values of outcome_id_col
+#'       - outcome_ids: sorted unique values of outcome_id_col
 #'       - outcome_to_index: named integer vector mapping outcome value -> index
 #'       - observed_outcome_indices: list of integer index vectors per cohort (ordered by cohort_id)
 #'       - unit_cohorts: data.table with columns unit_id_col, cohort_id
@@ -140,8 +141,8 @@ construct_cohorts_from_panel <- function(panel_df,
     validate_required_panel_cols(panel_dt, unit_id_col, outcome_id_col)
 
     # Build the globally sorted unique outcome vector and an inverse index map
-    outcome_names <- sort(unique(panel_dt[[outcome_id_col]]))
-    outcome_to_index <- setNames(seq_along(outcome_names), as.character(outcome_names))
+    outcome_ids <- sort(unique(panel_dt[[outcome_id_col]]))
+    outcome_to_index <- setNames(seq_along(outcome_ids), as.character(outcome_ids))
 
     # For each unit, compute sorted indices of its unique outcomes using the map
     # Also compute a canonical string key for grouping cohorts
@@ -180,14 +181,14 @@ construct_cohorts_from_panel <- function(panel_df,
     if (isTRUE(cohort_observed_outcomes_as_df)) {
         return(list(
             cohort_observed_outcomes_df = construct_cohort_observed_outcomes_df(
-                outcome_names = outcome_names,
+                outcome_ids = outcome_ids,
                 observed_outcome_indices = observed_outcome_indices
             ),
             unit_cohorts = unit_cohorts
         ))
     } else {
         return(list(
-            outcome_names = outcome_names,
+            outcome_ids = outcome_ids,
             outcome_to_index = outcome_to_index,
             observed_outcome_indices = observed_outcome_indices,
             unit_cohorts = unit_cohorts
@@ -214,8 +215,8 @@ UnbalancedPanel <- R6Class(
         get_outcome_value_col = function() private$outcome_value_col,
         get_model_rank = function() private$model_rank,
         get_min_cohort_size = function() private$min_cohort_size,
-        get_unit_names = function() private$unit_names,
-        get_outcome_names = function() private$outcome_names,
+        get_unit_ids = function() private$unit_ids,
+        get_outcome_ids = function() private$outcome_ids,
         get_outcome_to_index = function() private$outcome_to_index,
         get_observed_outcome_indices = function() private$observed_outcome_indices,
         get_unit_cohorts = function() private$unit_cohorts,
@@ -236,10 +237,10 @@ UnbalancedPanel <- R6Class(
             validate_required_panel_cols(private$original_panel, 
                 private$unit_id_col, private$outcome_id_col, private$outcome_value_col)
             
-            # Build sorted unit names and index map
-            unit_names <- sort(unique(private$original_panel[[private$unit_id_col]]))
-            private$unit_names <- unit_names
-            private$unit_to_index <- setNames(seq_along(unit_names), as.character(unit_names))
+            # Build sorted unit ids and index map
+            unit_ids <- sort(unique(private$original_panel[[private$unit_id_col]]))
+            private$unit_ids <- unit_ids
+            private$unit_to_index <- setNames(seq_along(unit_ids), as.character(unit_ids))
 
             # Compute cohorts and save artifacts
             coh <- construct_cohorts_from_panel(
@@ -250,7 +251,7 @@ UnbalancedPanel <- R6Class(
                 private$min_cohort_size,
                 cohort_observed_outcomes_as_df = FALSE
             )
-            private$outcome_names <- coh$outcome_names
+            private$outcome_ids <- coh$outcome_ids
             private$outcome_to_index <- coh$outcome_to_index
             private$observed_outcome_indices <- coh$observed_outcome_indices
             private$unit_cohorts <- coh$unit_cohorts
@@ -294,9 +295,9 @@ UnbalancedPanel <- R6Class(
         model_rank = NULL,
         min_cohort_size = 0L,
 
-        unit_names = NULL,
+        unit_ids = NULL,
         unit_to_index = NULL,
-        outcome_names = NULL,
+        outcome_ids = NULL,
         outcome_to_index = NULL,
         observed_outcome_indices = NULL,
         unit_cohorts = NULL,

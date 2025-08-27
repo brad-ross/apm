@@ -65,8 +65,8 @@ test_that("staircase missingness with two units per cohort (matching core test)"
         cohort_observed_outcomes_as_df = FALSE
     )
 
-    # 1) outcome_names should be sorted unique outcomes
-    expect_equal(res$outcome_names, outcomes)
+    # 1) outcome_ids should be sorted unique outcomes
+    expect_equal(res$outcome_ids, outcomes)
 
     # 2) observed_outcome_indices should match defined cohorts in cohort_id order
     expected_indices <- lapply(cohort_indices, as.integer)
@@ -109,10 +109,10 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
         min_cohort_size = 2
     )
 
-    # outcome_names should be sorted unique outcomes
-    expect_equal(obj$get_outcome_names(), outcomes)
-    # unit_names should be sorted unique unit ids
-    expect_equal(obj$get_unit_names(), sort(unique(unlist(units_by_cohort))))
+    # outcome_ids should be sorted unique outcomes
+    expect_equal(obj$get_outcome_ids(), outcomes)
+    # unit_ids should be sorted unique unit ids
+    expect_equal(obj$get_unit_ids(), sort(unique(unlist(units_by_cohort))))
 
     # observed_outcome_indices should match defined cohorts
     expected_indices <- lapply(cohort_indices, as.integer)
@@ -186,7 +186,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
     )
 
     # all outcomes should be intact
-    expect_equal(res$outcome_names, outcomes)
+    expect_equal(res$outcome_ids, outcomes)
 
     # The small cohort has outcome_count=1 < 2 and num_units=1 < 2, so it's dropped
     expected_indices_size <- list(as.integer(c(1, 2)), as.integer(c(2, 3)))
@@ -293,7 +293,7 @@ test_that("construct_cohort_observed_outcomes_df builds long-form mapping", {
     cohort_indices <- list(1:3, 2:4, 3:5)
 
     res_df <- apm:::construct_cohort_observed_outcomes_df(
-        outcome_names = outcomes,
+        outcome_ids = outcomes,
         observed_outcome_indices = cohort_indices
     )
 
