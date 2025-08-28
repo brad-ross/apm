@@ -125,11 +125,17 @@ MultinomialBootstrap::MultinomialBootstrap(std::size_t N, std::size_t B, std::ui
 BayesianBootstrap::BayesianBootstrap(std::size_t N, std::size_t B, std::uint64_t seed)
     : WeightedBootstrap([&]() {
           validate_bootstrap_sizes(N, B, "BayesianBootstrap");
+          // When building for R (via RcppArmadillo), Armadillo's RNG is wired to
+          // R's RNG. Seeding must be done from R (set.seed). Avoid calling
+          // arma::arma_rng::set_seed* to prevent warnings and ensure correctness.
+          // Outside of R builds, we seed Armadillo's RNG directly.
+          #ifndef USING_R
           if (seed) {
               arma::arma_rng::set_seed(seed);
           } else {
               arma::arma_rng::set_seed_random();
           }
+          #endif
 
           arma::mat W(N, B, arma::fill::none);
           for (std::size_t b = 0; b < B; ++b) {
