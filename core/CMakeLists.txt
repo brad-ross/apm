@@ -18,7 +18,7 @@ find_package(Arrow REQUIRED)
 # Arrow found successfully
 
 # Create the core library
-add_library(apm src/apm_core.cpp src/linear_algebra_utils.cpp src/process_panel.cpp)
+add_library(apm src/apm_core.cpp src/linear_algebra_utils.cpp src/bootstrap.cpp)
 target_include_directories(apm PUBLIC src)
 
 # Link libraries using modern CMake targets
@@ -75,6 +75,6 @@ install(TARGETS apm
     RUNTIME DESTINATION bin
 )
 
-install(FILES src/apm_core.h src/process_panel.h
+install(FILES src/apm_core.h src/bootstrap.h
     DESTINATION include/apm
 ) 
