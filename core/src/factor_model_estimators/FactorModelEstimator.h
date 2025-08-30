@@ -71,22 +71,24 @@ public:
      *
      * @param unit_idxs A vector of length N containing unit indices for the batch.
      * @param Y An N x T_c matrix of observed outcomes for the batch.
-     * @param X An N x T_c x q cube of covariates for the batch (if q == 0, X may be empty).
+     * @param X An N x T_c x q cube of covariates for the batch. If q==0, X may be empty
+     *          (zero slices; rows/cols may be zero or match N and T_c).
      */
     void add_data(const arma::uvec& unit_idxs,
                   const arma::mat& Y,
-                  const arma::cube& X);
+                  const arma::cube& X = arma::cube());
 
     /**
      * @brief Adds a single observation.
      *
      * @param unit_idx The unit index for the observation.
      * @param Y A vector of length T_c containing observed outcomes for the unit.
-     * @param X A T_c x q matrix of covariates for the unit (if q == 0, X may have zero columns).
+     * @param X A T_c x q matrix of covariates for the unit. If q==0, X may have
+     *          zero columns (rows may be zero or T_c).
      */
     void add_datum(std::size_t unit_idx,
                    const arma::vec& Y,
-                   const arma::mat& X);
+                   const arma::mat& X = arma::mat());
 
     /**
      * @brief Produces parameter estimates from the accumulated data.

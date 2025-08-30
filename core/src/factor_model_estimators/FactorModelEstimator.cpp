@@ -24,6 +24,13 @@ void FactorModelEstimator::validate_data_dimensions(const arma::uvec& unit_idxs,
     if (Y.n_rows != N || Y.n_cols != T_c_) {
         throw std::invalid_argument("add_data(): Y must be N x T_c.");
     }
+    if (q_ == 0) {
+        // Allow empty X when q==0
+        if (!(X.is_empty() || X.n_slices == 0)) {
+            throw std::invalid_argument("add_data(): q==0 so X must be empty (zero slices).");
+        }
+        return;
+    }
     if (X.n_rows != N || X.n_cols != T_c_ || X.n_slices != q_) {
         throw std::invalid_argument("add_data(): X must be N x T_c x q.");
     }
@@ -34,6 +41,12 @@ void FactorModelEstimator::validate_datum_dimensions(std::size_t unit_idx,
                                                      const arma::mat& X) const {
     if (Y.n_elem != T_c_) {
         throw std::invalid_argument("add_datum(): Y must have length T_c.");
+    }
+    if (q_ == 0) {
+        if (!(X.is_empty() || X.n_cols == 0)) {
+            throw std::invalid_argument("add_datum(): q==0 so X must have zero columns or be empty.");
+        }
+        return;
     }
     if (X.n_rows != T_c_ || X.n_cols != q_) {
         throw std::invalid_argument("add_datum(): X must be T_c x q.");
