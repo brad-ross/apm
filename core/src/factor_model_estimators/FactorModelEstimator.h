@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "../bootstrap.h"
+#include "../FactorModelParameters.h"
 
 #ifdef USING_R
 #include <RcppArmadillo.h>
@@ -86,6 +87,14 @@ public:
     void add_datum(std::size_t unit_idx,
                    const arma::vec& Y,
                    const arma::mat& X);
+
+    /**
+     * @brief Produces parameter estimates from the accumulated data.
+     * @return FactorModelParameters containing estimate of the T_c x r factor matrix G, 
+     * optional T_c-dimensional outcome fixed effects g_0 and optional q-dimensional 
+     * covariate coefficients a.
+     */
+    virtual FactorModelParameters estimate() = 0;
 
 protected:
     /**
