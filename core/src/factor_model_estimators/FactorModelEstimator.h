@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "../bootstrap.h"
 #include "../FactorModelParameters.h"
@@ -15,6 +16,35 @@
 #endif
 
 namespace apm {
+
+/**
+ * @brief Container for point estimates and (optional) bootstrap replicates of factor model parameters.
+ *
+ * Fields:
+ *  - parameter_estimates: the primary parameter estimates (G, optional g_0, optional a).
+ *  - bootstrap_replicates: a vector of parameter estimates, one per bootstrap draw when present,
+ *    or empty if no bootstrap is attached.
+ */
+struct FactorModelEstimates {
+    FactorModelParameters parameter_estimates;                 // point estimates
+    std::vector<FactorModelParameters> bootstrap_replicates;  // length B if bootstrap is present; otherwise 0
+
+    /**
+     * @brief Move-construct from a precomputed vector of bootstrap replicates.
+     * @param params Point estimates.
+     * @param boot_reps Vector of bootstrap parameter estimates (moved into place).
+     */
+    FactorModelEstimates(FactorModelParameters params,
+                         std::vector<FactorModelParameters> boot_reps)
+        : parameter_estimates(std::move(params)),
+          bootstrap_replicates(std::move(boot_reps)) {}
+
+    /**
+     * @brief Indicates whether bootstrap replicates are present (non-empty).
+     * @return `true` if replicates exist, `false` otherwise.
+     */
+    bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
+};
 
 /**
  * @brief Abstract base class for linear factor model estimators.
@@ -91,12 +121,10 @@ public:
                    const arma::mat& X = arma::mat());
 
     /**
-     * @brief Produces parameter estimates from the accumulated data.
-     * @return FactorModelParameters containing estimate of the T_c x r factor matrix G, 
-     * optional T_c-dimensional outcome fixed effects g_0 and optional q-dimensional 
-     * covariate coefficients a.
+     * @brief Produces parameter estimates (and optional bootstrap replicates) from the accumulated data.
+     * @return FactorModelEstimates containing point estimates and (if applicable) bootstrap replicates.
      */
-    virtual FactorModelParameters estimate() = 0;
+    virtual FactorModelEstimates estimate() = 0;
 
 protected:
     /**
