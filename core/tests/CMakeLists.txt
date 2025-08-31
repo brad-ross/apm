@@ -9,6 +9,7 @@ add_executable(test_apm
     test_apm_core.cpp
     test_linear_algebra_utils.cpp
     test_bootstrap.cpp
+    test_pc_estimators.cpp
 )
 
 # Link with the core library and Google Test

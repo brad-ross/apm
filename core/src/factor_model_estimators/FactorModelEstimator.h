@@ -128,6 +128,10 @@ public:
 
     /**
      * @brief Adds a single observation by wrapping into a batch and delegating to add_data.
+     * 
+     * @param unit_idx The index of the unit to add.
+     * @param Y A T_c vector of outcomes for the unit.
+     * @param X A T_c x q matrix of covariates for the unit.
      */
     void add_datum(std::size_t unit_idx,
                    const arma::vec& Y,
