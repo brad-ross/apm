@@ -13,8 +13,22 @@ void FactorModelEstimator::add_data(const arma::uvec& unit_idxs,
 void FactorModelEstimator::add_datum(std::size_t unit_idx,
                                      const arma::vec& Y,
                                      const arma::mat& X) {
-    validate_datum_dimensions(unit_idx, Y, X);
-    add_datum_(unit_idx, Y, X);
+    arma::uvec unit_idxs(1);
+    unit_idxs(0) = static_cast<arma::uword>(unit_idx);
+
+    arma::mat Y_batch = Y.t(); // 1 x T_c_
+
+    arma::cube X_batch;
+    if (q_ == 0 || X.n_cols == 0) {
+        X_batch = arma::cube(); // empty cube when no covariates
+    } else {
+        X_batch.set_size(1, T_c_, q_);
+        for (std::size_t s = 0; s < q_; ++s) {
+            X_batch.slice(static_cast<arma::uword>(s)).row(0) = X.col(static_cast<arma::uword>(s)).t();
+        }
+    }
+
+    add_data(unit_idxs, Y_batch, X_batch);
 }
 
 void FactorModelEstimator::validate_data_dimensions(const arma::uvec& unit_idxs,
@@ -36,22 +50,6 @@ void FactorModelEstimator::validate_data_dimensions(const arma::uvec& unit_idxs,
     }
 }
 
-void FactorModelEstimator::validate_datum_dimensions(std::size_t unit_idx,
-                                                     const arma::vec& Y,
-                                                     const arma::mat& X) const {
-    if (Y.n_elem != T_c_) {
-        throw std::invalid_argument("add_datum(): Y must have length T_c.");
-    }
-    if (q_ == 0) {
-        if (!(X.is_empty() || X.n_cols == 0)) {
-            throw std::invalid_argument("add_datum(): q==0 so X must have zero columns or be empty.");
-        }
-        return;
-    }
-    if (X.n_rows != T_c_ || X.n_cols != q_) {
-        throw std::invalid_argument("add_datum(): X must be T_c x q.");
-    }
-}
 
 } // namespace apm
 

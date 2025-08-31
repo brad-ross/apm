@@ -109,12 +109,7 @@ public:
                   const arma::cube& X = arma::cube());
 
     /**
-     * @brief Adds a single observation.
-     *
-     * @param unit_idx The unit index for the observation.
-     * @param Y A vector of length T_c containing observed outcomes for the unit.
-     * @param X A T_c x q matrix of covariates for the unit. If q==0, X may have
-     *          zero columns (rows may be zero or T_c).
+     * @brief Adds a single observation by wrapping into a batch and delegating to add_data.
      */
     void add_datum(std::size_t unit_idx,
                    const arma::vec& Y,
@@ -157,16 +152,7 @@ protected:
                                   const arma::mat& Y,
                                   const arma::cube& X) const;
 
-    /**
-     * @brief Validates dimensions for a single observation add.
-     *
-     * Requirements:
-     *  - Y must have length T_c
-     *  - X must be T_c x q (may have zero columns if q == 0)
-     */
-    void validate_datum_dimensions(std::size_t unit_idx,
-                                   const arma::vec& Y,
-                                   const arma::mat& X) const;
+    // No single-datum validation needed; add_data performs validation for wrapped batches
 
     //==============================================================================
     // Hooks to be implemented by subclasses
@@ -179,12 +165,7 @@ protected:
                            const arma::mat& Y,
                            const arma::cube& X) = 0;
 
-    /**
-     * @brief Subclass hook for adding a single observation (pre-validated inputs).
-     */
-    virtual void add_datum_(std::size_t unit_idx,
-                            const arma::vec& Y,
-                            const arma::mat& X) = 0;
+    // No add_datum_ hook needed; add_datum wraps and calls add_data
 
     std::size_t r_;                                        // model rank
     std::size_t T_c_;                                      // outcome dimension
