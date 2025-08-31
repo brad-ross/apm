@@ -200,5 +200,3 @@ protected:
 } // namespace apm
 
 #endif // APM_FACTOR_MODEL_ESTIMATOR_H
-
-
