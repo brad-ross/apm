@@ -31,6 +31,18 @@ void FactorModelEstimator::add_datum(std::size_t unit_idx,
     add_data(unit_idxs, Y_batch, X_batch);
 }
 
+arma::vec FactorModelEstimator::boot_weights_for_indices(const arma::uvec& unit_idxs, std::size_t b) const {
+    if (!bootstrap_) {
+        throw std::runtime_error("bootstrap_weights_for_indices: no bootstrap present");
+    }
+    const std::size_t B = num_bootstraps();
+    if (b >= B) {
+        throw std::out_of_range("bootstrap_weights_for_indices: draw index out of range");
+    }
+    const arma::mat rows = bootstrap_->obs(unit_idxs); // N x B
+    return rows.col(static_cast<arma::uword>(b));       // length N
+}
+
 void FactorModelEstimator::validate_data_dimensions(const arma::uvec& unit_idxs,
                                                     const arma::mat& Y,
                                                     const arma::cube& X) const {

@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -87,6 +88,23 @@ public:
     std::shared_ptr<const WeightedBootstrap> bootstrap() const noexcept { return bootstrap_; }
 
     /**
+     * @brief Returns the number of bootstrap replicates.
+     * @return B when bootstrap present; otherwise 0.
+     */
+    std::size_t num_bootstraps() const noexcept {
+        return bootstrap_ ? bootstrap_->n_bootstraps() : 0;
+    }
+
+    /**
+     * @brief Returns bootstrap weights for the specified unit indices and draw b.
+     * @param unit_idxs Vector of unit indices (rows in the bootstrap weight matrix).
+     * @param b Bootstrap draw index in [0, B).
+     * @return Vector of length unit_idxs.n_elem containing weights for draw b.
+     * @throws std::runtime_error if no bootstrap is present or b is out of range.
+     */
+    arma::vec boot_weights_for_indices(const arma::uvec& unit_idxs, std::size_t b) const;
+
+    /**
      * @brief Returns the covariate dimension.
      * @return Covariate dimension q.
      */
@@ -134,7 +152,11 @@ protected:
                                   std::size_t T_c,
                                   std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
                                   std::size_t q = 0)
-        : r_(r), T_c_(T_c), bootstrap_(std::move(bootstrap)), q_(q) {}
+        : r_(r), T_c_(T_c), bootstrap_(std::move(bootstrap)), q_(q) {
+        if (r_ > T_c_) {
+            throw std::invalid_argument("FactorModelEstimator: r must be <= T_c.");
+        }
+    }
 
     //==============================================================================
     // Validation helpers
@@ -164,8 +186,6 @@ protected:
     virtual void add_data_(const arma::uvec& unit_idxs,
                            const arma::mat& Y,
                            const arma::cube& X) = 0;
-
-    // No add_datum_ hook needed; add_datum wraps and calls add_data
 
     std::size_t r_;                                        // model rank
     std::size_t T_c_;                                      // outcome dimension
