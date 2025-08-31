@@ -79,6 +79,52 @@ std::pair<arma::mat, double> PCBase::weighted_combine_second_moment_mats(
     return {std::move(combined), total_weight};
 }
 
+arma::mat PCBase::top_r_eigenvectors_psd(const arma::mat& S, std::size_t r)
+{
+    const arma::uword n = S.n_rows;
+    if (S.n_cols != n) {
+        throw std::invalid_argument("top_r_eigenvectors_psd: input must be square.");
+    }
+    if (r > static_cast<std::size_t>(n)) {
+        throw std::invalid_argument("top_r_eigenvectors_psd: r cannot exceed matrix dimension.");
+    }
+    if (r == 0) {
+        return arma::mat(n, 0, arma::fill::zeros);
+    }
+
+    arma::vec eigval;
+    arma::mat eigvec;
+    if (!arma::eig_sym(eigval, eigvec, S)) {
+        throw std::runtime_error("top_r_eigenvectors_psd: eig_sym failed.");
+    }
+
+    const arma::uword p = eigvec.n_cols;
+    arma::uvec idxs = arma::regspace<arma::uvec>(p - static_cast<arma::uword>(r), p - 1);
+    return eigvec.cols(idxs);
+}
+
+FactorModelEstimates PCEstimator::estimate()
+{
+    // Compute main estimate using accumulated second-moment matrix
+    const arma::mat& S = outcome_second_moment();
+    arma::mat G_hat = top_r_eigenvectors_psd(S, r());
+    FactorModelParameters params(std::move(G_hat));
+
+    // Bootstrap replicates, if any
+    std::vector<FactorModelParameters> boot_reps;
+    const std::size_t B = num_bootstraps();
+    if (B > 0) {
+        boot_reps.reserve(B);
+        for (std::size_t b = 0; b < B; ++b) {
+            arma::mat S_b = boot_outcome_second_moment_mats.slice(static_cast<arma::uword>(b));
+            arma::mat G_b = top_r_eigenvectors_psd(S_b, r());
+            boot_reps.emplace_back(std::move(G_b));
+        }
+    }
+
+    return FactorModelEstimates(std::move(params), std::move(boot_reps));
+}
+
 PCEstimatorWithFEs::PCEstimatorWithFEs(std::size_t r,
                                        std::size_t T_c,
                                        std::shared_ptr<const WeightedBootstrap> bootstrap,
@@ -141,6 +187,31 @@ arma::vec PCEstimatorWithFEs::weighted_combine_means(
     const double rel_batch_weight = batch_weight / total_weight;
     arma::vec combined = rel_batch_weight * batch_mean + (1 - rel_batch_weight) * current_mean;
     return combined;
+}
+
+FactorModelEstimates PCEstimatorWithFEs::estimate()
+{
+    // Compute covariance matrix: E[YY'] - mu mu'
+    arma::mat cov = outcome_second_moment() - outcome_means * outcome_means.t();
+
+    arma::mat G_hat = top_r_eigenvectors_psd(cov, r());
+    FactorModelParameters params(std::move(G_hat), outcome_means);
+
+    std::vector<FactorModelParameters> boot_reps;
+    const std::size_t B = num_bootstraps();
+    if (B > 0) {
+        boot_reps.reserve(B);
+        for (std::size_t b = 0; b < B; ++b) {
+            const arma::uword bu = static_cast<arma::uword>(b);
+            arma::vec mu_b = boot_outcome_means.col(bu);
+            arma::mat cov_b = boot_outcome_second_moment_mats.slice(bu) - mu_b * mu_b.t();
+
+            arma::mat G_b = top_r_eigenvectors_psd(cov_b, r());
+            boot_reps.emplace_back(std::move(G_b), std::move(mu_b));
+        }
+    }
+
+    return FactorModelEstimates(std::move(params), std::move(boot_reps));
 }
 
 } // namespace apm

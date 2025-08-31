@@ -26,6 +26,11 @@ protected:
         const arma::mat& current_second_moment_mat,
         double current_total_weight);
 
+    // Returns n x r matrix whose columns are eigenvectors associated with the
+    // largest r eigenvalues of a symmetric PSD matrix S. Assumes S is PSD
+    // and symmetric; does not symmetrize.
+    static arma::mat top_r_eigenvectors_psd(const arma::mat& S, std::size_t r);
+
     std::size_t N; // number of observations
 
     // Accessor for subclasses to read the accumulated second moment matrix
@@ -42,6 +47,8 @@ private:
 class PCEstimator : public PCBase {
 public:
     using PCBase::PCBase;
+
+    FactorModelEstimates estimate() override;
 };
 
 class PCEstimatorWithFEs : public PCBase {
@@ -50,6 +57,8 @@ public:
                                 std::size_t T_c,
                                 std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
                                 std::size_t q = 0);
+
+    FactorModelEstimates estimate() override;
 
 protected:
     void add_data_(const arma::uvec& unit_idxs,
