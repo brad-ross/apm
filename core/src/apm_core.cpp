@@ -199,34 +199,6 @@ arma::mat align_factors_using_apm(
     return arma::null(agg_proj_mat);
 }
 
-arma::vec aggregate_cohort_specific_covariate_coefs(
-    const std::vector<arma::vec>& a_c_vec,
-    const arma::vec& cohort_weights) {
-    if (a_c_vec.empty()) {
-        return arma::vec();
-    }
-
-    const arma::uword C = a_c_vec.size();
-    const arma::uword q = a_c_vec[0].n_elem;
-    arma::vec mean_a(q, arma::fill::zeros);
-
-    arma::vec weights = cohort_weights;
-    if (weights.n_elem == 0) {
-        weights = arma::vec(C, arma::fill::ones);
-    }
-    const arma::vec effective_weights = process_weights(weights, C);
-
-    for (arma::uword c = 0; c < C; ++c) {
-        const auto& a_c = a_c_vec[c];
-        if (a_c.n_elem != q) {
-            throw std::invalid_argument("All covariate coefficient vectors must have the same length.");
-        }
-        mean_a += a_c * effective_weights(c);
-    }
-
-    return mean_a;
-}
-
 arma::vec aggregate_cohort_specific_outcome_fes(
     const std::vector<arma::vec>& g_0_c_vec,
     const ObservedOutcomeIndices& observed_outcome_indices,
@@ -276,6 +248,34 @@ arma::vec aggregate_cohort_specific_outcome_fes(
     }
 
     return g_0;
+}
+
+arma::vec aggregate_cohort_specific_covariate_coefs(
+    const std::vector<arma::vec>& a_c_vec,
+    const arma::vec& cohort_weights) {
+    if (a_c_vec.empty()) {
+        return arma::vec();
+    }
+
+    const arma::uword C = a_c_vec.size();
+    const arma::uword q = a_c_vec[0].n_elem;
+    arma::vec mean_a(q, arma::fill::zeros);
+
+    arma::vec weights = cohort_weights;
+    if (weights.n_elem == 0) {
+        weights = arma::vec(C, arma::fill::ones);
+    }
+    const arma::vec effective_weights = process_weights(weights, C);
+
+    for (arma::uword c = 0; c < C; ++c) {
+        const auto& a_c = a_c_vec[c];
+        if (a_c.n_elem != q) {
+            throw std::invalid_argument("All covariate coefficient vectors must have the same length.");
+        }
+        mean_a += a_c * effective_weights(c);
+    }
+
+    return mean_a;
 }
 
 FactorModelParameters aggregate_cohort_specific_factor_model_params(
