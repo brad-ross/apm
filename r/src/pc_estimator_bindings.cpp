@@ -1,7 +1,7 @@
 #include <RcppArmadillo.h>
-#include "../../../core/src/factor_model_estimators/pc_estimators.h"
-#include "../../../core/src/bootstrap.h"
-#include "../r_utils.h"
+#include "../../core/src/factor_model_estimators/pc_estimators.h"
+#include "../../core/src/bootstrap.h"
+#include "r_utils.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 

@@ -1,8 +1,8 @@
 #include <RcppArmadillo.h>
-#include "../../../core/src/factor_model_estimators/FactorModelEstimator.h"
-#include "../../../core/src/FactorModelParameters.h"
-#include "../../../core/src/bootstrap.h"
-#include "../r_utils.h"
+#include "../../core/src/factor_model_estimators/FactorModelEstimator.h"
+#include "../../core/src/FactorModelParameters.h"
+#include "../../core/src/bootstrap.h"
+#include "r_utils.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
