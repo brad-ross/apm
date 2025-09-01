@@ -9,4 +9,7 @@ PKG_CXXFLAGS = -std=c++17
 PKG_LIBS = -L/opt/homebrew/lib $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
 # Object files (including the core library)
-OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o ../../core/src/apm_core.o ../../core/src/linear_algebra_utils.o ../../core/src/bootstrap.o 
+OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o \
+           ../../core/src/apm_core.o ../../core/src/linear_algebra_utils.o ../../core/src/bootstrap.o \
+           ../../core/src/factor_model_estimators/FactorModelEstimator.o ../../core/src/factor_model_estimators/pc_estimators.o \
+           factor_model_estimators/factor_model_estimator_bindings.o factor_model_estimators/pc_estimator_bindings.o
