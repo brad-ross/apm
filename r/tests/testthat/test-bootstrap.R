@@ -1,3 +1,5 @@
+context("Testing bootstrap data structures")
+
 test_that("Multinomial bootstrap dims, sums, and accessors", {
   N <- 25L; B <- 100L
   wb <- WeightedBootstrap$new(N, B, type = "multinomial", seed = 123)

@@ -8,6 +8,8 @@ expect_same_subspace <- function(G1, G2, tol = 1e-9) {
   testthat::expect_true(max(abs(P1 - P2)) < tol, info = paste0("P1=\n", capture.output(print(P1)), "\nP2=\n", capture.output(print(P2))))
 }
 
+context("Testing principal component factor model estimators")
+
 #==============================================================================
 # PCEstimator tests (no fixed effects)
 #==============================================================================
