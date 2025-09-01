@@ -33,7 +33,7 @@ arma::uword get_num_outcomes(
 
 ProblemDimensions get_problem_dimensions(
     const std::vector<arma::mat>& cohort_factor_matrices,
-    const std::vector<arma::uvec>& observed_outcome_indices) {
+    const apm::ObservedOutcomeIndices& observed_outcome_indices) {
     
     if (cohort_factor_matrices.size() != observed_outcome_indices.size() || cohort_factor_matrices.empty()) {
         throw std::invalid_argument("There must be at least one cohort's factor matrix and observed outcome indices, and the number of cohort factor matrices must match the number of observed outcome indices.");
@@ -80,7 +80,7 @@ arma::vec process_weights(
 
 arma::mat compute_aggregated_projection_matrix(
     const std::vector<arma::mat>& cohort_factor_matrices,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const apm::ObservedOutcomeIndices& observed_outcome_indices,
     const ProblemDimensions& dims,
     const arma::vec& cohort_weights) {
     arma::mat agg_proj_mat(dims.T, dims.T, arma::fill::zeros);
@@ -122,7 +122,7 @@ using Graph = boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS
 // Helper to compute the union of observed outcomes for a super cohort
 std::set<arma::uword> get_observed_outcomes_for_super_cohort(
     const std::set<arma::uword>& super_cohort,
-    const std::vector<arma::uvec>& observed_outcome_indices) {
+    const apm::ObservedOutcomeIndices& observed_outcome_indices) {
     
     std::set<arma::uword> all_indices;
     for (const auto& cohort_idx : super_cohort) {
@@ -135,7 +135,7 @@ std::set<arma::uword> get_observed_outcomes_for_super_cohort(
 
 Graph construct_o3_graph(
     const std::vector<std::set<arma::uword>>& super_cohorts,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const apm::ObservedOutcomeIndices& observed_outcome_indices,
     unsigned int r) {
     
     const arma::uword num_super_cohorts = super_cohorts.size();
@@ -178,7 +178,7 @@ std::string get_version() {
 
 arma::mat align_factors_using_apm(
     const std::vector<arma::mat>& cohort_factor_matrices,
-    const std::vector<arma::uvec>& observed_outcome_indices) {
+    const ObservedOutcomeIndices& observed_outcome_indices) {
     // Default to equal weights across cohorts.
     arma::vec cohort_weights(cohort_factor_matrices.size(), arma::fill::ones);
 
@@ -187,7 +187,7 @@ arma::mat align_factors_using_apm(
 
 arma::mat align_factors_using_apm(
     const std::vector<arma::mat>& cohort_factor_matrices,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const arma::vec& cohort_weights) {
     const auto dims = get_problem_dimensions(cohort_factor_matrices, observed_outcome_indices);
 
@@ -223,7 +223,7 @@ arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>
 
 arma::vec aggregate_cohort_specific_outcome_fes(
     const std::vector<arma::vec>& g_0_c_vec,
-    const std::vector<arma::uvec>& observed_outcome_indices) {
+    const ObservedOutcomeIndices& observed_outcome_indices) {
 
     if (g_0_c_vec.size() != observed_outcome_indices.size()) {
         throw std::invalid_argument("Number of fixed effect vectors must match number of observed outcome index vectors.");
@@ -322,7 +322,7 @@ arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::vec& a,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec,
     const std::vector<arma::mat>& X_c_vec) {
 
@@ -357,7 +357,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec) {
     
     const arma::uword T = G.n_rows;
@@ -385,7 +385,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
     const arma::vec& a,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec,
     const std::vector<arma::mat>& X_c_vec) {
 
@@ -413,7 +413,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 
 arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec) {
 
     const arma::uword T = G.n_rows;
@@ -440,7 +440,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 //==============================================================================
 
 std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     unsigned int r) {
     
     const arma::uword C = observed_outcome_indices.size();
@@ -486,7 +486,7 @@ std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
 }
 
 bool aligned_factors_identified(
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     unsigned int r) {
 
     const arma::uword C = observed_outcome_indices.size();

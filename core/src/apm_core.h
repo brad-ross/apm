@@ -12,6 +12,9 @@
 
 namespace apm {
 
+// Alias representing the type of observed_outcome_indices throughout the codebase
+using ObservedOutcomeIndices = std::vector<arma::uvec>;
+
 /**
  * @brief Get library version information
  * 
@@ -46,7 +49,7 @@ std::string get_version();
  */
 arma::mat align_factors_using_apm(
     const std::vector<arma::mat>& cohort_factor_matrices,
-    const std::vector<arma::uvec>& observed_outcome_indices);
+    const ObservedOutcomeIndices& observed_outcome_indices);
 
 /**
  * @brief Computes an aligned matrix of factor vectors from cohort-specific ones using cohort-specific weights.
@@ -72,7 +75,7 @@ arma::mat align_factors_using_apm(
  */
 arma::mat align_factors_using_apm(
     const std::vector<arma::mat>& cohort_factor_matrices,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const arma::vec& cohort_weights);
 
 /**
@@ -101,7 +104,7 @@ arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>
  */
 arma::vec aggregate_cohort_specific_outcome_fes(
     const std::vector<arma::vec>& g_0_c_vec,
-    const std::vector<arma::uvec>& observed_outcome_indices);
+    const ObservedOutcomeIndices& observed_outcome_indices);
 
 //==============================================================================
 // Outcome Imputation
@@ -185,7 +188,7 @@ arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::vec& a,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec,
     const std::vector<arma::mat>& X_c_vec);
 
@@ -200,7 +203,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec);
 
 /**
@@ -215,7 +218,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
     const arma::vec& a,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec,
     const std::vector<arma::mat>& X_c_vec);
 
@@ -228,7 +231,7 @@ arma::mat estimate_outcome_means_across_cohorts(
  */
 arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec);
 
 //==============================================================================
@@ -251,7 +254,7 @@ arma::mat estimate_outcome_means_across_cohorts(
  *         corresponding to the original cohorts together forming a super cohort.
  */
 std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     unsigned int r);
 
 /**
@@ -269,7 +272,7 @@ std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
  * @return `true` if the factors are identified, `false` otherwise.
  */
 bool aligned_factors_identified(
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     unsigned int r);
 
 } // namespace apm

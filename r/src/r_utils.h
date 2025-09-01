@@ -2,6 +2,7 @@
 #define APM_R_UTILS_H
 
 #include <RcppArmadillo.h>
+#include "../../core/src/apm_core.h"
 #include <vector>
 #include <memory>
 namespace apm { class WeightedBootstrap; }
@@ -12,7 +13,7 @@ namespace apm {
 namespace r_utils {
 
 // Converts an R list of 1-based integer vectors to a C++ vector of 0-based arma::uvecs.
-std::vector<arma::uvec> to_cpp_observed_outcome_indices(const Rcpp::List& r_list);
+apm::ObservedOutcomeIndices to_cpp_observed_outcome_indices(const Rcpp::List& r_list);
 
 // Convert an external pointer holding std::shared_ptr<WeightedBootstrap>
 // into a shared_ptr<const WeightedBootstrap>. Returns nullptr if xp is NULL.
