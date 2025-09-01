@@ -179,26 +179,21 @@ std::string get_version() {
 
 arma::mat align_factors_using_apm(
     const std::vector<arma::mat>& cohort_factor_matrices,
-    const ObservedOutcomeIndices& observed_outcome_indices) {
-    // Default to equal weights across cohorts.
-    arma::vec cohort_weights(cohort_factor_matrices.size(), arma::fill::ones);
-
-    return align_factors_using_apm(cohort_factor_matrices, observed_outcome_indices, cohort_weights);
-}
-
-arma::mat align_factors_using_apm(
-    const std::vector<arma::mat>& cohort_factor_matrices,
     const ObservedOutcomeIndices& observed_outcome_indices,
     const arma::vec& cohort_weights) {
     const auto dims = get_problem_dimensions(cohort_factor_matrices, observed_outcome_indices);
 
-    const auto processed_weights = process_weights(cohort_weights, dims.C);
+    arma::vec weights = cohort_weights;
+    if (weights.n_elem == 0) {
+        weights = arma::vec(dims.C, arma::fill::ones);
+    }
+    const auto effective_weights = process_weights(weights, dims.C);
 
     arma::mat agg_proj_mat = compute_aggregated_projection_matrix(
         cohort_factor_matrices, 
         observed_outcome_indices, 
         dims, 
-        processed_weights
+        effective_weights
     );
 
     return arma::null(agg_proj_mat);
@@ -306,12 +301,7 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
         }
     }
 
-    arma::mat aggregated_G;
-    if (cohort_weights.n_elem == 0) {
-        aggregated_G = align_factors_using_apm(cohort_specific_G, observed_outcome_indices);
-    } else {
-        aggregated_G = align_factors_using_apm(cohort_specific_G, observed_outcome_indices, cohort_weights);
-    }
+    arma::mat aggregated_G = align_factors_using_apm(cohort_specific_G, observed_outcome_indices, cohort_weights);
 
     std::optional<arma::vec> aggregated_g_0;
     if (!cohort_specific_g_0.empty()) {

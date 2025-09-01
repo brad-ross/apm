@@ -28,56 +28,21 @@ std::string get_version();
 //==============================================================================
 
 /**
- * @brief Computes an aligned matrix of factor vectors from cohort-specific ones.
+ * @brief Computes an aligned matrix of factor vectors from cohort-specific ones (optionally weighted).
  *
- * This function constructs an Aggregated Projection Matrix from cohort-specific data and 
- * then returns an orthonormal basis for the null space of this matrix, which 
- * also serves as a basis for the column space of the matrix whose rows are the 
- * factor vectors corresponding to each outcome.
+ * Constructs the Aggregated Projection Matrix (APM) from cohort-specific factor matrices
+ * and returns an orthonormal basis for its null space. If cohort_weights is omitted or
+ * empty, equal weights are used across cohorts.
  *
- * @param cohort_factor_matrices A vector of matrices, one for each cohort, 
- * where the rows of the matrix corresponding to a given cohort contain the factor vectors corresponding to the observed outcomes for that cohort.
- * Each matrix must have the same number of columns equal to the rank 
- * of the factor model.
- * @param observed_outcome_indices A vector of the same length as cohort_factor_matrices.
- *                                 Each element is a vector of indices indicating
- *                                 which outcomes were observed for the
- *                                 corresponding cohort. The number of indices
- *                                 must match the number of rows in the cohort's
- *                                 factor matrix.
- * @return A matrix whose columns form an orthonormal basis for the null space
- *         of the aggregated projection matrix.
- */
-arma::mat align_factors_using_apm(
-    const std::vector<arma::mat>& cohort_factor_matrices,
-    const ObservedOutcomeIndices& observed_outcome_indices);
-
-/**
- * @brief Computes an aligned matrix of factor vectors from cohort-specific ones using cohort-specific weights.
- *
- * This function constructs an Aggregated Projection Matrix (APM) from cohort-specific 
- * factor matrices and then returns an orthonormal basis for the null space of the APM, 
- * which also serves as a basis for the column space of the matrix whose rows are the 
- * factor vectors corresponding to each outcome.
- *
- * @param cohort_factor_matrices A vector of matrices, one for each cohort, 
- * where the rows of the matrix corresponding to a given cohort contain the factor vectors corresponding to the observed outcomes for that cohort.
- * Each matrix must have the same number of columns equal to the rank 
- * of the factor model.
- * @param observed_outcome_indices A vector of the same length as cohort_factor_matrices.
- *                                 Each element is a vector of indices indicating
- *                                 which outcomes were observed for the
- *                                 corresponding cohort. The number of indices
- *                                 must match the number of rows in the cohort's
- *                                 factor matrix.
- * @param cohort_weights A vector of weights for each cohort. The weights are scaled to sum to one.
- * @return A matrix whose columns form an orthonormal basis for the null space
- *         of the aggregated projection matrix.
+ * @param cohort_factor_matrices A vector of matrices, one for each cohort.
+ * @param observed_outcome_indices Observed outcomes per cohort (0-based indices).
+ * @param cohort_weights Optional weights per cohort; scaled to sum to one if provided.
+ * @return A matrix whose columns form an orthonormal basis for the null space of the APM.
  */
 arma::mat align_factors_using_apm(
     const std::vector<arma::mat>& cohort_factor_matrices,
     const ObservedOutcomeIndices& observed_outcome_indices,
-    const arma::vec& cohort_weights);
+    const arma::vec& cohort_weights = arma::vec());
 
 /**
  * @brief Aggregates cohort-specific covariate coefficient estimates.
