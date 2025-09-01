@@ -352,6 +352,56 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
     return FactorModelParameters(std::move(aggregated_G), std::move(aggregated_g_0), std::move(aggregated_a));
 }
 
+FactorModelEstimates aggregate_cohort_specific_factor_model_params(
+    const std::vector<FactorModelEstimates>& cohort_specific_factor_model_param_ests,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::vec& cohort_weights,
+    const std::vector<arma::vec>& bootstrap_cohort_weights) {
+    
+    const std::size_t C = cohort_specific_factor_model_param_ests.size();
+
+    // Aggregate point estimates
+    std::vector<FactorModelParameters> point_params;
+    point_params.reserve(C);
+    for (const auto& est : cohort_specific_factor_model_param_ests) {
+        point_params.push_back(est.parameter_estimates);
+    }
+
+    FactorModelParameters agg_point = aggregate_cohort_specific_factor_model_params(
+        point_params, observed_outcome_indices, cohort_weights);
+
+    // Determine number of bootstrap replicates from first cohort (0 if none)
+    std::size_t B = cohort_specific_factor_model_param_ests.empty()
+        ? 0
+        : cohort_specific_factor_model_param_ests.front().bootstrap_replicates.size();
+    
+    if (bootstrap_cohort_weights.size() != B) {
+        throw std::invalid_argument("bootstrap_cohort_weights must have length equal to number of bootstrap replicates.");
+    }
+
+    std::vector<FactorModelParameters> agg_bootstrap;
+    agg_bootstrap.reserve(B);
+
+    for (std::size_t b = 0; b < B; ++b) {
+        std::vector<FactorModelParameters> params_b;
+        params_b.reserve(C);
+        for (const auto& est : cohort_specific_factor_model_param_ests) {
+            if (b == 0) {
+                if (est.bootstrap_replicates.size() != B) {
+                    throw std::invalid_argument("All cohorts must have the same number of bootstrap replicates.");
+                }
+            }
+            params_b.push_back(est.bootstrap_replicates[b]);
+        }
+        
+        agg_bootstrap.push_back(
+            aggregate_cohort_specific_factor_model_params(
+                params_b, observed_outcome_indices, bootstrap_cohort_weights[b]));
+    }
+
+    return FactorModelEstimates(std::move(agg_point), std::move(agg_bootstrap));
+}
+
 //==============================================================================
 // Outcome Imputation
 //==============================================================================

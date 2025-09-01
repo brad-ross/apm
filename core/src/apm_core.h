@@ -92,6 +92,20 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
     const ObservedOutcomeIndices& observed_outcome_indices,
     const arma::vec& cohort_weights = arma::vec());
 
+/**
+ * @brief Aggregate cohort-specific parameter estimates including bootstrap replicates.
+ *
+ * Aggregates point estimates and each bootstrap replicate independently using
+ * optional weights (and optional per-bootstrap weights), returning a
+ * FactorModelEstimates containing aggregated point estimates and aggregated
+ * bootstrap replicates.
+ */
+FactorModelEstimates aggregate_cohort_specific_factor_model_params(
+    const std::vector<FactorModelEstimates>& cohort_specific_factor_model_param_ests,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::vec& cohort_weights = arma::vec(),
+    const std::vector<arma::vec>& bootstrap_cohort_weights = {});
+
 //==============================================================================
 // Outcome Imputation
 //==============================================================================
