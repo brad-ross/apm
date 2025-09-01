@@ -54,7 +54,9 @@ arma::mat align_factors_using_apm(
  *                covariate coefficient estimates.
  * @return An arma::vec containing the aggregated covariate coefficient estimates.
  */
-arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>& a_c_vec);
+arma::vec aggregate_cohort_specific_covariate_coefs(
+    const std::vector<arma::vec>& a_c_vec,
+    const arma::vec& cohort_weights = arma::vec());
 
 /**
  * @brief Aggregates cohort-specific outcome fixed effect estimates.
@@ -70,7 +72,8 @@ arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>
  */
 arma::vec aggregate_cohort_specific_outcome_fes(
     const std::vector<arma::vec>& g_0_c_vec,
-    const ObservedOutcomeIndices& observed_outcome_indices);
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::vec& cohort_weights = arma::vec());
 
 /**
  * @brief Aggregate cohort-specific parameter estimates into a unified set.

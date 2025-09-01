@@ -199,19 +199,29 @@ arma::mat align_factors_using_apm(
     return arma::null(agg_proj_mat);
 }
 
-arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>& a_c_vec) {
+arma::vec aggregate_cohort_specific_covariate_coefs(
+    const std::vector<arma::vec>& a_c_vec,
+    const arma::vec& cohort_weights) {
     if (a_c_vec.empty()) {
         return arma::vec();
     }
 
+    const arma::uword C = a_c_vec.size();
     const arma::uword q = a_c_vec[0].n_elem;
     arma::vec mean_a(q, arma::fill::zeros);
 
-    for (const auto& a_c : a_c_vec) {
+    arma::vec weights = cohort_weights;
+    if (weights.n_elem == 0) {
+        weights = arma::vec(C, arma::fill::ones);
+    }
+    const arma::vec effective_weights = process_weights(weights, C);
+
+    for (arma::uword c = 0; c < C; ++c) {
+        const auto& a_c = a_c_vec[c];
         if (a_c.n_elem != q) {
             throw std::invalid_argument("All covariate coefficient vectors must have the same length.");
         }
-        mean_a += a_c / a_c_vec.size();
+        mean_a += a_c * effective_weights(c);
     }
 
     return mean_a;
@@ -219,7 +229,8 @@ arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>
 
 arma::vec aggregate_cohort_specific_outcome_fes(
     const std::vector<arma::vec>& g_0_c_vec,
-    const ObservedOutcomeIndices& observed_outcome_indices) {
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::vec& cohort_weights) {
 
     if (g_0_c_vec.size() != observed_outcome_indices.size()) {
         throw std::invalid_argument("Number of fixed effect vectors must match number of observed outcome index vectors.");
@@ -232,7 +243,14 @@ arma::vec aggregate_cohort_specific_outcome_fes(
     }
 
     arma::vec g_0_sum(T, arma::fill::zeros);
-    arma::uvec g_0_counts(T, arma::fill::zeros);
+    arma::vec g_0_weight_sum(T, arma::fill::zeros);
+
+    const arma::uword C = g_0_c_vec.size();
+    arma::vec weights = cohort_weights;
+    if (weights.n_elem == 0) {
+        weights = arma::vec(C, arma::fill::ones);
+    }
+    const arma::vec effective_weights = process_weights(weights, C);
 
     for (size_t c = 0; c < g_0_c_vec.size(); ++c) {
         const arma::vec& g_0_c = g_0_c_vec[c];
@@ -244,15 +262,16 @@ arma::vec aggregate_cohort_specific_outcome_fes(
 
         for (arma::uword i = 0; i < T_c.n_elem; ++i) {
             const arma::uword t = T_c(i);
-            g_0_sum(t) += g_0_c(i);
-            g_0_counts(t)++;
+            const double w = effective_weights(c);
+            g_0_sum(t) += w * g_0_c(i);
+            g_0_weight_sum(t) += w;
         }
     }
 
     arma::vec g_0(T, arma::fill::zeros);
     for (arma::uword t = 0; t < T; ++t) {
-        if (g_0_counts(t) > 0) {
-            g_0(t) = g_0_sum(t) / g_0_counts(t);
+        if (g_0_weight_sum(t) > 0) {
+            g_0(t) = g_0_sum(t) / g_0_weight_sum(t);
         }
     }
 
@@ -305,12 +324,12 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
 
     std::optional<arma::vec> aggregated_g_0;
     if (!cohort_specific_g_0.empty()) {
-        aggregated_g_0 = aggregate_cohort_specific_outcome_fes(cohort_specific_g_0, observed_outcome_indices);
+        aggregated_g_0 = aggregate_cohort_specific_outcome_fes(cohort_specific_g_0, observed_outcome_indices, cohort_weights);
     }
 
     std::optional<arma::vec> aggregated_a;
     if (!cohort_specific_a.empty()) {
-        aggregated_a = aggregate_cohort_specific_covariate_coefs(cohort_specific_a);
+        aggregated_a = aggregate_cohort_specific_covariate_coefs(cohort_specific_a, cohort_weights);
     }
 
     return FactorModelParameters(std::move(aggregated_G), std::move(aggregated_g_0), std::move(aggregated_a));
