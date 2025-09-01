@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "../bootstrap.h"
-#include "../FactorModelParameters.h"
+#include "../factor_model_parameter_structs.h"
 
 #ifdef USING_R
 #include <RcppArmadillo.h>
@@ -18,34 +18,7 @@
 
 namespace apm {
 
-/**
- * @brief Container for point estimates and (optional) bootstrap replicates of factor model parameters.
- *
- * Fields:
- *  - parameter_estimates: the primary parameter estimates (G, optional g_0, optional a).
- *  - bootstrap_replicates: a vector of parameter estimates, one per bootstrap draw when present,
- *    or empty if no bootstrap is attached.
- */
-struct FactorModelEstimates {
-    FactorModelParameters parameter_estimates;                 // point estimates
-    std::vector<FactorModelParameters> bootstrap_replicates;  // length B if bootstrap is present; otherwise 0
-
-    /**
-     * @brief Move-construct from a precomputed vector of bootstrap replicates.
-     * @param params Point estimates.
-     * @param boot_reps Vector of bootstrap parameter estimates (moved into place).
-     */
-    FactorModelEstimates(FactorModelParameters params,
-                         std::vector<FactorModelParameters> boot_reps)
-        : parameter_estimates(std::move(params)),
-          bootstrap_replicates(std::move(boot_reps)) {}
-
-    /**
-     * @brief Indicates whether bootstrap replicates are present (non-empty).
-     * @return `true` if replicates exist, `false` otherwise.
-     */
-    bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
-};
+// FactorModelEstimates moved to factor_model_parameter_structs.h
 
 /**
  * @brief Abstract base class for linear factor model estimators.
