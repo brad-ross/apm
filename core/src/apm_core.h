@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include "factor_model_parameter_structs.h"
 
 namespace apm {
 
@@ -105,6 +106,23 @@ arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>
 arma::vec aggregate_cohort_specific_outcome_fes(
     const std::vector<arma::vec>& g_0_c_vec,
     const ObservedOutcomeIndices& observed_outcome_indices);
+
+/**
+ * @brief Aggregate cohort-specific parameter estimates into a unified set.
+ *
+ * Given per-cohort FactorModelParameters and observed outcome indices, aligns
+ * factor matrices across cohorts and aggregates optional fixed effects and
+ * covariate coefficients when present for all cohorts.
+ *
+ * @param cohort_specific_factor_model_params Vector of per-cohort parameters.
+ * @param observed_outcome_indices Observed outcome indices per cohort (0-based).
+ * @param cohort_weights Optional cohort weights; scaled to sum to one if provided.
+ * @return Aggregated FactorModelParameters (G and optional g_0, a).
+ */
+FactorModelParameters aggregate_cohort_specific_factor_model_params(
+    const std::vector<FactorModelParameters>& cohort_specific_factor_model_params,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::vec& cohort_weights = arma::vec());
 
 //==============================================================================
 // Outcome Imputation
