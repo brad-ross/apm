@@ -165,6 +165,51 @@ Graph construct_o3_graph(
     return o3_graph;
 }
 
+// Collect cohort-specific parameter vectors (G, optional g_0, optional a)
+struct CohortSpecificCollections {
+    std::vector<arma::mat> G_list;
+    std::vector<arma::vec> g0_list;
+    std::vector<arma::vec> a_list;
+};
+
+CohortSpecificCollections extract_cohort_specific_collections(
+    const std::vector<apm::FactorModelParameters>& cohort_specific_factor_model_params) {
+    CohortSpecificCollections out;
+    const arma::uword C = cohort_specific_factor_model_params.size();
+    if (C == 0) {
+        return out;
+    }
+
+    out.G_list.reserve(C);
+    out.g0_list.reserve(C);
+    out.a_list.reserve(C);
+
+    const bool ref_has_g0 = cohort_specific_factor_model_params[0].has_fixed_effects();
+    const bool ref_has_a  = cohort_specific_factor_model_params[0].has_covariate_coefs();
+
+    for (arma::uword c = 0; c < C; ++c) {
+        const auto& params = cohort_specific_factor_model_params[c];
+        if (c > 0) {
+            if (params.has_fixed_effects() != ref_has_g0) {
+                throw std::invalid_argument("All or none of the FactorModelParameters must include g_0.");
+            }
+            if (params.has_covariate_coefs() != ref_has_a) {
+                throw std::invalid_argument("All or none of the FactorModelParameters must include a.");
+            }
+        }
+
+        out.G_list.push_back(params.G);
+        if (ref_has_g0) {
+            out.g0_list.push_back(*(params.g_0));
+        }
+        if (ref_has_a) {
+            out.a_list.push_back(*(params.a));
+        }
+    }
+
+    return out;
+}
+
 } // anonymous namespace
 
 namespace apm {
@@ -290,46 +335,18 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
         throw std::invalid_argument("Number of cohorts in parameters must match observed_outcome_indices.");
     }
 
-    std::vector<arma::mat> cohort_specific_G;
-    cohort_specific_G.reserve(C);
-    std::vector<arma::vec> cohort_specific_g_0;
-    cohort_specific_g_0.reserve(C);
-    std::vector<arma::vec> cohort_specific_a;
-    cohort_specific_a.reserve(C);
+    const auto collections = extract_cohort_specific_collections(cohort_specific_factor_model_params);
 
-    const bool ref_has_g0 = cohort_specific_factor_model_params[0].has_fixed_effects();
-    const bool ref_has_a  = cohort_specific_factor_model_params[0].has_covariate_coefs();
-
-    for (arma::uword c = 0; c < C; ++c) {
-        const auto& params = cohort_specific_factor_model_params[c];
-        if (c > 0) {
-            if (params.has_fixed_effects() != ref_has_g0) {
-                throw std::invalid_argument("All or none of the FactorModelParameters must include g_0.");
-            }
-            if (params.has_covariate_coefs() != ref_has_a) {
-                throw std::invalid_argument("All or none of the FactorModelParameters must include a.");
-            }
-        }
-
-        cohort_specific_G.push_back(params.G);
-        if (ref_has_g0) {
-            cohort_specific_g_0.push_back(*(params.g_0));
-        }
-        if (ref_has_a) {
-            cohort_specific_a.push_back(*(params.a));
-        }
-    }
-
-    arma::mat aggregated_G = align_factors_using_apm(cohort_specific_G, observed_outcome_indices, cohort_weights);
+    arma::mat aggregated_G = align_factors_using_apm(collections.G_list, observed_outcome_indices, cohort_weights);
 
     std::optional<arma::vec> aggregated_g_0;
-    if (!cohort_specific_g_0.empty()) {
-        aggregated_g_0 = aggregate_cohort_specific_outcome_fes(cohort_specific_g_0, observed_outcome_indices, cohort_weights);
+    if (!collections.g0_list.empty()) {
+        aggregated_g_0 = aggregate_cohort_specific_outcome_fes(collections.g0_list, observed_outcome_indices, cohort_weights);
     }
 
     std::optional<arma::vec> aggregated_a;
-    if (!cohort_specific_a.empty()) {
-        aggregated_a = aggregate_cohort_specific_covariate_coefs(cohort_specific_a, cohort_weights);
+    if (!collections.a_list.empty()) {
+        aggregated_a = aggregate_cohort_specific_covariate_coefs(collections.a_list, cohort_weights);
     }
 
     return FactorModelParameters(std::move(aggregated_G), std::move(aggregated_g_0), std::move(aggregated_a));
