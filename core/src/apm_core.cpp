@@ -437,7 +437,7 @@ FactorModelEstimates aggregate_cohort_specific_factor_model_params(
     // Determine number of bootstrap replicates from first cohort (0 if none)
     std::size_t B = cohort_specific_factor_model_param_ests.empty()
         ? 0
-        : cohort_specific_factor_model_param_ests.front().bootstrap_replicates.size();
+        : cohort_specific_factor_model_param_ests.front().n_bootstrap_replicates();
     
     if (bootstrap_cohort_weights.size() != B) {
         throw std::invalid_argument("bootstrap_cohort_weights must have length equal to number of bootstrap replicates.");
@@ -451,7 +451,7 @@ FactorModelEstimates aggregate_cohort_specific_factor_model_params(
         params_b.reserve(C);
         for (const auto& est : cohort_specific_factor_model_param_ests) {
             if (b == 0) {
-                if (est.bootstrap_replicates.size() != B) {
+                if (est.n_bootstrap_replicates() != B) {
                     throw std::invalid_argument("All cohorts must have the same number of bootstrap replicates.");
                 }
             }
@@ -663,6 +663,57 @@ arma::mat estimate_outcome_means_across_cohorts(
     }
 
     return m;
+}
+
+OutcomeMeansEstimates estimate_outcome_means_across_cohorts(
+    const FactorModelEstimates& factor_model_estimates,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::vector<OutcomeMeanSufficientStatEstimates>& suff_stat_estimates_vec) {
+
+    const std::size_t C = static_cast<std::size_t>(observed_outcome_indices.size());
+    if (suff_stat_estimates_vec.size() != C) {
+        throw std::invalid_argument("Input vectors must have a size equal to the number of cohorts.");
+    }
+
+    // Point estimates
+    std::vector<OutcomeMeanSufficientStatistics> suff_stats_point;
+    suff_stats_point.reserve(C);
+    for (std::size_t c = 0; c < C; ++c) {
+        suff_stats_point.push_back(suff_stat_estimates_vec[c].suff_stat_estimates);
+    }
+    arma::mat point_means = estimate_outcome_means_across_cohorts(
+        factor_model_estimates.parameter_estimates,
+        observed_outcome_indices,
+        suff_stats_point);
+
+    // Bootstrap replicates
+    const bool has_param_boot = factor_model_estimates.has_bootstrap_replicates();
+    std::size_t B = has_param_boot ? factor_model_estimates.n_bootstrap_replicates() : 0;
+    if (has_param_boot) {
+        // Validate all cohorts have same number of bootstraps
+        for (std::size_t c = 0; c < C; ++c) {
+            if (suff_stat_estimates_vec[c].n_bootstrap_replicates() != B) {
+                throw std::invalid_argument("All cohorts must have the same number of bootstrap replicates as the number of bootstrap replicates in the factor model estimates.");
+            }
+        }
+    }
+
+    std::vector<arma::mat> bootstrap_means;
+    bootstrap_means.reserve(B);
+    for (std::size_t b = 0; b < B; ++b) {
+        // Build suff stats slice for bootstrap b
+        std::vector<OutcomeMeanSufficientStatistics> suff_stats_b;
+        suff_stats_b.reserve(C);
+        for (std::size_t c = 0; c < C; ++c) {
+            suff_stats_b.push_back(suff_stat_estimates_vec[c].bootstrap_replicates[b]);
+        }
+
+        const FactorModelParameters& params_b = factor_model_estimates.bootstrap_replicates[b];
+        bootstrap_means.push_back(
+            estimate_outcome_means_across_cohorts(params_b, observed_outcome_indices, suff_stats_b));
+    }
+
+    return OutcomeMeansEstimates(std::move(point_means), std::move(bootstrap_means));
 }
 
 //==============================================================================

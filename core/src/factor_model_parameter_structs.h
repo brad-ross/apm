@@ -99,6 +99,10 @@ struct FactorModelEstimates {
      * @return `true` if replicates exist, `false` otherwise.
      */
     bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
+    /**
+     * @brief Returns the number of bootstrap replicates (0 if none).
+     */
+    std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_replicates.size(); }
 };
 
 /**
@@ -172,6 +176,10 @@ struct OutcomeMeanSufficientStatEstimates {
      * @return true if replicates exist; false otherwise.
      */
     bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
+    /**
+     * @brief Returns the number of bootstrap replicates (0 if none).
+     */
+    std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_replicates.size(); }
 
     /**
      * @brief Construct sufficient statistics and bootstrap replicates from raw data and a bootstrap object.
