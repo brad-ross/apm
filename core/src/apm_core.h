@@ -170,6 +170,29 @@ arma::vec impute_outcomes(
     const arma::uvec& T_c,
     const arma::vec& m_c);
 
+/**
+ * @brief Estimates outcomes using factor model parameters and sufficient statistics.
+ *
+ * Chooses the appropriate imputation routine based on the presence of outcome
+ * fixed effects (g_0) and/or covariate coefficients (a) in
+ * `apm::FactorModelParameters` (defined in `factor_model_parameter_structs.h`),
+ * and the presence of covariate means in
+ * `apm::OutcomeMeanSufficientStatistics` (defined in `factor_model_parameter_structs.h`).
+ * Throws if covariate-related fields are inconsistent between inputs or if
+ * dimensions are incompatible.
+ *
+ * @param factor_model_parameters `apm::FactorModelParameters` containing G (T x r) and optional
+ *                                g_0 (length T) and a (length q).
+ * @param T_c A vector of indices for the observed outcomes for the cohort.
+ * @param outcome_mean_suff_stats `apm::OutcomeMeanSufficientStatistics` with observed_outcome_means
+ *                                (length T_c) and optional covar_means (T x q).
+ * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
+ */
+arma::vec impute_outcomes(
+    const FactorModelParameters& factor_model_parameters,
+    const arma::uvec& T_c,
+    const OutcomeMeanSufficientStatistics& outcome_mean_suff_stats);
+
 //==============================================================================
 // Outcome Mean Estimation Across Cohorts
 //==============================================================================

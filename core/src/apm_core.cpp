@@ -117,6 +117,48 @@ arma::mat compute_bridge_functions(
     return apm::internal::multi_min_norm_solve(G_c.t(), G.t()).t();
 }
 
+// Consolidated validator and resolver for imputation arguments
+struct ResolvedImputationArgs {
+    const arma::mat& G;
+    const arma::vec* g0;       // nullptr if absent
+    const arma::vec* a;        // nullptr if absent
+    const arma::mat* X;        // nullptr if absent
+    const arma::uvec& T_c;
+    const arma::vec& m_c;
+};
+
+ResolvedImputationArgs resolve_imputation_args(
+    const apm::FactorModelParameters& params,
+    const arma::uvec& T_c,
+    const apm::OutcomeMeanSufficientStatistics& stats) {
+
+    const arma::mat& G = params.G;
+
+    const bool has_g0 = params.has_fixed_effects();
+    const bool has_a  = params.has_covariate_coefs();
+    const bool has_X  = stats.has_covar_means();
+    if (has_a != has_X) {
+        throw std::invalid_argument("impute_outcomes: covariate information mismatch between parameters and sufficient statistics.");
+    }
+
+    const arma::vec* g0_ptr = nullptr;
+    if (has_g0) {
+        const arma::vec& g0 = *(params.g_0);
+        g0_ptr = &g0;
+    }
+
+    const arma::vec* a_ptr = nullptr;
+    const arma::mat* X_ptr = nullptr;
+    if (has_a) {
+        const arma::vec& a = *(params.a);
+        const arma::mat& X = *(stats.covar_means);
+        a_ptr = &a;
+        X_ptr = &X;
+    }
+
+    return ResolvedImputationArgs{G, g0_ptr, a_ptr, X_ptr, T_c, stats.observed_outcome_means};
+}
+
 // Define the graph type using Boost Graph Library
 using Graph = boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS>;
 
@@ -451,6 +493,25 @@ arma::vec impute_outcomes(
     
     const arma::mat B_c = compute_bridge_functions(G, T_c);
     return B_c * m_c;
+}
+
+arma::vec impute_outcomes(
+    const FactorModelParameters& factor_model_parameters,
+    const arma::uvec& T_c,
+    const OutcomeMeanSufficientStatistics& outcome_mean_suff_stats) {
+
+    const ResolvedImputationArgs args = resolve_imputation_args(factor_model_parameters, T_c, outcome_mean_suff_stats);
+
+    if (args.g0 && args.a) {
+        return impute_outcomes(args.G, *args.g0, *args.a, args.T_c, args.m_c, *args.X);
+    }
+    if (args.g0 && !args.a) {
+        return impute_outcomes(args.G, *args.g0, args.T_c, args.m_c);
+    }
+    if (!args.g0 && args.a) {
+        return impute_outcomes(args.G, *args.a, args.T_c, args.m_c, *args.X);
+    }
+    return impute_outcomes(args.G, args.T_c, args.m_c);
 }
 
 //==============================================================================
