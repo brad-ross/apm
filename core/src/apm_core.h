@@ -257,6 +257,26 @@ arma::mat estimate_outcome_means_across_cohorts(
     const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec);
 
+/**
+ * @brief Estimates mean outcomes for each cohort using bundled parameters and sufficient statistics.
+ *
+ * Uses `apm::FactorModelParameters` (defined in `factor_model_parameter_structs.h`) and a
+ * vector of `apm::OutcomeMeanSufficientStatistics` (also defined there) to compute cohort
+ * mean outcomes by dispatching to the appropriate imputation routine per cohort.
+ *
+ * @param factor_model_parameters `apm::FactorModelParameters` containing G (T x r) and optional
+ *                                g_0 (length T) and a (length q).
+ * @param observed_outcome_indices A vector where each element is a vector of indices for the
+ *                                 observed outcomes for a cohort.
+ * @param suff_stats_vec A vector of `apm::OutcomeMeanSufficientStatistics`, one per cohort, each
+ *                       with observed_outcome_means (length T_c) and optional covar_means (T x q).
+ * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
+ */
+arma::mat estimate_outcome_means_across_cohorts(
+    const FactorModelParameters& factor_model_parameters,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::vector<OutcomeMeanSufficientStatistics>& suff_stats_vec);
+
 //==============================================================================
 // Identification Verification Via the O^3 Algorithm
 //==============================================================================
