@@ -24,14 +24,14 @@ arma::vec process_weights(arma::vec weights, arma::uword expected_length) {
 std::optional<arma::mat> covar_means_from(
     const std::optional<arma::cube>& covars,
     arma::uword N,
-    arma::uword T_c_len,
     const arma::vec& normalized_weights) {
     if (!covars) return std::nullopt;
-    if (covars->n_rows != N || covars->n_cols != T_c_len) {
-        throw std::invalid_argument("OutcomeMeanSufficientStatistics: covars must have dimensions N x T_c x q matching outcomes' N and T_c.");
+    if (covars->n_rows != N) {
+        throw std::invalid_argument("OutcomeMeanSufficientStatistics: covars and outcomes must both have N rows.");
     }
+
     const arma::uword q = covars->n_slices;
-    arma::mat cm(T_c_len, q, arma::fill::zeros);
+    arma::mat cm(covars->n_cols, q, arma::fill::zeros);
     for (arma::uword k = 0; k < q; ++k) {
         cm.col(k) = covars->slice(k).t() * normalized_weights;
     }
@@ -43,11 +43,7 @@ OutcomeMeanSufficientStatistics::OutcomeMeanSufficientStatistics(
     arma::vec observed_means_in,
     std::optional<arma::mat> covar_means_in)
     : observed_outcome_means(std::move(observed_means_in)),
-      covar_means(std::move(covar_means_in)) {
-    if (covar_means && static_cast<arma::uword>(covar_means->n_rows) != observed_outcome_means.n_elem) {
-        throw std::invalid_argument("OutcomeMeanSufficientStatistics: covar_means rows must equal length of observed_outcome_means (T_c).");
-    }
-}
+      covar_means(std::move(covar_means_in)) {}
 
 OutcomeMeanSufficientStatistics::OutcomeMeanSufficientStatistics(
     const arma::mat& outcomes,
@@ -55,7 +51,7 @@ OutcomeMeanSufficientStatistics::OutcomeMeanSufficientStatistics(
     arma::vec weights)
     : OutcomeMeanSufficientStatistics(
           outcomes.t() * process_weights(arma::vec(weights), outcomes.n_rows),
-          covar_means_from(covars, outcomes.n_rows, outcomes.n_cols,
+          covar_means_from(covars, outcomes.n_rows,
                            process_weights(std::move(weights), outcomes.n_rows))) {}
 
 OutcomeMeanSufficientStatEstimates::OutcomeMeanSufficientStatEstimates(

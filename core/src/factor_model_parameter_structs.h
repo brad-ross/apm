@@ -106,11 +106,11 @@ struct FactorModelEstimates {
  *
  * Fields:
  *  - observed_outcome_means: length T_c vector of observed outcome means.
- *  - covar_means: optional T_c x q matrix of covariate means (per outcome).
+ *  - covar_means: optional T x q matrix of covariate means (per outcome).
  */
 struct OutcomeMeanSufficientStatistics {
     arma::vec observed_outcome_means;                   // length T_c
-    std::optional<arma::mat> covar_means;               // T_c x q (if present)
+    std::optional<arma::mat> covar_means;               // T x q (if present)
 
     // Constructors
     OutcomeMeanSufficientStatistics() = default;
@@ -122,9 +122,9 @@ struct OutcomeMeanSufficientStatistics {
      * @brief Construct from raw outcomes and optional covariates, aggregating across units.
      *
      * @param outcomes N x T_c matrix of observed outcomes across N units.
-     * @param covars Optional N x T_c x q cube of covariates across N units.
+     * @param covars Optional N x T x q cube of covariates across N units.
      *               When provided, covariate means are computed by averaging over the N dimension
-     *               (weighted if weights provided), yielding a T_c x q matrix.
+     *               (weighted if weights provided), yielding a T x q matrix.
      * @param weights Optional length-N vector of non-negative weights. If empty, uses equal weights.
      *                Weights are normalized to sum to one before aggregation.
      */
@@ -145,6 +145,11 @@ struct OutcomeMeanSufficientStatistics {
      * @return Length of observed_outcome_means.
      */
     std::size_t T_c() const noexcept { return static_cast<std::size_t>(observed_outcome_means.n_elem); }
+    /**
+     * @brief Returns the number of outcomes (T) if covariate means are present, else 0.
+     * @return Number of rows in covar_means, or 0 if absent.
+     */
+    std::size_t T() const noexcept { return covar_means ? static_cast<std::size_t>(covar_means->n_rows) : 0; }
     /**
      * @brief Returns the number of covariates (q) if covariate means are present, else 0.
      * @return Number of columns in covar_means, or 0 if absent.
@@ -173,7 +178,7 @@ struct OutcomeMeanSufficientStatEstimates {
      *
      * @param outcomes N x T_c matrix of observed outcomes.
      * @param bootstrap shared_ptr to WeightedBootstrap providing B bootstrap draws. If null, no replicates are created.
-     * @param covars Optional N x T_c x q cube of covariates.
+     * @param covars Optional N x T x q cube of covariates.
      * @param unit_idxs Optional indices of units to include (0-based). If empty, all units are used.
      */
     OutcomeMeanSufficientStatEstimates(const arma::mat& outcomes,
