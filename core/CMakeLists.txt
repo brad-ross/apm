@@ -22,6 +22,7 @@ add_library(apm
     src/apm_core.cpp
     src/linear_algebra_utils.cpp
     src/bootstrap.cpp
+    src/factor_model_parameter_structs.cpp
     src/factor_model_estimators/FactorModelEstimator.cpp
     src/factor_model_estimators/pc_estimators.cpp
 )
