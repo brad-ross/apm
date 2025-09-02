@@ -259,6 +259,176 @@ TEST(APMTest, EstimateMeans_FactorsOnly) {
     ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
 }
 
+TEST(APMTest, EstimateMeans_ParamsAndSuffStats_AllComponents) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat true_m(data.C, data.T);
+    true_m.row(0) = (data.G * data.l_c[0] + data.X_c_vec[0] * data.a + data.g_0).t();
+    true_m.row(1) = (data.G * data.l_c[1] + data.X_c_vec[1] * data.a + data.g_0).t();
+
+    apm::FactorModelParameters params(data.G, data.g_0, data.a);
+
+    std::vector<apm::OutcomeMeanSufficientStatistics> suff_stats_vec;
+    suff_stats_vec.reserve(data.C);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        arma::vec m_c = arma::vec(true_m.row(c).t()).elem(data.observed_outcome_indices[c]);
+        suff_stats_vec.emplace_back(m_c, data.X_c_vec[c]);
+    }
+
+    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+        params, data.observed_outcome_indices, suff_stats_vec);
+
+    ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
+}
+
+TEST(APMTest, EstimateMeans_ParamsAndSuffStats_FixedEffectsOnly) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat true_m(data.C, data.T);
+    true_m.row(0) = (data.G * data.l_c[0] + data.g_0).t();
+    true_m.row(1) = (data.G * data.l_c[1] + data.g_0).t();
+
+    apm::FactorModelParameters params(data.G, data.g_0, std::nullopt);
+
+    std::vector<apm::OutcomeMeanSufficientStatistics> suff_stats_vec;
+    suff_stats_vec.reserve(data.C);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        arma::vec m_c = arma::vec(true_m.row(c).t()).elem(data.observed_outcome_indices[c]);
+        suff_stats_vec.emplace_back(m_c, std::nullopt);
+    }
+
+    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+        params, data.observed_outcome_indices, suff_stats_vec);
+
+    ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
+}
+
+TEST(APMTest, EstimateMeans_ParamsAndSuffStats_CovariatesOnly) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat true_m(data.C, data.T);
+    true_m.row(0) = (data.G * data.l_c[0] + data.X_c_vec[0] * data.a).t();
+    true_m.row(1) = (data.G * data.l_c[1] + data.X_c_vec[1] * data.a).t();
+
+    apm::FactorModelParameters params(data.G, std::nullopt, data.a);
+
+    std::vector<apm::OutcomeMeanSufficientStatistics> suff_stats_vec;
+    suff_stats_vec.reserve(data.C);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        arma::vec m_c = arma::vec(true_m.row(c).t()).elem(data.observed_outcome_indices[c]);
+        suff_stats_vec.emplace_back(m_c, data.X_c_vec[c]);
+    }
+
+    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+        params, data.observed_outcome_indices, suff_stats_vec);
+
+    ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
+}
+
+TEST(APMTest, EstimateMeans_ParamsAndSuffStats_FactorsOnly) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat true_m(data.C, data.T);
+    true_m.row(0) = (data.G * data.l_c[0]).t();
+    true_m.row(1) = (data.G * data.l_c[1]).t();
+
+    apm::FactorModelParameters params(data.G, std::nullopt, std::nullopt);
+
+    std::vector<apm::OutcomeMeanSufficientStatistics> suff_stats_vec;
+    suff_stats_vec.reserve(data.C);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        arma::vec m_c = arma::vec(true_m.row(c).t()).elem(data.observed_outcome_indices[c]);
+        suff_stats_vec.emplace_back(m_c, std::nullopt);
+    }
+
+    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+        params, data.observed_outcome_indices, suff_stats_vec);
+
+    ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
+}
+
+TEST(APMTest, EstimateMeans_EstimatesWithBootstrap_AllComponents) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat true_m(data.C, data.T);
+    true_m.row(0) = (data.G * data.l_c[0] + data.X_c_vec[0] * data.a + data.g_0).t();
+    true_m.row(1) = (data.G * data.l_c[1] + data.X_c_vec[1] * data.a + data.g_0).t();
+
+    apm::FactorModelParameters params_point(data.G, data.g_0, data.a);
+
+    const std::size_t B = 2;
+    std::vector<apm::OutcomeMeanSufficientStatEstimates> suff_est_vec;
+    suff_est_vec.reserve(data.C);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        arma::vec m_c = arma::vec(true_m.row(c).t()).elem(data.observed_outcome_indices[c]);
+        apm::OutcomeMeanSufficientStatistics stats_point(m_c, data.X_c_vec[c]);
+        std::vector<apm::OutcomeMeanSufficientStatistics> boot_stats(B, stats_point);
+        suff_est_vec.emplace_back(stats_point, std::move(boot_stats));
+    }
+
+    // Duplicate bootstrap replicates identical to the point parameters
+    std::vector<apm::FactorModelParameters> param_boot(B, apm::FactorModelParameters(data.G, data.g_0, data.a));
+    apm::FactorModelEstimates param_estimates(std::move(params_point), std::move(param_boot));
+
+    apm::OutcomeMeansEstimates out = apm::estimate_outcome_means_across_cohorts(
+        param_estimates, data.observed_outcome_indices, suff_est_vec);
+
+    ASSERT_TRUE(arma::approx_equal(out.mean_outcomes, true_m, "absdiff", 1e-9));
+    ASSERT_EQ(out.bootstrap_replicates.size(), B);
+    for (std::size_t b = 0; b < B; ++b) {
+        ASSERT_TRUE(arma::approx_equal(out.bootstrap_replicates[b], out.mean_outcomes, "absdiff", 1e-9));
+    }
+}
+
+TEST(APMTest, EstimateMeans_EstimatesWithBootstrap_MismatchThrows) {
+    auto data = setup_estimation_test_data();
+
+    std::vector<apm::FactorModelParameters> param_boot;
+    param_boot.emplace_back(data.G, data.g_0 + 0.1, data.a);
+    param_boot.emplace_back(data.G, data.g_0 + 0.2, data.a);
+    apm::FactorModelEstimates param_estimates(apm::FactorModelParameters(data.G, data.g_0, data.a),
+                                              std::move(param_boot));
+
+    std::vector<apm::OutcomeMeanSufficientStatEstimates> suff_est_vec;
+    suff_est_vec.reserve(data.C);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        arma::mat X_c = data.X_c_vec[c];
+        arma::vec m_c(data.observed_outcome_indices[c].n_elem, arma::fill::zeros);
+        apm::OutcomeMeanSufficientStatistics stats_point(m_c, X_c);
+        std::vector<apm::OutcomeMeanSufficientStatistics> boots;
+        if (c == 0) {
+            boots.push_back(stats_point);
+        } else {
+            boots.push_back(stats_point);
+            boots.push_back(stats_point);
+        }
+        suff_est_vec.emplace_back(stats_point, std::move(boots));
+    }
+
+    EXPECT_THROW(
+        (void)apm::estimate_outcome_means_across_cohorts(param_estimates,
+                                                         data.observed_outcome_indices,
+                                                         suff_est_vec),
+        std::invalid_argument);
+}
+
+TEST(APMTest, ImputeOutcomes_Dispatcher_AllComponents) {
+    auto data = setup_estimation_test_data();
+
+    apm::FactorModelParameters params(data.G, data.g_0, data.a);
+    const arma::uword c = 0;
+    arma::uvec T_c = data.observed_outcome_indices[c];
+
+    arma::vec m_full = (data.G * data.l_c[c] + data.X_c_vec[c] * data.a + data.g_0);
+    arma::vec m_c = m_full.elem(T_c);
+    apm::OutcomeMeanSufficientStatistics stats(m_c, data.X_c_vec[c]);
+
+    arma::vec via_dispatch = apm::impute_outcomes(params, T_c, stats);
+    arma::vec via_raw = apm::impute_outcomes(data.G, data.g_0, data.a, T_c, m_c, data.X_c_vec[c]);
+
+    ASSERT_TRUE(arma::approx_equal(via_dispatch, via_raw, "absdiff", 1e-12));
+}
+
 TEST(APMTest, AlignFactorsAPMNonContiguousPattern) {
     // T=5 (max outcome index is 4), r=2.
     arma::mat true_factors = {
