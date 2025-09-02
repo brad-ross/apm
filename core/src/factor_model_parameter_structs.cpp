@@ -66,13 +66,19 @@ OutcomeMeanSufficientStatEstimates::OutcomeMeanSufficientStatEstimates(
 
 OutcomeMeanSufficientStatEstimates::OutcomeMeanSufficientStatEstimates(
     const arma::mat& outcomes,
-    const apm::WeightedBootstrap& bootstrap,
+    std::shared_ptr<const apm::WeightedBootstrap> bootstrap,
     std::optional<arma::cube> covars,
     arma::uvec unit_idxs)
     : suff_stat_estimates(outcomes, covars) {
     const std::size_t N = static_cast<std::size_t>(outcomes.n_rows);
-    const std::size_t B = bootstrap.n_bootstraps();
-    if (bootstrap.n_obs() != N) {
+
+    if (!bootstrap) {
+        bootstrap_replicates.clear();
+        return;
+    }
+
+    const std::size_t B = bootstrap->n_bootstraps();
+    if (bootstrap->n_obs() != N) {
         throw std::invalid_argument("OutcomeMeanSufficientStatEstimates: bootstrap n_obs must equal number of rows (N) in outcomes.");
     }
 
@@ -87,7 +93,7 @@ OutcomeMeanSufficientStatEstimates::OutcomeMeanSufficientStatEstimates(
     bootstrap_replicates.resize(B);
 
     // Get weights for selected units across all draws and use column b directly
-    arma::mat weights_rows = bootstrap.obs(unit_idxs); // (unit_idxs.size() x B)
+    arma::mat weights_rows = bootstrap->obs(unit_idxs); // (unit_idxs.size() x B)
     for (std::size_t b = 0; b < B; ++b) {
         arma::vec unit_idx_weights = weights_rows.col(static_cast<arma::uword>(b));
         bootstrap_replicates[b] = OutcomeMeanSufficientStatistics(outcomes, covars, std::move(unit_idx_weights));

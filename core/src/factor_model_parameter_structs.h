@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <vector>
 #include <utility>
+#include <memory>
 
 #ifdef USING_R
 #include <RcppArmadillo.h>
@@ -171,12 +172,12 @@ struct OutcomeMeanSufficientStatEstimates {
      * @brief Construct sufficient statistics and bootstrap replicates from raw data and a bootstrap object.
      *
      * @param outcomes N x T_c matrix of observed outcomes.
-     * @param bootstrap WeightedBootstrap providing B bootstrap draws.
+     * @param bootstrap shared_ptr to WeightedBootstrap providing B bootstrap draws. If null, no replicates are created.
      * @param covars Optional N x T_c x q cube of covariates.
      * @param unit_idxs Optional indices of units to include (0-based). If empty, all units are used.
      */
     OutcomeMeanSufficientStatEstimates(const arma::mat& outcomes,
-                                       const apm::WeightedBootstrap& bootstrap,
+                                       std::shared_ptr<const apm::WeightedBootstrap> bootstrap,
                                        std::optional<arma::cube> covars = std::nullopt,
                                        arma::uvec unit_idxs = arma::uvec());
 };
