@@ -1,4 +1,89 @@
-#' Base class for OutcomeMeanSuffStat estimator (streaming style)
+#' Outcome mean sufficient statistics estimator (streaming)
+#'
+#' Incrementally computes cohort-level sufficient statistics for outcome means
+#' and, optionally, covariate means. Data can be provided in batches or one unit
+#' at a time. When a \link{WeightedBootstrap} is attached, bootstrap-weighted
+#' aggregates are accumulated alongside the point estimates.
+#'
+#' Dimensions and expected shapes:
+#' - T_c: number of observed outcomes in the cohort (outcomes used for identification)
+#' - T:   total number of outcomes (required only if covariates are provided)
+#' - q:   number of covariates (required only if covariates are provided)
+#'
+#' Input data shapes when adding data:
+#' - Y: matrix of shape T_c x N_batch (columns correspond to units)
+#' - X: optional array/cube of shape T x q x N_batch (aligned with Y's unit order)
+#'
+#' @format An R6 class with methods:
+#' - initialize(T_c, T = 0L, q = 0L, bootstrap = NULL)
+#' - add_data(unit_idxs, Y, X = NULL)
+#' - add_datum(unit_idx, Y, X = NULL)
+#' - estimate()
+#' - T_c(), T(), q(), B()
+#'
+#' @section Methods:
+#' \describe{
+#'   \item{initialize(T_c, T = 0L, q = 0L, bootstrap = NULL)}{
+#'     Construct an estimator. If `bootstrap` is a \link{WeightedBootstrap} instance,
+#'     bootstrap replicates are tracked; otherwise only point estimates are tracked.
+#'
+#'     Arguments:
+#'     - `T_c` Integer, number of observed outcomes in the cohort.
+#'     - `T` Integer, total number of outcomes (required only if covariates are used).
+#'     - `q` Integer, number of covariates (required only if covariates are used).
+#'     - `bootstrap` Optional \link{WeightedBootstrap} controlling bootstrap weights.
+#'   }
+#'
+#'   \item{add_data(unit_idxs, Y, X = NULL)}{
+#'     Add a batch of units.
+#'
+#'     - `unit_idxs`: integer vector of unit indices used to derive bootstrap weights.
+#'     - `Y`: numeric matrix with shape T_c x N_batch.
+#'     - `X`: optional numeric array/cube with shape T x q x N_batch.
+#'
+#'     Returns the object itself (invisibly), enabling method chaining.
+#'   }
+#'
+#'   \item{add_datum(unit_idx, Y, X = NULL)}{
+#'     Add a single unit.
+#'
+#'     - `unit_idx`: integer index for this unit.
+#'     - `Y`: numeric vector of length T_c.
+#'     - `X`: optional numeric matrix with shape T x q.
+#'
+#'     Returns the object itself (invisibly).
+#'   }
+#'
+#'   \item{estimate()}{{Finalize and return} an \link{OutcomeMeanSuffStatEstimates}
+#'     object containing point estimates and, when available, bootstrap replicates.}
+#'
+#'   \item{T_c(), T(), q()}{{Accessors for} the configured dimensions.}
+#'
+#'   \item{B()}{{Number of} bootstrap replicates attached (0 if none).}
+#' }
+#'
+#' @seealso \link{WeightedBootstrap}, \link{OutcomeMeanSuffStatEstimates}
+#'
+#' @examples
+#' # Minimal example with point estimates only
+#' set.seed(1)
+#' T_c <- 3L; N <- 5L
+#' Y <- matrix(rnorm(T_c * N), nrow = T_c, ncol = N)
+#' est <- OutcomeMeanSuffStatEstimator$new(T_c = T_c)
+#' est$add_data(unit_idxs = seq_len(N), Y = Y)
+#' out <- est$estimate()
+#' out$observed_outcome_means()
+#'
+#' # With covariates and bootstrap
+#' T <- 4L; q <- 2L
+#' X <- array(rnorm(T * q * N), dim = c(T, q, N))
+#' wb <- get_weighted_bootstrap_draws(N = N, B = 10L, type = "bayesian")
+#' est2 <- OutcomeMeanSuffStatEstimator$new(T_c = T_c, T = T, q = q, bootstrap = wb)
+#' est2$add_data(unit_idxs = seq_len(N), Y = Y, X = X)
+#' out2 <- est2$estimate()
+#' out2$has_bootstrap()
+#' out2$observed_outcome_means(b = 1L)
+#'
 #' @export
 OutcomeMeanSuffStatEstimator <- R6::R6Class(
   "OutcomeMeanSuffStatEstimator",
@@ -43,7 +128,50 @@ OutcomeMeanSuffStatEstimator <- R6::R6Class(
   private = list(xp = NULL)
 )
 
-#' R6 wrapper for OutcomeMeanSuffStatEstimates (point + bootstrap reps)
+#' OutcomeMeanSuffStat estimates holder
+#'
+#' R6 wrapper returned by \code{OutcomeMeanSuffStatEstimator$estimate()},
+#' exposing point estimates and optional bootstrap replicates of the sufficient
+#' statistics.
+#'
+#' Contents:
+#' - Observed outcome means (length T_c) for the point estimate, and per-bootstrap
+#'   replicates when requested.
+#' - Optional covariate means (T x q) when covariates were supplied to the estimator.
+#'
+#' @format An R6 class with methods:
+#' - has_bootstrap(), num_bootstraps()
+#' - T_c(), T(), q()
+#' - observed_outcome_means(b = NULL)
+#' - covar_means(b = NULL)
+#'
+#' @section Methods:
+#' \describe{
+#'   \item{has_bootstrap()}{Logical, whether bootstrap replicates are available.}
+#'   \item{num_bootstraps()}{Number of bootstrap replicates (0 if none).}
+#'
+#'   \item{T_c(), T(), q()}{Dimensions of the underlying estimates.}
+#'
+#'   \item{observed_outcome_means(b = NULL)}{
+#'     Numeric vector (length T_c) of observed outcome means. If `b` is NULL,
+#'     returns the point estimate; otherwise returns replicate `b` (1-indexed).
+#'   }
+#'
+#'   \item{covar_means(b = NULL)}{
+#'     Numeric matrix (T x q) of covariate means if covariates were tracked; otherwise NULL.
+#'     If `b` is NULL, returns the point estimate; otherwise returns replicate `b` (1-indexed).
+#'   }
+#' }
+#'
+#' @seealso \link{OutcomeMeanSuffStatEstimator}
+#'
+#' @examples
+#' T_c <- 2L; N <- 3L
+#' Y <- matrix(rnorm(T_c * N), nrow = T_c)
+#' est <- OutcomeMeanSuffStatEstimator$new(T_c = T_c)
+#' out <- est$add_data(seq_len(N), Y)$estimate()
+#' out$observed_outcome_means()
+#'
 #' @export
 OutcomeMeanSuffStatEstimates <- R6::R6Class(
   "OutcomeMeanSuffStatEstimates",
