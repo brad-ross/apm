@@ -111,6 +111,8 @@ construct_cohort_observed_outcomes_df <- function(outcome_ids, observed_outcome_
 #' @param panel_df data.table containing panel data
 #' @param unit_id_col Column name for unit identifier
 #' @param outcome_id_col Column name for outcome identifier
+#' @param outcome_value_col Column name for the outcome value; rows with missing
+#'   values in this column are dropped prior to cohort construction
 #' @param model_rank Integer model rank
 #' @param min_cohort_size Minimum units per cohort to keep (default: 0)
 #' @param cohort_observed_outcomes_as_df Logical; if TRUE (default), return a
@@ -132,13 +134,15 @@ construct_cohort_observed_outcomes_df <- function(outcome_ids, observed_outcome_
 construct_cohorts_from_panel <- function(panel_df,
                                          unit_id_col,
                                          outcome_id_col,
+                                         outcome_value_col,
                                          model_rank,
                                          min_cohort_size = 0,
                                          cohort_observed_outcomes_as_df = TRUE) {
     panel_dt <- to_data_table(panel_df)
 
-    # Validate required columns exist using internal helper
-    validate_required_panel_cols(panel_dt, unit_id_col, outcome_id_col)
+    # Validate required columns exist and drop rows with missing outcome values
+    validate_required_panel_cols(panel_dt, unit_id_col, outcome_id_col, outcome_value_col)
+    panel_dt <- panel_dt[!is.na(get(outcome_value_col))]
 
     # Build the globally sorted unique outcome vector and an inverse index map
     outcome_ids <- sort(unique(panel_dt[[outcome_id_col]]))
@@ -221,13 +225,15 @@ UnbalancedPanel <- R6Class(
         get_observed_outcome_indices = function() private$observed_outcome_indices,
         get_unit_cohorts = function() private$unit_cohorts,
         get_processed_panel = function() private$processed_panel,
+        get_covar_cols = function() private$covar_cols,
 
         initialize = function(panel_df,
                               unit_id_col,
                               outcome_id_col,
                               outcome_value_col,
                               model_rank,
-                              min_cohort_size = 0) {
+                              min_cohort_size = 0,
+                              covar_cols = character(0)) {
             private$original_panel <- to_data_table(panel_df)
             private$unit_id_col <- unit_id_col
             private$outcome_id_col <- outcome_id_col
@@ -237,6 +243,17 @@ UnbalancedPanel <- R6Class(
             validate_required_panel_cols(private$original_panel, 
                 private$unit_id_col, private$outcome_id_col, private$outcome_value_col)
             
+            # Normalize and validate covariate columns
+            covar_cols <- as.character(covar_cols)
+            covar_cols <- unique(covar_cols)
+            covar_cols <- setdiff(covar_cols, c(private$unit_id_col, private$outcome_id_col, private$outcome_value_col))
+            missing_covar <- setdiff(covar_cols, names(private$original_panel))
+            if (length(missing_covar) > 0L) {
+                stop(sprintf("UnbalancedPanel: covar_cols not found in original_panel: %s",
+                             paste(missing_covar, collapse = ", ")))
+            }
+            private$covar_cols <- covar_cols
+            
             # Build sorted unit ids and index map
             unit_ids <- sort(unique(private$original_panel[[private$unit_id_col]]))
             private$unit_ids <- unit_ids
@@ -244,11 +261,12 @@ UnbalancedPanel <- R6Class(
 
             # Compute cohorts and save artifacts
             coh <- construct_cohorts_from_panel(
-                private$original_panel,
-                private$unit_id_col,
-                private$outcome_id_col,
-                private$model_rank,
-                private$min_cohort_size,
+                panel_df = private$original_panel,
+                unit_id_col = private$unit_id_col,
+                outcome_id_col = private$outcome_id_col,
+                outcome_value_col = private$outcome_value_col,
+                model_rank = private$model_rank,
+                min_cohort_size = private$min_cohort_size,
                 cohort_observed_outcomes_as_df = FALSE
             )
             private$outcome_ids <- coh$outcome_ids
@@ -260,8 +278,9 @@ UnbalancedPanel <- R6Class(
             private$unit_cohorts[, unit_idx := private$unit_to_index[as.character(get(private$unit_id_col))]]
 
             # Select only relevant columns from the original panel
+            keep_cols <- c(private$unit_id_col, private$outcome_id_col, private$outcome_value_col, private$covar_cols)
             orig_panel_only_relevant_cols <- private$original_panel[
-                , c(private$unit_id_col, private$outcome_id_col, private$outcome_value_col)
+                , keep_cols
                 , with = FALSE
             ]
 
@@ -279,8 +298,8 @@ UnbalancedPanel <- R6Class(
             # Sort by cohort_id, unit_idx, then outcome index (explicit column names)
             setorderv(processed, c("cohort_id", "unit_idx", "outcome_idx"))
 
-            # Ensure column order: unit_idx, cohort_id, outcome_idx, outcome value
-            setcolorder(processed, c("unit_idx", "cohort_id", "outcome_idx", private$outcome_value_col))
+            # Ensure column order: unit_idx, cohort_id, outcome_idx, outcome value, then covariates
+            setcolorder(processed, c("unit_idx", "cohort_id", "outcome_idx", private$outcome_value_col, private$covar_cols))
 
             private$processed_panel <- processed
 
@@ -301,7 +320,8 @@ UnbalancedPanel <- R6Class(
         outcome_to_index = NULL,
         observed_outcome_indices = NULL,
         unit_cohorts = NULL,
-        processed_panel = NULL
+        processed_panel = NULL,
+        covar_cols = character(0)
     )
 )
 
