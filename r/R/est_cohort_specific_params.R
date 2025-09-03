@@ -149,6 +149,7 @@ build_Y_X_for_group_ <- function(sd, T_idx, covar_cols) {
         X[, , j] <- as.matrix(x_wide[, -"unit_idx"])
     }
     list(Y = Y, X = X, unit_idxs = unit_idxs, T_all = T_all)
+    list(Y = Y, X = X, unit_idxs = unit_idxs, T_all = T_all)
 }
 
 # Internal: run factor estimators for a cohort group
@@ -212,5 +213,3 @@ assemble_outcome_means_ <- function(grp) {
     }
     lst
 }
-
-
