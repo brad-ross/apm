@@ -2,90 +2,17 @@ context("Testing functions used to process raw panel data")
 
 library(data.table)
 
-# Test helpers to avoid repetition ------------------------------------------------
-build_panel_from_indices <- function(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE) {
-    all_units <- sort(unique(unlist(units_by_cohort)))
-    rbindlist(lapply(seq_along(cohort_indices), function(k) {
-        observed_idxs <- cohort_indices[[k]]
-        observed_outcomes <- outcomes[observed_idxs]
-        unit_ids <- units_by_cohort[[k]]
-        rbindlist(lapply(unit_ids, function(u) {
-            if (isTRUE(include_covariates)) {
-                # Full grid over outcomes with NA y for unobserved; include dummy covariates
-                dt <- data.table(
-                    unit_id = u,
-                    outcome_id = outcomes
-                )
-                dt[, y := match(outcome_id, outcomes)]
-                dt[!outcome_id %in% observed_outcomes, y := NA_integer_]
-                dt[, cov1 := as.integer(match(u, all_units))]
-                dt[, cov2 := as.integer(k)]
-                dt
-            } else {
-                # Only observed outcomes; no covariates
-                dt <- data.table(
-                    unit_id = u,
-                    outcome_id = observed_outcomes
-                )
-                dt[, y := match(outcome_id, outcomes)]
-                dt
-            }
-        }))
-    }))
-}
-
-build_expected_unit_map <- function(units_by_cohort) {
-    rbindlist(mapply(function(units, cid) {
-        data.table(unit_id = units, cohort_id = cid)
-    }, units_by_cohort, seq_along(units_by_cohort), SIMPLIFY = FALSE))
-}
-
-build_expected_processed_panel <- function(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE) {
-    all_units <- sort(unique(unlist(units_by_cohort)))
-    rbindlist(lapply(seq_along(cohort_indices), function(cid) {
-        observed_idxs <- cohort_indices[[cid]]
-        rbindlist(lapply(units_by_cohort[[cid]], function(u) {
-            if (isTRUE(include_covariates)) {
-                dt <- data.table(
-                    unit_id = u,
-                    cohort_id = cid,
-                    outcome_idx = seq_along(outcomes)
-                )
-                dt[, y := as.integer(outcome_idx)]
-                dt[!outcome_idx %in% observed_idxs, y := NA_integer_]
-                dt[, cov1 := as.integer(match(u, all_units))]
-                dt[, cov2 := as.integer(cid)]
-                dt
-            } else {
-                data.table(
-                    unit_id = u,
-                    cohort_id = cid,
-                    outcome_idx = observed_idxs,
-                    y = as.integer(observed_idxs)
-                )
-            }
-        }))
-    }))
-}
+# Shared helpers are defined in helper-test-utils.R
 
 test_that("staircase missingness with two units per cohort (matching core test)", {
     # Outcomes and units
-    outcomes <- c("A", "B", "C", "D", "E")
+    outcomes <- make_outcomes(5)
 
     # Define cohorts as staircase matching core test indices (1-based):
-    # {1,2,3}, {2,3,4}, {3,4,5}
-    cohort_indices <- list(
-        1:3,
-        2:4,
-        3:5
-    )
+    cohort_indices <- make_staircase_observed_indices(5, 3)
 
     # Two units per cohort
-    units_by_cohort <- list(
-        c("u1", "u2"),
-        c("u3", "u4"),
-        c("u5", "u6")
-    )
+    units_by_cohort <- make_units_by_cohort(3, 2)
 
     # Build panel with full outcome grid, NA y for unobserved, and covariates
     panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE)
@@ -123,13 +50,9 @@ test_that("staircase missingness with two units per cohort (matching core test)"
 
 test_that("UnbalancedPanel initializes and processes panel correctly", {
     # Outcomes and units (staircase pattern like existing tests)
-    outcomes <- c("A", "B", "C", "D", "E")
-    cohort_indices <- list(1:3, 2:4, 3:5)
-    units_by_cohort <- list(
-        c("u1", "u2"),
-        c("u3", "u4"),
-        c("u5", "u6")
-    )
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3)
+    units_by_cohort <- make_units_by_cohort(3, 2)
 
     # Build panel with full outcome grid, NA y for unobserved, and covariates
     panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE)
@@ -188,13 +111,9 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
 
 test_that("UnbalancedPanel works without covariates provided", {
     # Outcomes and units (staircase pattern)
-    outcomes <- c("A", "B", "C", "D", "E")
-    cohort_indices <- list(1:3, 2:4, 3:5)
-    units_by_cohort <- list(
-        c("u1", "u2"),
-        c("u3", "u4"),
-        c("u5", "u6")
-    )
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3)
+    units_by_cohort <- make_units_by_cohort(3, 2)
 
     # Build panel with full outcome grid, NA y for unobserved, and covariates (which we won't pass)
     panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE)
@@ -361,8 +280,8 @@ test_that("validate_required_panel_cols enforces required columns", {
 
 
 test_that("construct_cohort_observed_outcomes_df builds long-form mapping", {
-    outcomes <- c("A", "B", "C", "D", "E")
-    cohort_indices <- list(1:3, 2:4, 3:5)
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3)
 
     res_df <- apm:::construct_cohort_observed_outcomes_df(
         outcome_ids = outcomes,
