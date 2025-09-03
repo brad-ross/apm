@@ -172,11 +172,11 @@ compute_outcome_means_for_group_ <- function(yx, q, T_c, bootstrap) {
     if (q > 0L) {
         omsse_est <- OutcomeMeanSuffStatEstimator$new(T_c = T_c, T = T_all_len, q = q, bootstrap = bootstrap)
         omsse_est$add_data(unit_idxs = yx$unit_idxs, Y = yx$Y, X = yx$X)
-        omsse_est$estimate()
+        return(omsse_est$estimate())
     } else {
         omsse_est <- OutcomeMeanSuffStatEstimator$new(T_c = T_c, T = T_all_len, q = 0L, bootstrap = bootstrap)
         omsse_est$add_data(unit_idxs = yx$unit_idxs, Y = yx$Y)
-        omsse_est$estimate()
+        return(omsse_est$estimate())
     }
 }
 
