@@ -12,5 +12,5 @@ PKG_LIBS = -L/opt/homebrew/lib $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o \
            ../../core/src/apm_core.o ../../core/src/linear_algebra_utils.o ../../core/src/bootstrap.o \
            ../../core/src/factor_model_estimators/FactorModelEstimator.o ../../core/src/factor_model_estimators/pc_estimators.o \
-           ../../core/src/factor_model_parameter_structs.o \
+           ../../core/src/OutcomeMeanSuffStatEstimator.o \
            factor_model_estimator_bindings.o pc_estimator_bindings.o outcome_sufficient_stats_bindings.o

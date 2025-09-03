@@ -21,13 +21,13 @@ make_units_by_cohort <- function(n_cohorts, units_per_cohort, prefix = "u", star
 # Panel builders
 build_panel_from_indices <- function(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE) {
     all_units <- sort(unique(unlist(units_by_cohort)))
-    rbindlist(lapply(seq_along(cohort_indices), function(k) {
+    data.table::rbindlist(lapply(seq_along(cohort_indices), function(k) {
         observed_idxs <- cohort_indices[[k]]
         observed_outcomes <- outcomes[observed_idxs]
         unit_ids <- units_by_cohort[[k]]
-        rbindlist(lapply(unit_ids, function(u) {
+        data.table::rbindlist(lapply(unit_ids, function(u) {
             if (isTRUE(include_covariates)) {
-                dt <- data.table(
+                dt <- data.table::data.table(
                     unit_id = u,
                     outcome_id = outcomes
                 )
@@ -37,7 +37,7 @@ build_panel_from_indices <- function(outcomes, cohort_indices, units_by_cohort, 
                 dt[, ("cov2") := as.integer(k)]
                 dt
             } else {
-                dt <- data.table(
+                dt <- data.table::data.table(
                     unit_id = u,
                     outcome_id = observed_outcomes
                 )
@@ -116,13 +116,13 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                                             rotate = TRUE) {
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = rotate)
 
-    rbindlist(lapply(seq_along(cohort_indices), function(k) {
+    data.table::rbindlist(lapply(seq_along(cohort_indices), function(k) {
         observed_idxs <- cohort_indices[[k]]
         observed_outcomes <- outcomes[observed_idxs]
         unit_ids <- units_by_cohort[[k]]
-        rbindlist(lapply(unit_ids, function(u) {
+        data.table::rbindlist(lapply(unit_ids, function(u) {
             if (isTRUE(include_covariates)) {
-                dt <- data.table(
+                dt <- data.table::data.table(
                     unit_id = u,
                     outcome_id = outcomes
                 )
@@ -133,7 +133,7 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                 dt[, ("cov2") := as.integer(k)]
                 dt
             } else {
-                dt <- data.table(
+                dt <- data.table::data.table(
                     unit_id = u,
                     outcome_id = observed_outcomes
                 )
@@ -146,18 +146,18 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
 }
 
 build_expected_unit_map <- function(units_by_cohort) {
-    rbindlist(mapply(function(units, cid) {
-        data.table(unit_id = units, cohort_id = cid)
+    data.table::rbindlist(mapply(function(units, cid) {
+        data.table::data.table(unit_id = units, cohort_id = cid)
     }, units_by_cohort, seq_along(units_by_cohort), SIMPLIFY = FALSE))
 }
 
 build_expected_processed_panel <- function(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE) {
     all_units <- sort(unique(unlist(units_by_cohort)))
-    rbindlist(lapply(seq_along(cohort_indices), function(cid) {
+    data.table::rbindlist(lapply(seq_along(cohort_indices), function(cid) {
         observed_idxs <- cohort_indices[[cid]]
-        rbindlist(lapply(units_by_cohort[[cid]], function(u) {
+        data.table::rbindlist(lapply(units_by_cohort[[cid]], function(u) {
             if (isTRUE(include_covariates)) {
-                dt <- data.table(
+                dt <- data.table::data.table(
                     unit_id = u,
                     cohort_id = cid,
                     outcome_idx = seq_along(outcomes)
@@ -168,7 +168,7 @@ build_expected_processed_panel <- function(outcomes, cohort_indices, units_by_co
                 dt[, ("cov2") := as.integer(cid)]
                 dt
             } else {
-                data.table(
+                data.table::data.table(
                     unit_id = u,
                     cohort_id = cid,
                     outcome_idx = observed_idxs,
