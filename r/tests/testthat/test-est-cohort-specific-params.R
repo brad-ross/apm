@@ -87,13 +87,13 @@ test_that("build_Y_X_for_group_ reshapes Y and X correctly (with covariates)", {
     expect_equal(max(abs(yx$Y - expected_Y)), 0, tolerance = 1e-12)
 
     expect_true(is.array(yx$X))
-    expect_equal(dim(yx$X), c(2L, length(T_idx), 2L))
+    expect_equal(dim(yx$X), c(2L, length(outcomes), 2L))
 
     # cov1 is unit index within global unit ordering (u1..u6) -> cohort 1 has 1,2
-    expected_cov1 <- matrix(c(rep(1L, length(T_idx)), rep(2L, length(T_idx))), nrow = 2, byrow = TRUE)
+    expected_cov1 <- matrix(c(rep(1L, length(outcomes)), rep(2L, length(outcomes))), nrow = 2, byrow = TRUE)
     expect_equal(yx$X[, , 1], expected_cov1)
     # cov2 is cohort id constant (=1) across units/outcomes
-    expect_equal(yx$X[, , 2], matrix(1L, nrow = 2, ncol = length(T_idx)))
+    expect_equal(yx$X[, , 2], matrix(1L, nrow = 2, ncol = length(outcomes)))
 })
 
 test_that("build_Y_X_for_group_ handles q=0 (no covariates)", {
@@ -151,14 +151,19 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
 
     res <- est_cohort_specific_params(panel, est_specs)
 
-    expect_equal(sort(names(res)), sort(c("pca", "pca_fe")))
-    # both spec lists keyed by cohort ids
-    expect_true(all(names(res[["pca"]]) == as.character(seq_along(cohort_indices))))
-    expect_true(all(names(res[["pca_fe"]]) == as.character(seq_along(cohort_indices))))
+    # outer structure keys
+    expect_setequal(names(res), c("cohort_specific_factor_ests", "cohort_outcome_means"))
 
-    # check one cohort's outputs
-    out_no_fe <- res[["pca"]][["1"]]
-    out_fe <- res[["pca_fe"]][["1"]]
+    # factor ests keyed by spec name, then cohort ids
+    f <- res$cohort_specific_factor_ests
+    expect_equal(sort(names(f)), sort(c("pca", "pca_fe")))
+    # lists are indexed by numeric cohort_id
+    expect_equal(length(f[["pca"]]), length(cohort_indices))
+    expect_equal(length(f[["pca_fe"]]), length(cohort_indices))
+
+    # check one cohort's factor model outputs
+    out_no_fe <- f[["pca"]][[1]]
+    out_fe <- f[["pca_fe"]][[1]]
 
     expect_true(inherits(out_no_fe, "FactorModelEstimates"))
     expect_true(inherits(out_fe, "FactorModelEstimates"))
@@ -180,4 +185,16 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
     proj_est <- projection_matrix_r(out_no_fe$G())
     proj_true <- projection_matrix_r(G1_true)
     expect_equal(proj_est, proj_true, tolerance = 1e-9)
+
+    # outcome mean sufficient statistics per cohort
+    oms <- res$cohort_outcome_means
+    expect_equal(length(oms), length(cohort_indices))
+    expect_true(inherits(oms[[1]], "OutcomeMeanSuffStatEstimates"))
+    # observed means length should equal number of observed outcomes for cohort 1
+    expect_equal(length(oms[[1]]$observed_outcome_means()), length(cohort_indices[[1]]))
+
+    # observed means should equal true outcome means across units for cohort 1
+    expected_Y_mat <- expected_Y_for_units_ctx(ctx, cohort_id = 1L, unit_ids = units_by_cohort[[1]], T_idx = T_idx)
+    expected_means <- colMeans(expected_Y_mat)
+    expect_equal(oms[[1]]$observed_outcome_means(), as.numeric(expected_means), tolerance = 1e-12)
 })
