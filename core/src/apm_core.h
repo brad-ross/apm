@@ -295,19 +295,19 @@ struct OutcomeMeansEstimates {
  *        sufficient statistics estimates (with optional bootstrap).
  *
  * Computes point estimates using `apm::FactorModelEstimates::parameter_estimates` and
- * `apm::OutcomeMeanSufficientStatEstimates::suff_stat_estimates` for each cohort. If bootstrap
+ * `apm::OutcomeMeanSuffStatEstimates::suff_stat_estimates` for each cohort. If bootstrap
  * replicates are present in both inputs, computes mean outcomes for each bootstrap draw using the
  * corresponding replicate of parameters and sufficient statistics.
  *
  * @param factor_model_estimates `apm::FactorModelEstimates` containing point parameters and optional replicates.
  * @param observed_outcome_indices Observed outcome indices per cohort (0-based).
- * @param suff_stat_estimates_vec Vector of `apm::OutcomeMeanSufficientStatEstimates`, one per cohort.
+ * @param suff_stat_estimates_vec Vector of `apm::OutcomeMeanSuffStatEstimates`, one per cohort.
  * @return `apm::OutcomeMeansEstimates` containing a C x T point matrix and optional bootstrap matrices.
  */
 OutcomeMeansEstimates estimate_outcome_means_across_cohorts(
     const FactorModelEstimates& factor_model_estimates,
     const ObservedOutcomeIndices& observed_outcome_indices,
-    const std::vector<OutcomeMeanSufficientStatEstimates>& suff_stat_estimates_vec);
+    const std::vector<OutcomeMeanSuffStatEstimates>& suff_stat_estimates_vec);
 
 //==============================================================================
 // Identification Verification Via the O^3 Algorithm

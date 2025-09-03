@@ -120,21 +120,9 @@ struct OutcomeMeanSufficientStatistics {
     OutcomeMeanSufficientStatistics() = default;
 
     OutcomeMeanSufficientStatistics(arma::vec observed_means_in,
-                                    std::optional<arma::mat> covar_means_in = std::nullopt);
-
-    /**
-     * @brief Construct from raw outcomes and optional covariates, aggregating across units.
-     *
-     * @param outcomes N x T_c matrix of observed outcomes across N units.
-     * @param covars Optional N x T x q cube of covariates across N units.
-     *               When provided, covariate means are computed by averaging over the N dimension
-     *               (weighted if weights provided), yielding a T x q matrix.
-     * @param weights Optional length-N vector of non-negative weights. If empty, uses equal weights.
-     *                Weights are normalized to sum to one before aggregation.
-     */
-    OutcomeMeanSufficientStatistics(const arma::mat& outcomes,
-                                    std::optional<arma::cube> covars = std::nullopt,
-                                    arma::vec weights = arma::vec());
+                                    std::optional<arma::mat> covar_means_in = std::nullopt)
+        : observed_outcome_means(std::move(observed_means_in)),
+          covar_means(std::move(covar_means_in)) {}
 
     // Presence checks
     /**
@@ -164,12 +152,14 @@ struct OutcomeMeanSufficientStatistics {
 /**
  * @brief Aggregated sufficient statistics estimates with optional bootstrap replicates.
  */
-struct OutcomeMeanSufficientStatEstimates {
+struct OutcomeMeanSuffStatEstimates {
     OutcomeMeanSufficientStatistics suff_stat_estimates;                  // point sufficient stats
     std::vector<OutcomeMeanSufficientStatistics> bootstrap_replicates;   // length B if present; otherwise 0
 
-    OutcomeMeanSufficientStatEstimates(OutcomeMeanSufficientStatistics stats,
-                                       std::vector<OutcomeMeanSufficientStatistics> boot_reps = {});
+    OutcomeMeanSuffStatEstimates(OutcomeMeanSufficientStatistics stats,
+                                 std::vector<OutcomeMeanSufficientStatistics> boot_reps = {})
+        : suff_stat_estimates(std::move(stats)),
+          bootstrap_replicates(std::move(boot_reps)) {}
 
     /**
      * @brief Indicates whether bootstrap replicates are present (non-empty).
@@ -180,20 +170,9 @@ struct OutcomeMeanSufficientStatEstimates {
      * @brief Returns the number of bootstrap replicates (0 if none).
      */
     std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_replicates.size(); }
-
-    /**
-     * @brief Construct sufficient statistics and bootstrap replicates from raw data and a bootstrap object.
-     *
-     * @param outcomes N x T_c matrix of observed outcomes.
-     * @param bootstrap shared_ptr to WeightedBootstrap providing B bootstrap draws. If null, no replicates are created.
-     * @param covars Optional N x T x q cube of covariates.
-     * @param unit_idxs Optional indices of units to include (0-based). If empty, all units are used.
-     */
-    OutcomeMeanSufficientStatEstimates(const arma::mat& outcomes,
-                                       std::shared_ptr<const apm::WeightedBootstrap> bootstrap,
-                                       std::optional<arma::cube> covars = std::nullopt,
-                                       arma::uvec unit_idxs = arma::uvec());
 };
+
+// No heavy constructors or factories; use OutcomeSuffStatEstimator to build these.
 
 } // namespace apm
 

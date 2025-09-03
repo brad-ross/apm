@@ -22,9 +22,10 @@ add_library(apm
     src/apm_core.cpp
     src/linear_algebra_utils.cpp
     src/bootstrap.cpp
-    src/factor_model_parameter_structs.cpp
+    # factor_model_parameter_structs is header-only now
     src/factor_model_estimators/FactorModelEstimator.cpp
     src/factor_model_estimators/pc_estimators.cpp
+    src/OutcomeMeanSuffStatEstimator.cpp
 )
 target_include_directories(apm PUBLIC src)
 
@@ -82,6 +83,6 @@ install(TARGETS apm
     RUNTIME DESTINATION bin
 )
 
-install(FILES src/apm_core.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/factor_model_parameter_structs.h
+install(FILES src/apm_core.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/factor_model_parameter_structs.h src/OutcomeMeanSuffStatEstimator.h
     DESTINATION include/apm
 ) 

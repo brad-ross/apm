@@ -91,10 +91,10 @@ apm::FactorModelEstimates duplicate_bootstrap(const apm::FactorModelParameters& 
 }
 
 // Duplicate bootstrap replicates for sufficient statistics per cohort
-std::vector<apm::OutcomeMeanSufficientStatEstimates> duplicate_bootstrap_suff(
+std::vector<apm::OutcomeMeanSuffStatEstimates> duplicate_bootstrap_suff(
     const std::vector<apm::OutcomeMeanSufficientStatistics>& suff_stats_point,
     std::size_t B) {
-    std::vector<apm::OutcomeMeanSufficientStatEstimates> out;
+    std::vector<apm::OutcomeMeanSuffStatEstimates> out;
     out.reserve(suff_stats_point.size());
     for (const auto& stats_point : suff_stats_point) {
         std::vector<apm::OutcomeMeanSufficientStatistics> boot_stats(B, stats_point);
@@ -449,7 +449,7 @@ TEST(APMTest, EstimateMeans_EstimatesWithBootstrap_MismatchThrows) {
     apm::FactorModelEstimates param_estimates(apm::FactorModelParameters(data.G, data.g_0, data.a),
                                               std::move(param_boot));
 
-    std::vector<apm::OutcomeMeanSufficientStatEstimates> suff_est_vec;
+    std::vector<apm::OutcomeMeanSuffStatEstimates> suff_est_vec;
     suff_est_vec.reserve(data.C);
     for (arma::uword c = 0; c < data.C; ++c) {
         arma::mat X_c = data.X_c_vec[c];

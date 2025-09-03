@@ -668,7 +668,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 OutcomeMeansEstimates estimate_outcome_means_across_cohorts(
     const FactorModelEstimates& factor_model_estimates,
     const ObservedOutcomeIndices& observed_outcome_indices,
-    const std::vector<OutcomeMeanSufficientStatEstimates>& suff_stat_estimates_vec) {
+    const std::vector<OutcomeMeanSuffStatEstimates>& suff_stat_estimates_vec) {
 
     const std::size_t C = static_cast<std::size_t>(observed_outcome_indices.size());
     if (suff_stat_estimates_vec.size() != C) {
