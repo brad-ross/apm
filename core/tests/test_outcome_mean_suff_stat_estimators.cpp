@@ -137,8 +137,6 @@ TEST(OutcomeSuffStatEstimatorTest, CovariateMeans_ComputedAndDimensions) {
     X.slice(1).row(0) = arma::rowvec({10.0, 20.0, 30.0});
     X.slice(1).row(1) = arma::rowvec({30.0, 40.0, 50.0});
 
-    std::cout << "X: " << X << std::endl;
-
     est.add_data(unit_idxs, Y, X);
     apm::OutcomeMeanSuffStatEstimates out = est.estimate();
 
@@ -150,8 +148,6 @@ TEST(OutcomeSuffStatEstimatorTest, CovariateMeans_ComputedAndDimensions) {
     arma::mat expected_cm(T, q);
     expected_cm.col(0) = arma::vec({2.0, 3.0, 4.0});
     expected_cm.col(1) = arma::vec({20.0, 30.0, 40.0});
-    std::cout << "cm: " << cm << std::endl;
-    std::cout << "expected_cm: " << expected_cm << std::endl;
     ASSERT_TRUE(arma::approx_equal(cm, expected_cm, "absdiff", 1e-12));
 }
 
