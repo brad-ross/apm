@@ -196,6 +196,33 @@ static void assemble_Y_X_for_unit_run(
 }
 
 //==============================
+// Helpers: finalize outputs
+//==============================
+static CohortSpecificEstimates build_cohort_specific_estimates(
+    std::unordered_map<std::string, std::vector<std::optional<FactorModelEstimates>>>& tmp_factor,
+    std::vector<std::optional<OutcomeMeanSuffStatEstimates>>& tmp_outcome)
+{
+    const std::size_t C = tmp_outcome.size();
+
+    CohortSpecificEstimates out;
+    out.cohort_outcome_mean_ests.reserve(C);
+    for (std::size_t i = 0; i < C; ++i) {
+        out.cohort_outcome_mean_ests.push_back(std::move(*tmp_outcome[i]));
+    }
+
+    for (auto& kv : tmp_factor) {
+        auto& name = kv.first;
+        auto& vec_opt = kv.second;
+        std::vector<FactorModelEstimates> vec;
+        vec.reserve(C);
+        for (std::size_t i = 0; i < C; ++i) vec.push_back(std::move(*vec_opt[i]));
+        out.cohort_specific_factor_ests.emplace(name, std::move(vec));
+    }
+
+    return out;
+}
+
+//==============================
 // Main entry
 //==============================
 CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
@@ -303,20 +330,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
 #endif
 
     // Finalize outputs
-    CohortSpecificEstimates out;
-    out.cohort_outcome_mean_ests.reserve(C);
-    for (std::size_t i = 0; i < C; ++i) {
-        out.cohort_outcome_mean_ests.push_back(std::move(*tmp_outcome[i]));
-    }
-    for (auto& kv : tmp_factor) {
-        auto& name = kv.first;
-        auto& vec_opt = kv.second;
-        std::vector<FactorModelEstimates> vec;
-        vec.reserve(C);
-        for (std::size_t i = 0; i < C; ++i) vec.push_back(std::move(*vec_opt[i]));
-        out.cohort_specific_factor_ests.emplace(name, std::move(vec));
-    }
-    return out;
+    return build_cohort_specific_estimates(tmp_factor, tmp_outcome);
 }
 
 } // namespace apm
