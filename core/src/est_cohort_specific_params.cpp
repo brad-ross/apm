@@ -3,6 +3,7 @@
 #include <limits>
 #ifdef APM_HAS_TBB
 #include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/global_control.h>
 #endif
 
 namespace apm {
@@ -206,9 +207,20 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     std::size_t n_rows,
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
     const ObservedOutcomeIndices& observed_outcome_indices,
-    std::shared_ptr<const WeightedBootstrap> bootstrap)
+    std::shared_ptr<const WeightedBootstrap> bootstrap,
+    std::size_t num_threads)
 {
     const std::size_t q = covar_cols.size();
+
+#ifdef APM_HAS_TBB
+    std::unique_ptr<oneapi::tbb::global_control> tbb_gc;
+    if (num_threads > 1) {
+        tbb_gc = std::make_unique<oneapi::tbb::global_control>(
+            oneapi::tbb::global_control::max_allowed_parallelism,
+            static_cast<std::size_t>(num_threads)
+        );
+    }
+#endif
 
     // Single pass: build cohort blocks and their unit runs
     std::vector<CohortBlock> blocks = build_cohort_blocks_with_unit_runs(
@@ -224,12 +236,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     std::vector<std::optional<OutcomeMeanSuffStatEstimates>> tmp_outcome(C);
 
     // Parallelize across cohorts
-    // Parallelize across cohorts if TBB is available; otherwise, fall back to serial loop
-#ifdef APM_HAS_TBB
-    oneapi::tbb::parallel_for(std::size_t(0), C, [&](std::size_t cidx) {
-#else
-    for (std::size_t cidx = 0; cidx < C; ++cidx) {
-#endif
+    auto process_cohort = [&](std::size_t cidx) {
         const CohortBlock& blk = blocks[cidx];
 
         // Dictionaries for this cohort (T_c order and T from max+1)
@@ -276,9 +283,22 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
         for (auto& kv : ests) {
             tmp_factor[kv.first][cidx].emplace(kv.second->estimate());
         }
+    };
+
+    // Parallelize across cohorts if requested; otherwise use serial loop
 #ifdef APM_HAS_TBB
-    });
+    if (num_threads <= 1) {
+        for (std::size_t cidx = 0; cidx < C; ++cidx) {
+            process_cohort(cidx);
+        }
+    } else {
+        oneapi::tbb::parallel_for(std::size_t(0), C, [&](std::size_t cidx) {
+            process_cohort(cidx);
+        });
+    }
 #else
+    for (std::size_t cidx = 0; cidx < C; ++cidx) {
+        process_cohort(cidx);
     }
 #endif
 
