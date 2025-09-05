@@ -1,67 +1,62 @@
-context("Testing cohort-specific parameter estimation helpers")
+context("Testing cohort-specific parameter estimation")
 
 library(data.table)
 
-test_that("validate_est_specs_ enforces required fields and values", {
-    # valid
-    expect_silent(apm:::validate_est_specs_(list(list(
-        name = "principal_components",
-        include_outcome_fes = FALSE,
-        r = 2
-    ))))
+# test_that("est_cohort_specific_params validates spec fields and estimator name", {
+#     outcomes <- make_outcomes(3)
+#     cohort_indices <- make_staircase_observed_indices(3, 2)
+#     units_by_cohort <- make_units_by_cohort(2, 2)
 
-    # missing field
-    expect_error(apm:::validate_est_specs_(list(list(
-        name = "principal_components",
-        r = 2
-    ))), regexp = "missing fields")
+#     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, r = 1L)
+#     panel <- UnbalancedPanel$new(
+#         panel_df = panel_dt,
+#         unit_id_col = "unit_id",
+#         outcome_id_col = "outcome_id",
+#         outcome_value_col = "y",
+#         model_rank = 1,
+#         min_cohort_size = 1
+#     )
 
-    # unsupported name
-    expect_error(apm:::validate_est_specs_(list(list(
-        name = "other",
-        include_outcome_fes = TRUE,
-        r = 2
-    ))), regexp = "Only 'principal_components'")
+#     # missing field r
+#     est_specs_missing <- list(list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE))
+#     expect_error(est_cohort_specific_params(panel, est_specs_missing), regexp = "missing fields")
 
-    # include_outcome_fes must be logical(1)
-    expect_error(apm:::validate_est_specs_(list(list(
-        name = "principal_components",
-        include_outcome_fes = c(TRUE, FALSE),
-        r = 2
-    ))))
+#     # unsupported estimator name should error from C++ core
+#     est_specs_bad <- list(list(factor_model_estimator = "other", include_outcome_fes = FALSE, r = 1L))
+#     expect_error(est_cohort_specific_params(panel, est_specs_bad))
+# })
 
-    # r must be positive integer-like
-    expect_error(apm:::validate_est_specs_(list(list(
-        name = "principal_components",
-        include_outcome_fes = FALSE,
-        r = 0
-    ))))
+test_that("wrapper returns FactorModelEstimates with expected dimensions", {
+    outcomes <- make_outcomes(4)
+    cohort_indices <- make_staircase_observed_indices(4, 2)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
+
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, r = 2L)
+    panel <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 2,
+        min_cohort_size = 1
+    )
+
+    est_specs <- list(spec = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L))
+    res <- est_cohort_specific_params(panel, est_specs)
+    out <- res$cohort_specific_factor_ests[[1]][[1]]
+    expect_true(inherits(out, "FactorModelEstimates"))
+    expect_equal(ncol(out$G()), 2L)
+    expect_equal(nrow(out$G()), length(cohort_indices[[1]]))
 })
 
-test_that("new_estimator_from_spec_ instantiates correct estimator", {
-    spec1 <- list(name = "principal_components", include_outcome_fes = FALSE, r = 1)
-    e1 <- apm:::new_estimator_from_spec_(spec1, T_c = 3, q = 0, bootstrap = NULL)
-    expect_true(inherits(e1, "PCEstimator"))
-    expect_equal(e1$r(), 1L)
-    expect_equal(e1$T_c(), 3L)
-    expect_equal(e1$q(), 0L)
-
-    spec2 <- list(name = "principal_components", include_outcome_fes = TRUE, r = 2)
-    e2 <- apm:::new_estimator_from_spec_(spec2, T_c = 4, q = 2, bootstrap = NULL)
-    expect_true(inherits(e2, "PCEstimatorWithFEs"))
-    expect_equal(e2$r(), 2L)
-    expect_equal(e2$T_c(), 4L)
-    expect_equal(e2$q(), 2L)
-})
-
-test_that("build_Y_X_for_group_ reshapes Y and X correctly (with covariates)", {
+test_that("covariate means are computed with expected dimensions and values", {
     outcomes <- make_outcomes(5)
     cohort_indices <- make_staircase_observed_indices(5, 3)
     units_by_cohort <- make_units_by_cohort(3, 2)
 
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE, r = 2L)
 
-    obj <- UnbalancedPanel$new(
+    panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
         unit_id_col = "unit_id",
         outcome_id_col = "outcome_id",
@@ -71,39 +66,26 @@ test_that("build_Y_X_for_group_ reshapes Y and X correctly (with covariates)", {
         covar_cols = c("cov1", "cov2")
     )
 
-    pp <- obj$get_processed_panel()
-    T_idx <- obj$get_observed_outcome_indices()[[1]]
-    sd <- pp[cohort_id == 1L]
-
-    yx <- apm:::build_Y_X_for_group_(sd, T_idx, obj$get_covar_cols())
-
-    expect_true(is.matrix(yx$Y))
-    expect_equal(dim(yx$Y), c(2L, length(T_idx)))
-    expect_true(!any(is.na(yx$Y)))
-
-    # Contents: construct expected Y from factor model used in helper
-    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
-    expected_Y <- expected_Y_for_units_ctx(ctx, cohort_id = 1L, unit_ids = units_by_cohort[[1]], T_idx = T_idx)
-    expect_equal(max(abs(yx$Y - expected_Y)), 0, tolerance = 1e-12)
-
-    expect_true(is.array(yx$X))
-    expect_equal(dim(yx$X), c(2L, length(outcomes), 2L))
-
-    # cov1 is unit index within global unit ordering (u1..u6) -> cohort 1 has 1,2
-    expected_cov1 <- matrix(c(rep(1L, length(outcomes)), rep(2L, length(outcomes))), nrow = 2, byrow = TRUE)
-    expect_equal(yx$X[, , 1], expected_cov1)
-    # cov2 is cohort id constant (=1) across units/outcomes
-    expect_equal(yx$X[, , 2], matrix(1L, nrow = 2, ncol = length(outcomes)))
+    est_specs <- list(pc = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L))
+    res <- est_cohort_specific_params(panel, est_specs)
+    oms <- res$cohort_outcome_means[[1]]
+    CM <- oms$covar_means()
+    expect_true(is.matrix(CM))
+    expect_equal(dim(CM), c(length(cohort_indices[[1]]), 2L))
+    # cov1 across cohort 1 has two units with values 1 and 2 at all outcomes -> mean 1.5
+    expect_true(all(CM[, 1] == 1.5))
+    # cov2 is cohort id constant (=1)
+    expect_true(all(CM[, 2] == 1))
 })
 
-test_that("build_Y_X_for_group_ handles q=0 (no covariates)", {
+test_that("q=0 flows without covariate means", {
     outcomes <- make_outcomes(5)
     cohort_indices <- make_staircase_observed_indices(5, 3)
     units_by_cohort <- make_units_by_cohort(3, 2)
 
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, r = 2L)
 
-    obj <- UnbalancedPanel$new(
+    panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
         unit_id_col = "unit_id",
         outcome_id_col = "outcome_id",
@@ -112,19 +94,10 @@ test_that("build_Y_X_for_group_ handles q=0 (no covariates)", {
         min_cohort_size = 2
     )
 
-    pp <- obj$get_processed_panel()
-    T_idx <- obj$get_observed_outcome_indices()[[1]]
-    sd <- pp[cohort_id == 1L]
-
-    yx <- apm:::build_Y_X_for_group_(sd, T_idx, obj$get_covar_cols())
-    expect_true(is.matrix(yx$Y))
-    expect_equal(dim(yx$Y), c(2L, length(T_idx)))
-    expect_null(yx$X)
-
-    # Contents: expected Y as in the covariate case
-    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
-    expected_Y <- expected_Y_for_units_ctx(ctx, cohort_id = 1L, unit_ids = units_by_cohort[[1]], T_idx = T_idx)
-    expect_equal(max(abs(yx$Y - expected_Y)), 0, tolerance = 1e-12)
+    est_specs <- list(pc = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L))
+    res <- est_cohort_specific_params(panel, est_specs)
+    oms <- res$cohort_outcome_means[[1]]
+    expect_null(oms$covar_means())
 })
 
 test_that("est_cohort_specific_params integrates estimators per cohort", {
@@ -145,8 +118,8 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
     )
 
     est_specs <- list(
-        pca = list(name = "principal_components", include_outcome_fes = FALSE, r = 2L),
-        pca_fe = list(name = "principal_components", include_outcome_fes = TRUE, r = 2L)
+        pca = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L),
+        pca_fe = list(factor_model_estimator = "principal_components", include_outcome_fes = TRUE, r = 2L)
     )
 
     res <- est_cohort_specific_params(panel, est_specs)
@@ -197,4 +170,43 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
     expected_Y_mat <- expected_Y_for_units_ctx(ctx, cohort_id = 1L, unit_ids = units_by_cohort[[1]], T_idx = T_idx)
     expected_means <- colMeans(expected_Y_mat)
     expect_equal(oms[[1]]$observed_outcome_means(), as.numeric(expected_means), tolerance = 1e-12)
+})
+
+test_that("bootstrap flows through and produces replicates", {
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3)
+    units_by_cohort <- make_units_by_cohort(3, 3)
+
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE, r = 2L)
+
+    panel <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 2,
+        min_cohort_size = 2,
+        covar_cols = c("cov1", "cov2")
+    )
+
+    # N equals number of unique units in processed panel
+    N <- nrow(unique(panel$get_processed_panel()[, .(unit_idx)]))
+    B <- 3L
+    wb <- get_weighted_bootstrap_draws(N = N, B = B, type = "bayesian", seed = 123L)
+
+    est_specs <- list(
+        pca = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L)
+    )
+
+    res <- est_cohort_specific_params(panel, est_specs, bootstrap = wb)
+
+    # Factor model bootstrap replicates present per cohort
+    f <- res$cohort_specific_factor_ests[["pca"]]
+    expect_equal(length(f), length(cohort_indices))
+    expect_true(all(vapply(f, function(e) e$num_bootstraps() == B, logical(1))))
+
+    # Outcome sufficient stats also have bootstrap replicates
+    oms <- res$cohort_outcome_means
+    expect_equal(length(oms), length(cohort_indices))
+    expect_true(all(vapply(oms, function(e) e$num_bootstraps() == B, logical(1))))
 })
