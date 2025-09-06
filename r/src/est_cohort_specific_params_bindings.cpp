@@ -6,7 +6,8 @@
 // [[Rcpp::depends(RcppArmadillo)]]
 
 // Convert est_specs: named list → unordered_map<string, EstimatorSpecification>
-// Each element is a list with fields: factor_model_estimator (string), include_outcome_fes (logical), r (integer)
+// Each element is a list with fields: factor_model_estimator (string), include_outcome_fes (logical), r (integer),
+// optional cohort_weighting (string: "equal" or "by_size")
 static bool has_valid_names(const Rcpp::List& lst) {
     SEXP nmSxp = Rf_getAttrib(lst, R_NamesSymbol);
     if (nmSxp == R_NilValue) return false;
@@ -36,6 +37,9 @@ to_cpp_specs(const Rcpp::List& est_specs_r) {
         csp.factor_model_estimator = Rcpp::as<std::string>(sp["factor_model_estimator"]);
         csp.include_outcome_fes = Rcpp::as<bool>(sp["include_outcome_fes"]);
         csp.r = static_cast<std::size_t>(Rcpp::as<int>(sp["r"]));
+        if (sp.containsElementNamed("cohort_weighting")) {
+            csp.cohort_weighting = Rcpp::as<std::string>(sp["cohort_weighting"]);
+        }
         std::string key = has_names ? std::string(Rcpp::as<std::string>(nm[i])) : std::string("spec_") + std::to_string(i + 1);
         out.emplace(std::move(key), std::move(csp));
     }
@@ -149,9 +153,23 @@ static Rcpp::List build_return_list(const apm::CohortSpecificEstimates& ests, co
         out_oms[static_cast<int>(c)] = Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates>(heap, true);
     }
 
+    // Cohort weights per spec (as external pointers to C++ objects)
+    Rcpp::List out_weights(spec_names.size());
+    out_weights.attr("names") = spec_names;
+    for (int i = 0; i < spec_names.size(); ++i) {
+        std::string key = Rcpp::as<std::string>(spec_names[i]);
+        auto wit = ests.cohort_weights.find(key);
+        if (wit == ests.cohort_weights.end()) {
+            Rcpp::stop("Spec key not found in cohort_weights: " + key);
+        }
+        auto* heapW = new apm::CohortWeightEstimates(wit->second);
+        out_weights[i] = Rcpp::XPtr<apm::CohortWeightEstimates>(heapW, true);
+    }
+
     return Rcpp::List::create(
         Rcpp::Named("cohort_specific_factor_ests") = out_factor,
-        Rcpp::Named("cohort_outcome_means") = out_oms
+        Rcpp::Named("cohort_outcome_means") = out_oms,
+        Rcpp::Named("cohort_weights") = out_weights
     );
 }
 
@@ -205,5 +223,4 @@ Rcpp::List est_cohort_specific_params_from_panel_cpp(Rcpp::DataFrame processed_p
 
     return build_return_list(ests, spec_names);
 }
-
 

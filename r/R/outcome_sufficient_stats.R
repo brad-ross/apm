@@ -201,5 +201,3 @@ OutcomeMeanSuffStatEstimates <- R6::R6Class(
   ),
   private = list(xp = NULL)
 )
-
-

@@ -49,6 +49,32 @@ test_that("wrapper returns FactorModelEstimates with expected dimensions", {
     expect_equal(nrow(out$G()), length(cohort_indices[[1]]))
 })
 
+test_that("cohort weights default to equal (1/C) without bootstrap", {
+    outcomes <- make_outcomes(4)
+    cohort_indices <- make_staircase_observed_indices(4, 3)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
+
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, r = 2L)
+    panel <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 2,
+        min_cohort_size = 1
+    )
+
+    est_specs <- list(spec = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L))
+    res <- est_cohort_specific_params(panel, est_specs)
+
+    expect_true("cohort_weights" %in% names(res))
+    w <- res$cohort_weights[["spec"]]
+    expect_true(inherits(w, "CohortWeightEstimates"))
+    expect_false(w$has_bootstrap())
+    C <- length(cohort_indices)
+    expect_equal(as.numeric(w$cohort_weights()), rep(1 / C, C))
+})
+
 test_that("covariate means are computed with expected dimensions and values", {
     outcomes <- make_outcomes(5)
     cohort_indices <- make_staircase_observed_indices(5, 3)
@@ -125,7 +151,7 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
     res <- est_cohort_specific_params(panel, est_specs)
 
     # outer structure keys
-    expect_setequal(names(res), c("cohort_specific_factor_ests", "cohort_outcome_means"))
+    expect_setequal(names(res), c("cohort_specific_factor_ests", "cohort_outcome_means", "cohort_weights"))
 
     # factor ests keyed by spec name, then cohort ids
     f <- res$cohort_specific_factor_ests
@@ -209,4 +235,56 @@ test_that("bootstrap flows through and produces replicates", {
     oms <- res$cohort_outcome_means
     expect_equal(length(oms), length(cohort_indices))
     expect_true(all(vapply(oms, function(e) e$num_bootstraps() == B, logical(1))))
+})
+
+test_that("cohort weights with bootstrap: equal vs by_size behave as expected", {
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3)
+    units_by_cohort <- make_units_by_cohort(3, 3)
+
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, r = 2L)
+
+    panel <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 2,
+        min_cohort_size = 2
+    )
+
+    N <- nrow(unique(panel$get_processed_panel()[, .(unit_idx)]))
+    B <- 5L
+    wb <- get_weighted_bootstrap_draws(N = N, B = B, type = "bayesian", seed = 321L)
+
+    est_specs <- list(
+        pca_equal = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L, cohort_weighting = "equal"),
+        pca_by    = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L, cohort_weighting = "by_size")
+    )
+
+    res <- est_cohort_specific_params(panel, est_specs, bootstrap = wb)
+
+    # Equal weights: point and each bootstrap draw are 1/C
+    C <- length(cohort_indices)
+    eq <- rep(1 / C, C)
+    w_eq <- res$cohort_weights[["pca_equal"]]
+    expect_true(inherits(w_eq, "CohortWeightEstimates"))
+    expect_true(w_eq$has_bootstrap())
+    expect_equal(as.numeric(w_eq$cohort_weights()), eq)
+    for (b in seq_len(B)) {
+        expect_equal(as.numeric(w_eq$bootstrap_cohort_weights(b)), eq)
+    }
+
+    # By-size weights: each bootstrap draw should sum to 1; point equals rowMeans of bootstraps
+    w_by <- res$cohort_weights[["pca_by"]]
+    expect_true(inherits(w_by, "CohortWeightEstimates"))
+    expect_true(w_by$has_bootstrap())
+    boots <- sapply(seq_len(B), function(b) as.numeric(w_by$bootstrap_cohort_weights(b)))
+    expect_equal(dim(boots), c(C, B))
+    # columns sums are 1
+    expect_true(all(abs(colSums(boots) - 1) < 1e-10))
+    # point equals average across draws
+    expect_equal(as.numeric(w_by$cohort_weights()), rowMeans(boots), tolerance = 1e-10)
+    # values in [0,1]
+    expect_true(all(boots >= 0 & boots <= 1))
 })

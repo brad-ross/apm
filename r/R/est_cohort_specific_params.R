@@ -4,15 +4,26 @@
 #'
 #' @param panel UnbalancedPanel instance
 #' @param est_specs named list of specs; each spec is a list with fields:
-#'   - factor_model_estimator: "principal_components"
-#'   - include_outcome_fes: logical(1)
-#'   - r: integer(1)
+#'   - factor_model_estimator: character(1), currently only "principal_components" is supported.
+#'       Uses a principal components estimator for cohort-specific factor matrices; when
+#'       `include_outcome_fes = TRUE`, the estimator jointly recovers outcome fixed effects.
+#'   - include_outcome_fes: logical(1). If TRUE, include cohort-specific outcome fixed effects
+#'       (g_0) in estimation and results; if FALSE, estimate factors only.
+#'   - r: integer(1). The factor model rank (number of latent factors) to estimate
+#'       within each cohort.
+#'   - cohort_weighting: character(1), one of "equal" or "by_size" (default "equal").
+#'       If "equal", cohorts are weighted equally with 1/C both for the point estimate and,
+#'       when bootstrap is present, for each bootstrap draw. If "by_size", the point cohort
+#'       weights equal the average across bootstrap draws of the per-draw cohort shares of total
+#'       unit weight; each bootstrap replicate weight vector equals the per-draw cohort shares.
+#'       When no bootstrap is provided, "by_size" uses cohort unit-count shares (n_c / sum n_c).
 #' @param bootstrap optional WeightedBootstrap
 #' @param num_threads integer number of threads (default 1L). If NULL, uses the
 #'   core default (serial or TBB default, depending on build).
 #' @return list with:
 #'   - cohort_specific_factor_ests: named list over spec keys; each is a list over cohorts of FactorModelEstimates
 #'   - cohort_outcome_means: list over cohorts of OutcomeMeanSuffStatEstimates
+#'   - cohort_weights: named list over spec keys of CohortWeightEstimates
 #' @export
 est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_threads = 1L) {
     stopifnot(inherits(panel, "UnbalancedPanel"))
@@ -52,9 +63,11 @@ est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_t
         lapply(lst, function(xp) FactorModelEstimates$new(xp))
     })
     wrapped_oms <- lapply(res$cohort_outcome_means, function(xp) OutcomeMeanSuffStatEstimates$new(xp))
+    wrapped_weights <- lapply(res$cohort_weights, function(xp) CohortWeightEstimates$new(xp))
 
     list(
         cohort_specific_factor_ests = wrapped_factor,
-        cohort_outcome_means = wrapped_oms
+        cohort_outcome_means = wrapped_oms,
+        cohort_weights = wrapped_weights
     )
 }
