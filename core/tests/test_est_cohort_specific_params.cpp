@@ -171,6 +171,20 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
     }
     ASSERT_TRUE(arma::approx_equal(oms0.observed_outcome_means, expected_means, "absdiff", 1e-12));
     EXPECT_FALSE(oms0.has_covar_means());
+
+    // Cohort weights: default is equal => 1/C, no bootstrap
+    ASSERT_EQ(out.cohort_weights.size(), 2u);
+    arma::vec eq = arma::ones(ctx.C) / static_cast<double>(ctx.C);
+    {
+        const auto& w = out.cohort_weights.at("pca");
+        ASSERT_TRUE(w.bootstrap_cohort_weights.empty());
+        ASSERT_TRUE(arma::approx_equal(w.cohort_weights, eq, "absdiff", 1e-12));
+    }
+    {
+        const auto& w = out.cohort_weights.at("pca_fe");
+        ASSERT_TRUE(w.bootstrap_cohort_weights.empty());
+        ASSERT_TRUE(arma::approx_equal(w.cohort_weights, eq, "absdiff", 1e-12));
+    }
 }
 
 TEST(CohortSpecificRawTest, YXAssembly_WithCovariates_DimensionsAndMeans) {
@@ -215,6 +229,9 @@ TEST(CohortSpecificRawTest, Bootstrap_DeterministicReplicates_NoCovariates) {
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;
     specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, ctx.r});
     specs.emplace("pca_fe", apm::EstimatorSpecification{"principal_components", true, ctx.r});
+    // Set cohort_weighting: by_size for pca, equal for pca_fe
+    specs.at("pca").cohort_weighting = std::string("by_size");
+    specs.at("pca_fe").cohort_weighting = std::string("equal");
 
     std::vector<const double*> covar_cols; // q=0
     apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
@@ -232,6 +249,29 @@ TEST(CohortSpecificRawTest, Bootstrap_DeterministicReplicates_NoCovariates) {
     const auto& pca_fe_vec = out.cohort_specific_factor_ests.at("pca_fe");
     ASSERT_EQ(pca_vec[0].bootstrap_replicates.size(), 2u);
     ASSERT_EQ(pca_fe_vec[0].bootstrap_replicates.size(), 2u);
+
+    // Cohort weights by spec
+    ASSERT_EQ(out.cohort_weights.size(), 2u);
+    const auto& w_by = out.cohort_weights.at("pca");
+    const auto& w_eq = out.cohort_weights.at("pca_fe");
+
+    // Expected S columns per draw given W
+    arma::vec S1 = {2.0/3.0, 1.0/3.0, 0.0};
+    arma::vec S2 = {0.0, 1.0/3.0, 2.0/3.0};
+    arma::vec meanS = 0.5 * (S1 + S2);
+
+    // by_size: point = mean across draws; bootstrap replicates equal S columns
+    ASSERT_EQ(w_by.bootstrap_cohort_weights.size(), 2u);
+    ASSERT_TRUE(arma::approx_equal(w_by.cohort_weights, meanS, "absdiff", 1e-12));
+    ASSERT_TRUE(arma::approx_equal(w_by.bootstrap_cohort_weights[0], S1, "absdiff", 1e-12));
+    ASSERT_TRUE(arma::approx_equal(w_by.bootstrap_cohort_weights[1], S2, "absdiff", 1e-12));
+
+    // equal: point and each bootstrap replicate are 1/C
+    arma::vec eq = arma::ones(ctx.C) / static_cast<double>(ctx.C);
+    ASSERT_EQ(w_eq.bootstrap_cohort_weights.size(), 2u);
+    ASSERT_TRUE(arma::approx_equal(w_eq.cohort_weights, eq, "absdiff", 1e-12));
+    ASSERT_TRUE(arma::approx_equal(w_eq.bootstrap_cohort_weights[0], eq, "absdiff", 1e-12));
+    ASSERT_TRUE(arma::approx_equal(w_eq.bootstrap_cohort_weights[1], eq, "absdiff", 1e-12));
 }
 
 

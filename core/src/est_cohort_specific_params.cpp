@@ -200,7 +200,8 @@ static void assemble_Y_X_for_unit_run(
 //==============================
 static CohortSpecificEstimates build_cohort_specific_estimates(
     std::unordered_map<std::string, std::vector<std::optional<FactorModelEstimates>>>& tmp_factor,
-    std::vector<std::optional<OutcomeMeanSuffStatEstimates>>& tmp_outcome)
+    std::vector<std::optional<OutcomeMeanSuffStatEstimates>>& tmp_outcome,
+    std::unordered_map<std::string, CohortWeightEstimates> cohort_weights)
 {
     const std::size_t C = tmp_outcome.size();
 
@@ -217,6 +218,87 @@ static CohortSpecificEstimates build_cohort_specific_estimates(
         vec.reserve(C);
         for (std::size_t i = 0; i < C; ++i) vec.push_back(std::move(*vec_opt[i]));
         out.cohort_specific_factor_ests.emplace(name, std::move(vec));
+    }
+
+    // Attach cohort weights
+    out.cohort_weights = std::move(cohort_weights);
+    return out;
+}
+
+//==============================
+// Helpers: cohort weights
+//==============================
+static std::unordered_map<std::string, CohortWeightEstimates> est_cohort_weights(
+    const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
+    const std::vector<CohortBlock>& blocks,
+    const std::shared_ptr<const WeightedBootstrap>& bootstrap)
+{
+    const std::size_t C = blocks.size();
+
+    // Build per-cohort unique unit indices
+    std::vector<arma::uvec> cohort_unit_idxs;
+    cohort_unit_idxs.reserve(C);
+    for (const auto& blk : blocks) {
+        arma::uvec idxs(blk.unit_runs.size());
+        for (std::size_t i = 0; i < blk.unit_runs.size(); ++i) {
+            idxs(i) = static_cast<arma::uword>(blk.unit_runs[i].unit);
+        }
+        cohort_unit_idxs.push_back(std::move(idxs));
+    }
+
+    const bool any_by_size = std::any_of(
+        est_specs.begin(), est_specs.end(),
+        [](const auto& kv){ return kv.second.cohort_weighting == "by_size"; }
+    );
+
+    // Optional precompute of S (C x B) only if bootstrap present and needed
+    std::size_t B = bootstrap ? bootstrap->n_bootstraps() : 0;
+    arma::mat S;
+    if (bootstrap && any_by_size) {
+        S.set_size(C, B);
+        for (std::size_t c = 0; c < C; ++c) {
+            arma::mat Wc = bootstrap->obs(cohort_unit_idxs[c]); // n_c x B
+            S.row(static_cast<arma::uword>(c)) = arma::sum(Wc, 0);
+        }
+        // Each column already sums to 1 across cohorts
+    }
+
+    // Build per-spec CohortWeightEstimates
+    std::unordered_map<std::string, CohortWeightEstimates> out;
+    out.reserve(est_specs.size());
+    for (const auto& kv : est_specs) {
+        const auto& name = kv.first;
+        const auto& sp = kv.second;
+        CohortWeightEstimates w;
+        if (sp.cohort_weighting == "equal") {
+            w.cohort_weights = arma::ones(C) / static_cast<double>(C);
+            if (B > 0) {
+                w.bootstrap_cohort_weights.reserve(B);
+                for (std::size_t b = 0; b < B; ++b) {
+                    w.bootstrap_cohort_weights.emplace_back(w.cohort_weights);
+                }
+            }
+        } else if (sp.cohort_weighting == "by_size") {
+            if (bootstrap && any_by_size) {
+                w.cohort_weights = arma::mean(S, 1);
+                w.bootstrap_cohort_weights.reserve(B);
+                for (std::size_t b = 0; b < B; ++b) {
+                    w.bootstrap_cohort_weights.emplace_back(S.col(static_cast<arma::uword>(b)));
+                }
+            } else {
+                arma::vec counts(C, arma::fill::zeros);
+                for (std::size_t c = 0; c < C; ++c) counts(c) = static_cast<double>(cohort_unit_idxs[c].n_elem);
+                const double tot = arma::accu(counts);
+                if (tot > 0.0) {
+                    w.cohort_weights = counts / tot;
+                } else {
+                    w.cohort_weights = arma::ones(C) / static_cast<double>(C);
+                }
+            }
+        } else {
+            throw std::invalid_argument("EstimatorSpecification.cohort_weighting must be 'equal' or 'by_size'");
+        }
+        out.emplace(name, std::move(w));
     }
 
     return out;
@@ -329,8 +411,10 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     }
 #endif
 
-    // Finalize outputs
-    return build_cohort_specific_estimates(tmp_factor, tmp_outcome);
+    // Compute cohort weights first, then build outputs with weights attached
+    auto weights_by_spec = est_cohort_weights(est_specs, blocks, bootstrap);
+    
+    return build_cohort_specific_estimates(tmp_factor, tmp_outcome, std::move(weights_by_spec));
 }
 
 } // namespace apm

@@ -32,11 +32,13 @@ struct EstimatorSpecification {
     std::string factor_model_estimator; // e.g., "principal_components"
     bool include_outcome_fes;
     std::size_t r;
+    std::string cohort_weighting = "equal"; // "equal" or "by_size"
 };
 
 struct CohortSpecificEstimates {
     std::unordered_map<std::string, std::vector<FactorModelEstimates>> cohort_specific_factor_ests;
     std::vector<OutcomeMeanSuffStatEstimates> cohort_outcome_mean_ests;
+    std::unordered_map<std::string, CohortWeightEstimates> cohort_weights;
 };
 
 /**

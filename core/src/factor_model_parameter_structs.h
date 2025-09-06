@@ -174,6 +174,21 @@ struct OutcomeMeanSuffStatEstimates {
 
 // No heavy constructors or factories; use OutcomeSuffStatEstimator to build these.
 
+/**
+ * @brief Container for cohort weighting estimates (point and optional bootstrap replicates).
+ *
+ * Fields:
+ *  - cohort_weights: length C vector of cohort weights (point estimate).
+ *  - bootstrap_cohort_weights: optional vector of length-B replicate weight vectors (each length C).
+ */
+struct CohortWeightEstimates {
+    arma::vec cohort_weights;
+    std::vector<arma::vec> bootstrap_cohort_weights;
+
+    bool has_bootstrap_replicates() const noexcept { return !bootstrap_cohort_weights.empty(); }
+    std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_cohort_weights.size(); }
+};
+
 } // namespace apm
 
 #endif // APM_FACTOR_MODEL_PARAMETERS_H
