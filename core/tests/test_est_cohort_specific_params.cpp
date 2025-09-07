@@ -280,3 +280,83 @@ TEST(CohortSpecificRawTest, Bootstrap_DeterministicReplicates_NoCovariates) {
 }
 
 
+TEST(CohortSpecificRawTest, AuxiliaryMeans_NoCovariates) {
+    PanelCtx ctx = make_ctx();
+    RawPanel rp = make_raw(ctx, /*with_covars=*/false);
+
+    std::unordered_map<std::string, apm::EstimatorSpecification> specs;
+    specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, ctx.r});
+
+    // Build two auxiliary columns as deterministic functions of unit and cohort
+    std::vector<double> aux1(rp.y.size());
+    std::vector<double> aux2(rp.y.size());
+    for (std::size_t i = 0; i < rp.y.size(); ++i) {
+        aux1[i] = static_cast<double>(rp.unit_idx[i] + 1);               // varies by unit only
+        aux2[i] = static_cast<double>(10 * rp.cohort_id[i] + rp.outcome_idx[i] + 1); // varies by cohort/outcome
+    }
+
+    std::vector<const double*> covar_cols; // q=0
+    std::vector<const double*> auxiliary_cols;
+    auxiliary_cols.push_back(aux1.data());
+    auxiliary_cols.push_back(aux2.data());
+
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, nullptr);
+
+    ASSERT_EQ(out.cohort_auxiliary_means.size(), ctx.C);
+
+    // Compute expected per-cohort pop shares and means directly from raw panel
+    for (std::size_t c = 0; c < ctx.C; ++c) {
+        double rows_c = 0.0;
+        double s1 = 0.0, s2 = 0.0;
+        for (std::size_t i = 0; i < rp.y.size(); ++i) {
+            if (static_cast<std::size_t>(rp.cohort_id[i]) == c) {
+                rows_c += 1.0;
+                s1 += aux1[i];
+                s2 += aux2[i];
+            }
+        }
+        double share_exp = (rows_c > 0.0) ? (rows_c / static_cast<double>(rp.y.size())) : 0.0;
+        double m1 = (rows_c > 0.0) ? (s1 / rows_c) : 0.0;
+        double m2 = (rows_c > 0.0) ? (s2 / rows_c) : 0.0;
+
+        const auto& est = out.cohort_auxiliary_means[c].estimates;
+        EXPECT_NEAR(est.cohort_pop_share, share_exp, 1e-12);
+        ASSERT_EQ(est.auxiliary_means.n_elem, 2u);
+        EXPECT_NEAR(est.auxiliary_means(0), m1, 1e-12);
+        EXPECT_NEAR(est.auxiliary_means(1), m2, 1e-12);
+    }
+}
+
+TEST(CohortSpecificRawTest, AuxiliaryMeans_WithBootstrapReplicatesExist) {
+    PanelCtx ctx = make_ctx();
+    RawPanel rp = make_raw(ctx, /*with_covars=*/false);
+
+    // Two bootstrap draws with nontrivial partitions over units
+    arma::mat W(6, 2, arma::fill::zeros);
+    for (int i = 0; i < 3; ++i) W(i, 0) = 1.0 / 3.0;
+    for (int i = 3; i < 6; ++i) W(i, 1) = 1.0 / 3.0;
+    auto boot = std::make_shared<TestBootstrap>(W);
+
+    std::unordered_map<std::string, apm::EstimatorSpecification> specs;
+    specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, ctx.r});
+
+    std::vector<double> aux1(rp.y.size(), 1.0);
+    std::vector<const double*> covar_cols; // q=0
+    std::vector<const double*> auxiliary_cols{aux1.data()};
+
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, boot);
+
+    ASSERT_EQ(out.cohort_auxiliary_means.size(), ctx.C);
+    for (std::size_t c = 0; c < ctx.C; ++c) {
+        const auto& aux = out.cohort_auxiliary_means[c];
+        ASSERT_EQ(aux.bootstrap_replicates.size(), 2u);
+        ASSERT_EQ(aux.estimates.auxiliary_means.n_elem, 1u);
+        ASSERT_EQ(aux.bootstrap_replicates[0].auxiliary_means.n_elem, 1u);
+    }
+}
+
+
