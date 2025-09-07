@@ -5,6 +5,7 @@
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/global_control.h>
 #endif
+#include "nuisance_param_estimators.h"
 
 namespace apm {
 
@@ -193,10 +194,44 @@ static void assemble_Y_X_for_unit_run(
 //==============================
 // Helpers: finalize outputs
 //==============================
+static void assemble_aux_data_for_unit(
+    const UnitRun& ur,
+    const int* outcome_idx,
+    const std::vector<const double*>& auxiliary_cols,
+    arma::mat& A_out)
+{
+    A_out.fill(std::numeric_limits<double>::quiet_NaN());
+    for (std::size_t r = ur.start; r < ur.end; ++r) {
+        const int o = outcome_idx[r];
+        if (static_cast<arma::uword>(o) >= A_out.n_rows) continue;
+        const arma::uword row = static_cast<arma::uword>(o);
+        for (arma::uword j = 0; j < A_out.n_cols; ++j) {
+            A_out(row, j) = auxiliary_cols[static_cast<std::size_t>(j)][r];
+        }
+    }
+}
+
+static std::vector<CohortAuxiliaryDataMeanEstimates> finalize_auxiliary_outputs(
+    const std::vector<std::optional<CohortAuxiliaryDataMeanEstimator>>& tmp_aux,
+    std::size_t n_rows)
+{
+    std::vector<CohortAuxiliaryDataMeanEstimates> aux_out;
+    const std::size_t C = tmp_aux.size();
+    if (C == 0) return aux_out;
+
+    const double total_rows = static_cast<double>(n_rows);
+
+    aux_out.reserve(C);
+    for (std::size_t c = 0; c < C; ++c) {
+        aux_out.emplace_back(tmp_aux[c]->estimate(static_cast<std::size_t>(total_rows)));
+    }
+    return aux_out;
+}
 static CohortSpecificEstimates build_cohort_specific_estimates(
     std::unordered_map<std::string, std::vector<std::optional<FactorModelEstimates>>>& tmp_factor,
     std::vector<std::optional<OutcomeMeanSuffStatEstimates>>& tmp_outcome,
-    std::unordered_map<std::string, CohortWeightEstimates> cohort_weights)
+    std::unordered_map<std::string, CohortWeightEstimates> cohort_weights,
+    std::vector<CohortAuxiliaryDataMeanEstimates>&& aux_out)
 {
     const std::size_t C = tmp_outcome.size();
 
@@ -217,6 +252,8 @@ static CohortSpecificEstimates build_cohort_specific_estimates(
 
     // Attach cohort weights
     out.cohort_weights = std::move(cohort_weights);
+    // Attach auxiliary outputs
+    out.cohort_auxiliary_means = std::move(aux_out);
     return out;
 }
 
@@ -308,6 +345,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     const int* outcome_idx,
     const double* y,
     const std::vector<const double*>& covar_cols,
+    const std::vector<const double*>& auxiliary_cols,
     std::size_t n_rows,
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
     const ObservedOutcomeIndices& observed_outcome_indices,
@@ -315,6 +353,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     std::size_t num_threads)
 {
     const std::size_t q = covar_cols.size();
+    const std::size_t d = auxiliary_cols.size();
 
 #ifdef APM_HAS_TBB
     std::unique_ptr<oneapi::tbb::global_control> tbb_gc;
@@ -338,6 +377,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
         tmp_factor.emplace(kv.first, std::vector<std::optional<FactorModelEstimates>>(C));
     }
     std::vector<std::optional<OutcomeMeanSuffStatEstimates>> tmp_outcome(C);
+    std::vector<std::optional<CohortAuxiliaryDataMeanEstimator>> tmp_aux(C);
 
     // Parallelize across cohorts
     auto process_cohort = [&](std::size_t cidx) {
@@ -356,6 +396,8 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
             bootstrap
         );
         auto ests = make_factor_estimators_for_cohort(est_specs, T_c, q, bootstrap);
+        std::optional<CohortAuxiliaryDataMeanEstimator> aux_est;
+        if (d > 0) aux_est.emplace(d, bootstrap);
 
         // Reusable buffers (pre-sized once per cohort)
         arma::vec Y(static_cast<arma::uword>(T_c));
@@ -386,6 +428,13 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
                 omsse.add_datum(static_cast<std::size_t>(ur.unit), Y);
             }
 
+            // Add datum to auxiliary data mean estimator
+            if (d > 0) {
+                arma::mat A(static_cast<arma::uword>(T), static_cast<arma::uword>(d));
+                assemble_aux_data_for_unit(ur, outcome_idx, auxiliary_cols, A);
+                aux_est->add_datum(static_cast<std::size_t>(ur.unit), A);
+            }
+
             // Reset buffers for next unit
             Y.fill(std::numeric_limits<double>::quiet_NaN());
             if (q > 0) {
@@ -398,6 +447,9 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
         tmp_outcome[cidx].emplace(omsse.estimate());
         for (auto& kv : ests) {
             tmp_factor[kv.first][cidx].emplace(kv.second->estimate());
+        }
+        if (d > 0) {
+            tmp_aux[cidx].emplace(std::move(*aux_est));
         }
     };
 
@@ -420,8 +472,15 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
 
     // Compute cohort weights first, then build outputs with weights attached
     auto weights_by_spec = est_cohort_weights(est_specs, blocks, bootstrap);
-    
-    return build_cohort_specific_estimates(tmp_factor, tmp_outcome, std::move(weights_by_spec));
+
+    // Finalize auxiliary outputs
+    std::vector<CohortAuxiliaryDataMeanEstimates> aux_out;
+    if (d > 0) {
+        // Use global totals; bootstrap totals per draw are implicitly 1
+        aux_out = finalize_auxiliary_outputs(tmp_aux, n_rows);
+    }
+
+    return build_cohort_specific_estimates(tmp_factor, tmp_outcome, std::move(weights_by_spec), std::move(aux_out));
 }
 
 } // namespace apm

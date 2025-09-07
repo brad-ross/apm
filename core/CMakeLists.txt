@@ -29,6 +29,7 @@ add_library(apm
     src/factor_model_estimators/FactorModelEstimator.cpp
     src/factor_model_estimators/pc_estimators.cpp
     src/OutcomeMeanSuffStatEstimator.cpp
+    src/nuisance_param_estimators.cpp
     src/est_cohort_specific_params.cpp
 )
 target_include_directories(apm PUBLIC src)
@@ -95,6 +96,6 @@ install(TARGETS apm
     RUNTIME DESTINATION bin
 )
 
-install(FILES src/apm_core.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/cohort_specific_param_structs.h src/OutcomeMeanSuffStatEstimator.h src/est_cohort_specific_params.h
+install(FILES src/apm_core.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/cohort_specific_param_structs.h src/OutcomeMeanSuffStatEstimator.h src/nuisance_param_estimators.h src/est_cohort_specific_params.h
     DESTINATION include/apm
 ) 

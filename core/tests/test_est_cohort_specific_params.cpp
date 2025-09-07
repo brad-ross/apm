@@ -99,10 +99,11 @@ TEST(CohortSpecificRawTest, InvalidEstimatorNameThrows) {
     specs.emplace("bad", apm::EstimatorSpecification{"not_supported", false, 1});
 
     std::vector<const double*> covar_cols; // q=0
+    std::vector<const double*> auxiliary_cols; // d=0
     EXPECT_THROW(
         (void)apm::estimate_cohort_specific_params_from_raw(
             rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-            covar_cols, rp.y.size(), specs, ctx.T_idx, nullptr),
+            covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, nullptr),
         std::invalid_argument);
 }
 
@@ -114,10 +115,11 @@ TEST(CohortSpecificRawTest, RGreaterThanTcThrows) {
     specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, /*r=*/10});
 
     std::vector<const double*> covar_cols; // q=0
+    std::vector<const double*> auxiliary_cols; // d=0
     EXPECT_THROW(
         (void)apm::estimate_cohort_specific_params_from_raw(
             rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-            covar_cols, rp.y.size(), specs, ctx.T_idx, nullptr),
+            covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, nullptr),
         std::invalid_argument);
 }
 
@@ -130,9 +132,10 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
     specs.emplace("pca_fe", apm::EstimatorSpecification{"principal_components", true, ctx.r});
 
     std::vector<const double*> covar_cols; // q=0
+    std::vector<const double*> auxiliary_cols; // d=0
     apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, rp.y.size(), specs, ctx.T_idx, nullptr);
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, nullptr);
 
     ASSERT_EQ(out.cohort_specific_factor_ests.size(), 2u);
     ASSERT_EQ(out.cohort_outcome_mean_ests.size(), ctx.C);
@@ -199,9 +202,10 @@ TEST(CohortSpecificRawTest, YXAssembly_WithCovariates_DimensionsAndMeans) {
     covar_cols.push_back(rp.cov1.data());
     covar_cols.push_back(rp.cov2.data());
 
+    std::vector<const double*> auxiliary_cols; // d=0
     apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, rp.y.size(), specs, ctx.T_idx, nullptr);
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, nullptr);
 
     const auto& oms0 = out.cohort_outcome_mean_ests[0].suff_stat_estimates;
     ASSERT_TRUE(oms0.has_covar_means());
@@ -234,9 +238,10 @@ TEST(CohortSpecificRawTest, Bootstrap_DeterministicReplicates_NoCovariates) {
     specs.at("pca_fe").cohort_weighting = std::string("equal");
 
     std::vector<const double*> covar_cols; // q=0
+    std::vector<const double*> auxiliary_cols; // d=0
     apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, rp.y.size(), specs, ctx.T_idx, boot);
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, boot);
 
     // Check suff stat bootstrap replicates exist and have expected lengths for cohort 0
     const auto& oms0 = out.cohort_outcome_mean_ests[0];

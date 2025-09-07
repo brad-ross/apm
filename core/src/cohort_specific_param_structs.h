@@ -189,6 +189,42 @@ struct CohortWeightEstimates {
     std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_cohort_weights.size(); }
 };
 
+/**
+ * @brief Cohort-level auxiliary data means and population share.
+ *
+ * Fields:
+ *  - cohort_pop_share: proportion of all rows belonging to this cohort
+ *  - auxiliary_means:  length-d vector of means over auxiliary columns
+ */
+struct CohortAuxiliaryDataMeans {
+    double cohort_pop_share;   // proportion of all rows in the dataset belonging to this cohort
+    arma::vec auxiliary_means; // length d (number of auxiliary columns)
+
+    CohortAuxiliaryDataMeans() = default;
+
+    CohortAuxiliaryDataMeans(double pop_share_in, arma::vec aux_means_in)
+        : cohort_pop_share(pop_share_in), auxiliary_means(std::move(aux_means_in)) {}
+
+    std::size_t d() const noexcept { return static_cast<std::size_t>(auxiliary_means.n_elem); }
+};
+
+/**
+ * @brief Aggregated cohort auxiliary data mean estimates with optional bootstrap replicates.
+ */
+struct CohortAuxiliaryDataMeanEstimates {
+    CohortAuxiliaryDataMeans estimates;                          // point estimate
+    std::vector<CohortAuxiliaryDataMeans> bootstrap_replicates;  // length B if present; else empty
+
+    CohortAuxiliaryDataMeanEstimates() = default;
+
+    CohortAuxiliaryDataMeanEstimates(CohortAuxiliaryDataMeans est,
+                                     std::vector<CohortAuxiliaryDataMeans> boot_reps = {})
+        : estimates(std::move(est)), bootstrap_replicates(std::move(boot_reps)) {}
+
+    bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
+    std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_replicates.size(); }
+};
+
 } // namespace apm
 
 #endif // APM_FACTOR_MODEL_PARAMETERS_H

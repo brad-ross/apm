@@ -39,6 +39,7 @@ struct CohortSpecificEstimates {
     std::unordered_map<std::string, std::vector<FactorModelEstimates>> cohort_specific_factor_ests;
     std::vector<OutcomeMeanSuffStatEstimates> cohort_outcome_mean_ests;
     std::unordered_map<std::string, CohortWeightEstimates> cohort_weights;
+    std::vector<CohortAuxiliaryDataMeanEstimates> cohort_auxiliary_means;
 };
 
 /**
@@ -55,6 +56,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     const int* outcome_idx,      // length n_rows, 0-based
     const double* y,             // length n_rows
     const std::vector<const double*>& covar_cols, // size q, each length n_rows
+    const std::vector<const double*>& auxiliary_cols,  // size d, each length n_rows
     std::size_t n_rows,
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
     const ObservedOutcomeIndices& observed_outcome_indices, // 0-based per cohort, index with cohort_id
