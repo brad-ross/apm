@@ -115,6 +115,20 @@ static CovariateColumns extract_covariate_columns(Rcpp::DataFrame processed_pane
     return out;
 }
 
+// Extract auxiliary columns as numeric vectors and raw pointers (same as covariates)
+static CovariateColumns extract_auxiliary_columns(Rcpp::DataFrame processed_panel, Rcpp::CharacterVector aux_cols, std::size_t n_rows) {
+    CovariateColumns out;
+    out.cols_r.reserve(aux_cols.size());
+    out.ptrs.reserve(aux_cols.size());
+    for (int j = 0; j < aux_cols.size(); ++j) {
+        Rcpp::NumericVector cj = processed_panel[Rcpp::as<std::string>(aux_cols[j])];
+        if (cj.size() != static_cast<int>(n_rows)) Rcpp::stop("Auxiliary column has inconsistent length");
+        out.ptrs.push_back(REAL(cj));
+        out.cols_r.push_back(std::move(cj));
+    }
+    return out;
+}
+
 // Resolve num_threads optional parameter (returns optional value flag and size)
 static std::pair<bool, std::size_t> resolve_num_threads(Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in) {
     if (num_threads_in.isNotNull()) {
@@ -153,6 +167,13 @@ static Rcpp::List build_return_list(const apm::CohortSpecificEstimates& ests, co
         out_oms[static_cast<int>(c)] = Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates>(heap, true);
     }
 
+    // Cohort auxiliary means (as external pointers to C++ objects)
+    Rcpp::List out_aux(ests.cohort_auxiliary_means.size());
+    for (std::size_t c = 0; c < ests.cohort_auxiliary_means.size(); ++c) {
+        auto* heapA = new apm::CohortAuxiliaryDataMeanEstimates(ests.cohort_auxiliary_means[c]);
+        out_aux[static_cast<int>(c)] = Rcpp::XPtr<apm::CohortAuxiliaryDataMeanEstimates>(heapA, true);
+    }
+
     // Cohort weights per spec (as external pointers to C++ objects)
     Rcpp::List out_weights(spec_names.size());
     out_weights.attr("names") = spec_names;
@@ -169,7 +190,8 @@ static Rcpp::List build_return_list(const apm::CohortSpecificEstimates& ests, co
     return Rcpp::List::create(
         Rcpp::Named("cohort_specific_factor_ests") = out_factor,
         Rcpp::Named("cohort_outcome_means") = out_oms,
-        Rcpp::Named("cohort_weights") = out_weights
+        Rcpp::Named("cohort_weights") = out_weights,
+        Rcpp::Named("cohort_auxiliary_means") = out_aux
     );
 }
 
@@ -178,12 +200,14 @@ Rcpp::List est_cohort_specific_params_from_panel_cpp(Rcpp::DataFrame processed_p
                                                     Rcpp::List observed_outcome_indices, // 1-based
                                                     const std::string& outcome_value_col,
                                                     Rcpp::CharacterVector covar_cols,
+                                                    Rcpp::CharacterVector auxiliary_cols,
                                                     Rcpp::List est_specs,
                                                     SEXP bootstrap_xptr = R_NilValue,
                                                     Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue) {
     // Extract columns and pointers
     PanelRawColumns cols = extract_panel_columns_0b(processed_panel, outcome_value_col);
     CovariateColumns covs = extract_covariate_columns(processed_panel, covar_cols, cols.n_rows);
+    CovariateColumns auxs = extract_auxiliary_columns(processed_panel, auxiliary_cols, cols.n_rows);
 
     // Convert inputs
     apm::ObservedOutcomeIndices obs_idx_0b = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
@@ -201,6 +225,7 @@ Rcpp::List est_cohort_specific_params_from_panel_cpp(Rcpp::DataFrame processed_p
             cols.outcome_ptr,
             cols.y_ptr,
             covs.ptrs,
+            auxs.ptrs,
             cols.n_rows,
             cpp_specs,
             obs_idx_0b,
@@ -214,6 +239,7 @@ Rcpp::List est_cohort_specific_params_from_panel_cpp(Rcpp::DataFrame processed_p
             cols.outcome_ptr,
             cols.y_ptr,
             covs.ptrs,
+            auxs.ptrs,
             cols.n_rows,
             cpp_specs,
             obs_idx_0b,
