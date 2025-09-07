@@ -95,6 +95,6 @@ install(TARGETS apm
     RUNTIME DESTINATION bin
 )
 
-install(FILES src/apm_core.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/factor_model_parameter_structs.h src/OutcomeMeanSuffStatEstimator.h src/est_cohort_specific_params.h
+install(FILES src/apm_core.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/cohort_specific_param_structs.h src/OutcomeMeanSuffStatEstimator.h src/est_cohort_specific_params.h
     DESTINATION include/apm
 ) 

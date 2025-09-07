@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "bootstrap.h"
-#include "factor_model_parameter_structs.h"
+#include "cohort_specific_param_structs.h"
 
 #ifdef USING_R
 #include <RcppArmadillo.h>

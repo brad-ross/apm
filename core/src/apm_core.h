@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 #include <set>
-#include "factor_model_parameter_structs.h"
+#include "cohort_specific_param_structs.h"
 
 namespace apm {
 

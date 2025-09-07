@@ -1,5 +1,5 @@
 #include <RcppArmadillo.h>
-#include "../../core/src/factor_model_parameter_structs.h"
+#include "../../core/src/cohort_specific_param_structs.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 

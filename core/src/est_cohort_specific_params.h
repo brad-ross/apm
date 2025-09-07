@@ -23,7 +23,7 @@
 #include "bootstrap.h"
 #include "factor_model_estimators/FactorModelEstimator.h"
 #include "factor_model_estimators/pc_estimators.h"
-#include "factor_model_parameter_structs.h"
+#include "cohort_specific_param_structs.h"
 #include "OutcomeMeanSuffStatEstimator.h"
 
 namespace apm {

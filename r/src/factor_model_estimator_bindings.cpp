@@ -1,6 +1,6 @@
 #include <RcppArmadillo.h>
 #include "../../core/src/factor_model_estimators/FactorModelEstimator.h"
-#include "../../core/src/factor_model_parameter_structs.h"
+#include "../../core/src/cohort_specific_param_structs.h"
 #include "../../core/src/bootstrap.h"
 #include "r_utils.h"
 
