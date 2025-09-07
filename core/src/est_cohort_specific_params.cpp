@@ -148,16 +148,15 @@ static void assemble_Y_X_for_unit_run(
     const double* y_col,
     const std::vector<const double*>& covar_cols, // size q, may be 0
     const CohortDictionaries& dicts,
-    arma::vec& Y,          // resized to T_c
-    arma::mat& X_full,     // resized to T x q if q>0, filled with NaN then rows set
-    arma::mat& X_obs       // resized to T_c x q if q>0
+    arma::vec& Y,          // expects size T_c
+    arma::mat& X_full,     // expects size T x q if q>0, will be filled with NaN then rows set
+    arma::mat& X_obs       // expects size T_c x q if q>0
 ) {
     const std::size_t T_c = static_cast<std::size_t>(dicts.T_idx_0b.n_elem);
     const std::size_t T   = dicts.T;
     const std::size_t q   = covar_cols.size();
 
     // Y over observed outcomes (T_c)
-    Y.set_size(T_c);
     for (std::size_t k = 0; k < T_c; ++k) {
         Y(static_cast<arma::uword>(k)) = std::numeric_limits<double>::quiet_NaN();
     }
@@ -170,13 +169,10 @@ static void assemble_Y_X_for_unit_run(
     }
 
     if (q == 0) {
-        X_full.reset();
-        X_obs.reset();
         return;
     }
 
     // X_full: T x q (initialize to NaN)
-    X_full.set_size(T, q);
     X_full.fill(std::numeric_limits<double>::quiet_NaN());
     for (std::size_t r = ur.start; r < ur.end; ++r) {
         const int o = outcome_idx[r];
@@ -188,7 +184,6 @@ static void assemble_Y_X_for_unit_run(
     }
 
     // X_obs: T_c x q by selecting rows of X_full in the T_idx order
-    X_obs.set_size(T_c, q);
     for (std::size_t k = 0; k < T_c; ++k) {
         const arma::uword row_full = static_cast<arma::uword>(dicts.T_idx_0b[k]); // 0-based
         X_obs.row(static_cast<arma::uword>(k)) = X_full.row(row_full);
@@ -362,9 +357,14 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
         );
         auto ests = make_factor_estimators_for_cohort(est_specs, T_c, q, bootstrap);
 
-        // Reusable buffers
-        arma::vec Y;
-        arma::mat X_full, X_obs;
+        // Reusable buffers (pre-sized once per cohort)
+        arma::vec Y(static_cast<arma::uword>(T_c));
+        arma::mat X_full;
+        arma::mat X_obs;
+        if (q > 0) {
+            X_full.set_size(static_cast<arma::uword>(T), static_cast<arma::uword>(q));
+            X_obs.set_size(static_cast<arma::uword>(T_c), static_cast<arma::uword>(q));
+        }
 
         // Stream units
         for (const auto& ur : blk.unit_runs) {
@@ -384,6 +384,13 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
                 omsse.add_datum(static_cast<std::size_t>(ur.unit), Y, X_full);
             } else {
                 omsse.add_datum(static_cast<std::size_t>(ur.unit), Y);
+            }
+
+            // Reset buffers for next unit
+            Y.fill(std::numeric_limits<double>::quiet_NaN());
+            if (q > 0) {
+                X_full.fill(std::numeric_limits<double>::quiet_NaN());
+                X_obs.fill(std::numeric_limits<double>::quiet_NaN());
             }
         }
 
