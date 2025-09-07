@@ -5,101 +5,114 @@
 
 namespace apm {
 
-CohortAuxiliaryDataMeanEstimator::CohortAuxiliaryDataMeanEstimator(std::size_t d,
+static arma::mat combine_aux_means(
+    const arma::cube& A,               // N x T x d
+    const arma::vec& row_weights,      // N
+    const arma::mat& current_means,    // T x d
+    double current_total_weight)
+{
+    const double batch_weight = arma::accu(row_weights);
+    if (batch_weight == 0.0) {
+        return current_means;
+    }
+    const arma::uword T = A.n_cols;
+    const arma::uword d = A.n_slices;
+    arma::mat batch_means(T, d, arma::fill::zeros);
+    for (arma::uword j = 0; j < d; ++j) {
+        arma::rowvec weighted_sum = row_weights.t() * A.slice(j); // 1 x T
+        batch_means.col(j) = (weighted_sum / batch_weight).t();   // T x 1
+    }
+    const double total_weight = current_total_weight + batch_weight;
+    const double rel = batch_weight / total_weight;
+    return rel * batch_means + (1.0 - rel) * current_means;
+}
+
+CohortAuxiliaryDataMeanEstimator::CohortAuxiliaryDataMeanEstimator(std::size_t T,
+                                                                   std::size_t d,
                                                                    std::shared_ptr<const WeightedBootstrap> bootstrap)
-    : d_(d), bootstrap_(std::move(bootstrap)),
-      row_count_(0.0),
-      aux_sum_(arma::zeros<arma::vec>(static_cast<arma::uword>(d_))),
-      aux_count_(arma::zeros<arma::vec>(static_cast<arma::uword>(d_)))
+    : T_(T), d_(d), bootstrap_(std::move(bootstrap)),
+      total_weight_(0.0), aux_means_(arma::zeros<arma::mat>(static_cast<arma::uword>(T_), static_cast<arma::uword>(d_))),
+      row_count_(0.0)
 {
     const std::size_t B = num_bootstraps();
     if (B > 0) {
-        boot_row_counts_ = arma::zeros<arma::vec>(static_cast<arma::uword>(B));
-        boot_aux_sum_    = arma::zeros<arma::mat>(static_cast<arma::uword>(d_), static_cast<arma::uword>(B));
-        boot_aux_weight_ = arma::zeros<arma::mat>(static_cast<arma::uword>(d_), static_cast<arma::uword>(B));
+        total_boot_weights_ = arma::zeros<arma::vec>(static_cast<arma::uword>(B));
+        boot_aux_means_     = arma::cube(static_cast<arma::uword>(T_), static_cast<arma::uword>(d_), static_cast<arma::uword>(B), arma::fill::zeros);
+        boot_row_counts_    = arma::zeros<arma::vec>(static_cast<arma::uword>(B));
     }
 }
 
 void CohortAuxiliaryDataMeanEstimator::validate_data_dimensions(const arma::uvec& unit_idxs,
                                                                 const arma::cube& A,
+                                                                std::size_t T,
                                                                 std::size_t d)
 {
     const std::size_t N = unit_idxs.n_elem;
-    if (A.n_rows != N || A.n_cols == 0 || A.n_slices != static_cast<arma::uword>(d)) {
+    if (A.n_rows != N || A.n_cols != static_cast<arma::uword>(T) || A.n_slices != static_cast<arma::uword>(d)) {
         throw std::invalid_argument("CohortAuxiliaryDataMeanEstimator::add_data: A must be N x T x d.");
     }
 }
 
 void CohortAuxiliaryDataMeanEstimator::add_data(const arma::uvec& unit_idxs, const arma::cube& A)
 {
-    validate_data_dimensions(unit_idxs, A, d_);
+    validate_data_dimensions(unit_idxs, A, T_, d_);
 
     const std::size_t N = unit_idxs.n_elem;
     const std::size_t B = num_bootstraps();
+    // Point estimate: equal weights for the batch
+    arma::vec ones_w(static_cast<arma::uword>(N), arma::fill::ones);
+    aux_means_ = combine_aux_means(A, ones_w, aux_means_, total_weight_);
+    total_weight_ += arma::accu(ones_w);
 
+    // Bootstrap estimates: weighted by replicate-specific unit weights
+    if (B > 0) {
+        arma::mat rows = bootstrap_->obs(unit_idxs); // N x B
+        for (arma::uword b = 0; b < static_cast<arma::uword>(B); ++b) {
+            arma::vec w_b = rows.col(b);
+            boot_aux_means_.slice(b) = combine_aux_means(A, w_b, boot_aux_means_.slice(b), total_boot_weights_(b));
+            total_boot_weights_(b) += arma::accu(w_b);
+        }
+    }
+
+    // Cohort population share accumulators (point: count rows; bootstrap: sum unit weights)
+    double rows_added = 0.0;
     for (std::size_t i = 0; i < N; ++i) {
         const arma::uword iu = static_cast<arma::uword>(i);
-        arma::vec w_b;
-        if (B > 0) {
-            arma::uvec one(1);
-            one(0) = unit_idxs(iu);
-            arma::mat rows = bootstrap_->obs(one); // 1 x B
-            w_b = rows.row(0).t();                 // B x 1
-        }
-
-        const arma::uword T = A.n_cols;
-        for (arma::uword t = 0; t < T; ++t) {
-            bool any_finite = false;
+        for (arma::uword t = 0; t < static_cast<arma::uword>(T_); ++t) {
+            bool has_finite = false;
             for (std::size_t j = 0; j < d_; ++j) {
-                const arma::uword jj = static_cast<arma::uword>(j);
-                const double v = A(iu, t, jj);
-                if (std::isfinite(v)) {
-                    any_finite = true;
-                    aux_sum_(jj) += v;
-                    aux_count_(jj) += 1.0;
-                    if (B > 0) {
-                        boot_aux_sum_.row(jj)    += v * w_b.t();
-                        boot_aux_weight_.row(jj) += w_b.t();
-                    }
-                }
+                if (std::isfinite(A(iu, t, static_cast<arma::uword>(j)))) { has_finite = true; break; }
             }
-            if (any_finite) {
-                row_count_ += 1.0;
-                if (B > 0) {
-                    boot_row_counts_ += w_b;
-                }
-            }
+            if (has_finite) rows_added += 1.0;
         }
+    }
+    row_count_ += rows_added;
+    if (B > 0) {
+        arma::mat rows = bootstrap_->obs(unit_idxs); // N x B
+        arma::rowvec col_sums = arma::sum(rows, 0);  // 1 x B
+        boot_row_counts_ += col_sums.t();
     }
 }
 
 void CohortAuxiliaryDataMeanEstimator::add_datum(std::size_t unit_idx, const arma::mat& A)
 {
-    if (A.n_cols != static_cast<arma::uword>(d_)) {
+    if (A.n_rows != static_cast<arma::uword>(T_) || A.n_cols != static_cast<arma::uword>(d_)) {
         throw std::invalid_argument("CohortAuxiliaryDataMeanEstimator::add_datum: A must be T x d.");
     }
     arma::uvec one(1);
     one(0) = static_cast<arma::uword>(unit_idx);
     // wrap: N x T x d, with N=1
-    arma::cube C(1, A.n_rows, A.n_cols);
-    for (arma::uword j = 0; j < A.n_cols; ++j) {
-        C.slice(j).row(0) = A.col(j).t();
-    }
+    arma::cube C(1, static_cast<arma::uword>(T_), static_cast<arma::uword>(d_));
+    for (arma::uword j = 0; j < static_cast<arma::uword>(d_); ++j) C.slice(j).row(0) = A.col(j).t();
     add_data(one, C);
 }
 
 CohortAuxiliaryDataMeanEstimates CohortAuxiliaryDataMeanEstimator::estimate(std::size_t total_rows) const
 {
-    arma::vec means(static_cast<arma::uword>(d_));
-    for (std::size_t j = 0; j < d_; ++j) {
-        const arma::uword jj = static_cast<arma::uword>(j);
-        const double n = aux_count_(jj);
-        means(jj) = (n > 0.0) ? (aux_sum_(jj) / n) : std::numeric_limits<double>::quiet_NaN();
-    }
     const double denom = static_cast<double>(total_rows);
     const double share = (denom > 0.0) ? (row_count_ / denom)
                                             : std::numeric_limits<double>::quiet_NaN();
-    CohortAuxiliaryDataMeans point(share, means);
+    CohortAuxiliaryDataMeans point(share, aux_means_);
 
     std::vector<CohortAuxiliaryDataMeans> boots;
     const std::size_t B = num_bootstraps();
@@ -107,13 +120,7 @@ CohortAuxiliaryDataMeanEstimates CohortAuxiliaryDataMeanEstimator::estimate(std:
         boots.reserve(B);
         for (std::size_t b = 0; b < B; ++b) {
             const arma::uword bu = static_cast<arma::uword>(b);
-            arma::vec means_b(static_cast<arma::uword>(d_));
-            for (std::size_t j = 0; j < d_; ++j) {
-                const arma::uword jj = static_cast<arma::uword>(j);
-                const double wden = boot_aux_weight_(jj, bu);
-                means_b(jj) = (wden > 0.0) ? (boot_aux_sum_(jj, bu) / wden)
-                                           : std::numeric_limits<double>::quiet_NaN();
-            }
+            arma::mat means_b = boot_aux_means_.slice(bu);
             // Each bootstrap column sums to 1 across units
             const double share_b = boot_row_counts_(bu);
             boots.emplace_back(share_b, std::move(means_b));

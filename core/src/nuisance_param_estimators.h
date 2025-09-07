@@ -21,7 +21,8 @@ namespace apm {
 
 class CohortAuxiliaryDataMeanEstimator {
 public:
-    explicit CohortAuxiliaryDataMeanEstimator(std::size_t d,
+    explicit CohortAuxiliaryDataMeanEstimator(std::size_t T,
+                                              std::size_t d,
                                               std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr);
 
     std::size_t d() const noexcept { return d_; }
@@ -39,18 +40,23 @@ public:
     CohortAuxiliaryDataMeanEstimates estimate(std::size_t total_rows) const;
 
 private:
-    static void validate_data_dimensions(const arma::uvec& unit_idxs, const arma::cube& A, std::size_t d);
+    static void validate_data_dimensions(const arma::uvec& unit_idxs, const arma::cube& A, std::size_t T, std::size_t d);
 
+    std::size_t T_;
     std::size_t d_;
     std::shared_ptr<const WeightedBootstrap> bootstrap_;
 
-    double row_count_;
-    arma::vec aux_sum_;    // d x 1
-    arma::vec aux_count_;  // d x 1
+    // Running point-estimate aggregates
+    double total_weight_;
+    arma::mat aux_means_; // T x d
 
+    // Running bootstrap aggregates
+    arma::vec  total_boot_weights_; // B
+    arma::cube boot_aux_means_;     // T x d x B
+
+    // For cohort population shares
+    double row_count_;
     arma::vec boot_row_counts_; // B x 1
-    arma::mat boot_aux_sum_;    // d x B
-    arma::mat boot_aux_weight_; // d x B
 };
 
 } // namespace apm

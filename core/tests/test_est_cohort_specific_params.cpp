@@ -308,24 +308,35 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_NoCovariates) {
 
     // Compute expected per-cohort pop shares and means directly from raw panel
     for (std::size_t c = 0; c < ctx.C; ++c) {
+        // Population share
         double rows_c = 0.0;
-        double s1 = 0.0, s2 = 0.0;
-        for (std::size_t i = 0; i < rp.y.size(); ++i) {
-            if (static_cast<std::size_t>(rp.cohort_id[i]) == c) {
-                rows_c += 1.0;
-                s1 += aux1[i];
-                s2 += aux2[i];
-            }
-        }
+        for (std::size_t i = 0; i < rp.y.size(); ++i) if (static_cast<std::size_t>(rp.cohort_id[i]) == c) rows_c += 1.0;
         double share_exp = (rows_c > 0.0) ? (rows_c / static_cast<double>(rp.y.size())) : 0.0;
-        double m1 = (rows_c > 0.0) ? (s1 / rows_c) : 0.0;
-        double m2 = (rows_c > 0.0) ? (s2 / rows_c) : 0.0;
 
         const auto& est = out.cohort_auxiliary_means[c].estimates;
         EXPECT_NEAR(est.cohort_pop_share, share_exp, 1e-12);
-        ASSERT_EQ(est.auxiliary_means.n_elem, 2u);
-        EXPECT_NEAR(est.auxiliary_means(0), m1, 1e-12);
-        EXPECT_NEAR(est.auxiliary_means(1), m2, 1e-12);
+
+        // Dimensions
+        arma::uword Tc = static_cast<arma::uword>(ctx.T_idx[c].max() + 1);
+        ASSERT_EQ(est.auxiliary_means.n_rows, Tc);
+        ASSERT_EQ(est.auxiliary_means.n_cols, 2u);
+
+        // Means per outcome row t
+        for (arma::uword t = 0; t < Tc; ++t) {
+            double s1 = 0.0, s2 = 0.0; std::size_t n = 0;
+            for (std::size_t i = 0; i < rp.y.size(); ++i) {
+                if (static_cast<std::size_t>(rp.cohort_id[i]) == c && static_cast<arma::uword>(rp.outcome_idx[i]) == t) {
+                    s1 += aux1[i]; s2 += aux2[i]; ++n;
+                }
+            }
+            if (n == 0) {
+                EXPECT_TRUE(std::isnan(est.auxiliary_means(t, 0)));
+                EXPECT_TRUE(std::isnan(est.auxiliary_means(t, 1)));
+            } else {
+                EXPECT_NEAR(est.auxiliary_means(t, 0), s1 / static_cast<double>(n), 1e-12);
+                EXPECT_NEAR(est.auxiliary_means(t, 1), s2 / static_cast<double>(n), 1e-12);
+            }
+        }
     }
 }
 
@@ -354,8 +365,22 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_WithBootstrapReplicatesExist) {
     for (std::size_t c = 0; c < ctx.C; ++c) {
         const auto& aux = out.cohort_auxiliary_means[c];
         ASSERT_EQ(aux.bootstrap_replicates.size(), 2u);
-        ASSERT_EQ(aux.estimates.auxiliary_means.n_elem, 1u);
-        ASSERT_EQ(aux.bootstrap_replicates[0].auxiliary_means.n_elem, 1u);
+        arma::uword Tc = static_cast<arma::uword>(ctx.T_idx[c].max() + 1);
+        ASSERT_EQ(aux.estimates.auxiliary_means.n_rows, Tc);
+        ASSERT_EQ(aux.estimates.auxiliary_means.n_cols, 1u);
+        ASSERT_EQ(aux.bootstrap_replicates[0].auxiliary_means.n_rows, Tc);
+        ASSERT_EQ(aux.bootstrap_replicates[0].auxiliary_means.n_cols, 1u);
+    }
+
+    // Check bootstrap cohort population shares per draw (sums to 1 across cohorts)
+    // Draw 1 uses units {0,1,2} equally; cohorts own units: c0->{0,1}, c1->{2,3}, c2->{4,5}
+    // Expected shares per draw: draw1: [2/3, 1/3, 0], draw2: [0, 1/3, 2/3]
+    std::vector<double> exp_draw1 = {2.0/3.0, 1.0/3.0, 0.0};
+    std::vector<double> exp_draw2 = {0.0, 1.0/3.0, 2.0/3.0};
+    for (std::size_t c = 0; c < ctx.C; ++c) {
+        const auto& aux = out.cohort_auxiliary_means[c];
+        EXPECT_NEAR(aux.bootstrap_replicates[0].cohort_pop_share, exp_draw1[c], 1e-12);
+        EXPECT_NEAR(aux.bootstrap_replicates[1].cohort_pop_share, exp_draw2[c], 1e-12);
     }
 }
 

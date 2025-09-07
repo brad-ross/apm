@@ -198,14 +198,15 @@ struct CohortWeightEstimates {
  */
 struct CohortAuxiliaryDataMeans {
     double cohort_pop_share;   // proportion of all rows in the dataset belonging to this cohort
-    arma::vec auxiliary_means; // length d (number of auxiliary columns)
+    arma::mat auxiliary_means; // T x d matrix of means across outcomes and aux columns
 
     CohortAuxiliaryDataMeans() = default;
 
-    CohortAuxiliaryDataMeans(double pop_share_in, arma::vec aux_means_in)
+    CohortAuxiliaryDataMeans(double pop_share_in, arma::mat aux_means_in)
         : cohort_pop_share(pop_share_in), auxiliary_means(std::move(aux_means_in)) {}
 
-    std::size_t d() const noexcept { return static_cast<std::size_t>(auxiliary_means.n_elem); }
+    std::size_t T() const noexcept { return static_cast<std::size_t>(auxiliary_means.n_rows); }
+    std::size_t d() const noexcept { return static_cast<std::size_t>(auxiliary_means.n_cols); }
 };
 
 /**

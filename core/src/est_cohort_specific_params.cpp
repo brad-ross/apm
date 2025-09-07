@@ -397,7 +397,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
         );
         auto ests = make_factor_estimators_for_cohort(est_specs, T_c, q, bootstrap);
         std::optional<CohortAuxiliaryDataMeanEstimator> aux_est;
-        if (d > 0) aux_est.emplace(d, bootstrap);
+        if (d > 0) aux_est.emplace(T, d, bootstrap);
 
         // Reusable buffers (pre-sized once per cohort)
         arma::vec Y(static_cast<arma::uword>(T_c));
