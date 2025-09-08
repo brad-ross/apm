@@ -66,12 +66,15 @@ est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_t
     })
     wrapped_oms <- lapply(res$cohort_outcome_means, function(xp) OutcomeMeanSuffStatEstimates$new(xp))
     wrapped_weights <- lapply(res$cohort_weights, function(xp) CohortWeightEstimates$new(xp))
-    wrapped_aux <- lapply(res$cohort_auxiliary_means, function(xp) CohortAuxiliaryDataMeanEstimates$new(xp))
 
-    list(
+    out <- list(
         cohort_specific_factor_ests = wrapped_factor,
         cohort_outcome_means = wrapped_oms,
-        cohort_weights = wrapped_weights,
-        cohort_auxiliary_means = wrapped_aux
+        cohort_weights = wrapped_weights
     )
+    if ("cohort_auxiliary_means" %in% names(res)) {
+        wrapped_aux <- lapply(res$cohort_auxiliary_means, function(xp) CohortAuxiliaryDataMeanEstimates$new(xp))
+        out$cohort_auxiliary_means <- wrapped_aux
+    }
+    out
 }

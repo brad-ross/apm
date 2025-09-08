@@ -150,8 +150,9 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
 
     res <- est_cohort_specific_params(panel, est_specs)
 
-    # outer structure keys (including auxiliary means container)
-    expect_setequal(names(res), c("cohort_specific_factor_ests", "cohort_outcome_means", "cohort_weights", "cohort_auxiliary_means"))
+    # outer structure keys: auxiliary means are optional
+    expect_true(all(c("cohort_specific_factor_ests", "cohort_outcome_means", "cohort_weights") %in% names(res)))
+    expect_false("cohort_auxiliary_means" %in% names(res))
 
     # factor ests keyed by spec name, then cohort ids
     f <- res$cohort_specific_factor_ests

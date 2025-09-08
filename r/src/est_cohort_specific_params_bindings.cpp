@@ -144,10 +144,14 @@ static Rcpp::List build_return_list(apm::CohortSpecificEstimates&& ests) {
         out_oms[static_cast<int>(c)] = Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates>(heap, true);
     }
 
-    Rcpp::List out_aux(ests.cohort_auxiliary_means.size());
-    for (std::size_t c = 0; c < ests.cohort_auxiliary_means.size(); ++c) {
-        auto* heapA = new apm::CohortAuxiliaryDataMeanEstimates(std::move(ests.cohort_auxiliary_means[c]));
-        out_aux[static_cast<int>(c)] = Rcpp::XPtr<apm::CohortAuxiliaryDataMeanEstimates>(heapA, true);
+    Rcpp::List out_aux;
+    const bool has_aux_means = !ests.cohort_auxiliary_means.empty();
+    if (has_aux_means) {
+        out_aux = Rcpp::List(ests.cohort_auxiliary_means.size());
+        for (std::size_t c = 0; c < ests.cohort_auxiliary_means.size(); ++c) {
+            auto* heapA = new apm::CohortAuxiliaryDataMeanEstimates(std::move(ests.cohort_auxiliary_means[c]));
+            out_aux[static_cast<int>(c)] = Rcpp::XPtr<apm::CohortAuxiliaryDataMeanEstimates>(heapA, true);
+        }
     }
 
     // Build factor and weight outputs together, using the union of spec names from both maps
@@ -194,12 +198,15 @@ static Rcpp::List build_return_list(apm::CohortSpecificEstimates&& ests) {
     out_factor.attr("names") = spec_names;
     out_weights.attr("names") = spec_names;
 
-    return Rcpp::List::create(
+    Rcpp::List res = Rcpp::List::create(
         Rcpp::Named("cohort_specific_factor_ests") = out_factor,
         Rcpp::Named("cohort_outcome_means") = out_oms,
-        Rcpp::Named("cohort_weights") = out_weights,
-        Rcpp::Named("cohort_auxiliary_means") = out_aux
+        Rcpp::Named("cohort_weights") = out_weights
     );
+    if (has_aux_means) {
+        res.push_back(out_aux, "cohort_auxiliary_means");
+    }
+    return res;
 }
 
 // [[Rcpp::export]]
