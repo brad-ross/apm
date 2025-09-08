@@ -1,7 +1,7 @@
 library(data.table)
 utils::globalVariables(c(
     "y", "outcome_id", "cov1", "cov2", "outcome_idx",
-    "unit_idx", "cohort_id", "outcome_idx_f"
+    "unit_idx", "cohort_id", "outcome_idx_f", "aux1", "aux2"
 ))
 
 # Outcome helpers
@@ -19,22 +19,28 @@ make_units_by_cohort <- function(n_cohorts, units_per_cohort, prefix = "u", star
 }
 
 # Panel builders
-build_panel_from_indices <- function(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE) {
+build_panel_from_indices <- function(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, include_auxiliary = FALSE) {
     all_units <- sort(unique(unlist(units_by_cohort)))
     data.table::rbindlist(lapply(seq_along(cohort_indices), function(k) {
         observed_idxs <- cohort_indices[[k]]
         observed_outcomes <- outcomes[observed_idxs]
         unit_ids <- units_by_cohort[[k]]
         data.table::rbindlist(lapply(unit_ids, function(u) {
-            if (isTRUE(include_covariates)) {
+            if (isTRUE(include_covariates) || isTRUE(include_auxiliary)) {
                 dt <- data.table::data.table(
                     unit_id = u,
                     outcome_id = outcomes
                 )
                 dt[, ("y") := match(get("outcome_id"), outcomes)]
                 dt[!get("outcome_id") %in% observed_outcomes, ("y") := NA_real_]
-                dt[, ("cov1") := as.integer(match(u, all_units))]
-                dt[, ("cov2") := as.integer(k)]
+                if (isTRUE(include_covariates)) {
+                    dt[, ("cov1") := as.integer(match(u, all_units))]
+                    dt[, ("cov2") := as.integer(k)]
+                }
+                if (isTRUE(include_auxiliary)) {
+                    dt[, ("aux1") := as.integer(match(u, all_units))]
+                    dt[, ("aux2") := as.integer(k)]
+                }
                 dt
             } else {
                 dt <- data.table::data.table(
@@ -112,6 +118,7 @@ expected_covariates_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
 # Factor-based outcome generator to avoid signature conflicts with older helpers
 build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_cohort,
                                             include_covariates = FALSE,
+                                            include_auxiliary = FALSE,
                                             r = 2L,
                                             rotate = TRUE) {
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = rotate)
@@ -121,7 +128,7 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
         observed_outcomes <- outcomes[observed_idxs]
         unit_ids <- units_by_cohort[[k]]
         data.table::rbindlist(lapply(unit_ids, function(u) {
-            if (isTRUE(include_covariates)) {
+            if (isTRUE(include_covariates) || isTRUE(include_auxiliary)) {
                 dt <- data.table::data.table(
                     unit_id = u,
                     outcome_id = outcomes
@@ -129,8 +136,14 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                 dt[, ("y") := NA_real_]
                 y_obs <- expected_Y_for_units_ctx(ctx, k, unit_ids = c(u), T_idx = observed_idxs)[1, ]
                 dt[get("outcome_id") %in% observed_outcomes, ("y") := y_obs]
-                dt[, ("cov1") := as.integer(match(u, ctx$all_units))]
-                dt[, ("cov2") := as.integer(k)]
+                if (isTRUE(include_covariates)) {
+                    dt[, ("cov1") := as.integer(match(u, ctx$all_units))]
+                    dt[, ("cov2") := as.integer(k)]
+                }
+                if (isTRUE(include_auxiliary)) {
+                    dt[, ("aux1") := as.integer(match(u, ctx$all_units))]
+                    dt[, ("aux2") := as.integer(k)]
+                }
                 dt
             } else {
                 dt <- data.table::data.table(

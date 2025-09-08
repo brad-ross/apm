@@ -25,6 +25,7 @@ public:
                                               std::size_t d,
                                               std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr);
 
+    std::size_t T() const noexcept { return T_; }
     std::size_t d() const noexcept { return d_; }
     bool has_bootstrap() const noexcept { return static_cast<bool>(bootstrap_); }
     std::size_t num_bootstraps() const noexcept { return bootstrap_ ? bootstrap_->n_bootstraps() : 0; }
@@ -34,10 +35,7 @@ public:
     // Single unit add: A is T x d for the unit
     void add_datum(std::size_t unit_idx, const arma::mat& A);
 
-    double row_count() const noexcept { return row_count_; }
-    arma::vec boot_row_counts() const { return boot_row_counts_; }
-
-    CohortAuxiliaryDataMeanEstimates estimate(std::size_t total_rows) const;
+    CohortAuxiliaryDataMeanEstimates estimate(std::size_t total_units) const;
 
 private:
     static void validate_data_dimensions(const arma::uvec& unit_idxs, const arma::cube& A, std::size_t T, std::size_t d);
@@ -53,10 +51,6 @@ private:
     // Running bootstrap aggregates
     arma::vec  total_boot_weights_; // B
     arma::cube boot_aux_means_;     // T x d x B
-
-    // For cohort population shares
-    double row_count_;
-    arma::vec boot_row_counts_; // B x 1
 };
 
 } // namespace apm

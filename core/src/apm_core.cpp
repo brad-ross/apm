@@ -17,20 +17,6 @@ struct ProblemDimensions {
     arma::uword C; // Number of cohorts
 };
 
-arma::uword get_num_outcomes(
-    const std::vector<arma::uvec>& observed_outcome_indices) {
-    
-    arma::uword max_idx = 0;
-    bool has_observations = false;
-    for (const auto& T_c : observed_outcome_indices) {
-        if (!T_c.empty()) {
-            has_observations = true;
-            max_idx = std::max(max_idx, T_c.max());
-        }
-    }
-
-    return has_observations ? max_idx + 1 : 0;
-}
 
 ProblemDimensions get_problem_dimensions(
     const std::vector<arma::mat>& cohort_factor_matrices,
@@ -52,7 +38,7 @@ ProblemDimensions get_problem_dimensions(
         }
     }
 
-    const arma::uword T = get_num_outcomes(observed_outcome_indices);
+    const arma::uword T = apm::num_outcomes(observed_outcome_indices);
 
     return {r, T, C};
 }
@@ -317,7 +303,7 @@ arma::vec aggregate_cohort_specific_outcome_fes(
         throw std::invalid_argument("Number of fixed effect vectors must match number of observed outcome index vectors.");
     }
     
-    const arma::uword T = get_num_outcomes(observed_outcome_indices);
+    const arma::uword T = apm::num_outcomes(observed_outcome_indices);
 
     if (T == 0) {
         return arma::vec();

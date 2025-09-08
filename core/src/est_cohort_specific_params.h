@@ -48,7 +48,7 @@ struct CohortSpecificEstimates {
  *
  * All indices (unit, cohort, outcome) are assumed to be 0-based.
  * The observed outcome order per cohort is provided via ObservedOutcomeIndices (0-based).
- * T for covariates is computed as 1 + max(observed outcomes for the cohort).
+ * T is computed globally as 1 + max observed outcome index across all cohorts.
  */
 CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     const int* unit_idx,         // length n_rows, 0-based

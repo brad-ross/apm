@@ -86,7 +86,6 @@ static std::vector<CohortBlock> build_cohort_blocks_with_unit_runs(
 struct CohortDictionaries {
     arma::uvec T_idx_0b;                                 // observed outcomes for this cohort (0-based)
     std::unordered_map<int, std::size_t> pos_T_idx;     // outcome -> position in Y/X_obs
-    std::size_t T;                                       // 1 + max(T_idx_0b)
 };
 
 static std::unordered_map<int, std::size_t> make_pos_map(const arma::uvec& idx0) {
@@ -97,12 +96,6 @@ static std::unordered_map<int, std::size_t> make_pos_map(const arma::uvec& idx0)
     return mp;
 }
 
-static std::size_t compute_T_from_T_idx(const arma::uvec& T_idx_0b) {
-    if (T_idx_0b.is_empty()) return 0;
-    arma::uword mx = T_idx_0b.max();
-    return static_cast<std::size_t>(mx + 1u);
-}
-
 static CohortDictionaries make_cohort_dicts(
     int cohort_0b,
     const ObservedOutcomeIndices& observed_outcome_indices)
@@ -110,7 +103,6 @@ static CohortDictionaries make_cohort_dicts(
     CohortDictionaries d;
     d.T_idx_0b = observed_outcome_indices.at(static_cast<std::size_t>(cohort_0b));
     d.pos_T_idx = make_pos_map(d.T_idx_0b);
-    d.T = compute_T_from_T_idx(d.T_idx_0b);
     return d;
 }
 
@@ -154,8 +146,8 @@ static void assemble_Y_X_for_unit_run(
     arma::mat& X_obs       // expects size T_c x q if q>0
 ) {
     const std::size_t T_c = static_cast<std::size_t>(dicts.T_idx_0b.n_elem);
-    const std::size_t T   = dicts.T;
     const std::size_t q   = covar_cols.size();
+    const std::size_t T   = static_cast<std::size_t>(X_full.n_rows);
 
     // Y over observed outcomes (T_c)
     for (std::size_t k = 0; k < T_c; ++k) {
@@ -213,17 +205,15 @@ static void assemble_aux_data_for_unit(
 
 static std::vector<CohortAuxiliaryDataMeanEstimates> finalize_auxiliary_outputs(
     const std::vector<std::optional<CohortAuxiliaryDataMeanEstimator>>& tmp_aux,
-    std::size_t n_rows)
+    std::size_t total_units)
 {
     std::vector<CohortAuxiliaryDataMeanEstimates> aux_out;
     const std::size_t C = tmp_aux.size();
     if (C == 0) return aux_out;
 
-    const double total_rows = static_cast<double>(n_rows);
-
     aux_out.reserve(C);
     for (std::size_t c = 0; c < C; ++c) {
-        aux_out.emplace_back(tmp_aux[c]->estimate(static_cast<std::size_t>(total_rows)));
+        aux_out.emplace_back(tmp_aux[c]->estimate(total_units));
     }
     return aux_out;
 }
@@ -383,10 +373,10 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     auto process_cohort = [&](std::size_t cidx) {
         const CohortBlock& blk = blocks[cidx];
 
-        // Dictionaries for this cohort (T_c order and T from max+1)
+        // Dictionaries for this cohort (T_c order)
         CohortDictionaries dicts = make_cohort_dicts(blk.cohort, observed_outcome_indices);
         const std::size_t T_c = static_cast<std::size_t>(dicts.T_idx_0b.n_elem);
-        const std::size_t T   = dicts.T;
+        const std::size_t T   = static_cast<std::size_t>(apm::num_outcomes(observed_outcome_indices));
 
         // Estimators
         OutcomeMeanSuffStatEstimator omsse(
@@ -476,8 +466,12 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     // Finalize auxiliary outputs
     std::vector<CohortAuxiliaryDataMeanEstimates> aux_out;
     if (d > 0) {
-        // Use global totals; bootstrap totals per draw are implicitly 1
-        aux_out = finalize_auxiliary_outputs(tmp_aux, n_rows);
+        // Compute total number of unique units across all cohorts
+        std::size_t total_units = 0;
+        for (const auto& blk : blocks) {
+            total_units += blk.unit_runs.size();
+        }
+        aux_out = finalize_auxiliary_outputs(tmp_aux, total_units);
     }
 
     return build_cohort_specific_estimates(tmp_factor, tmp_outcome, std::move(weights_by_spec), std::move(aux_out));

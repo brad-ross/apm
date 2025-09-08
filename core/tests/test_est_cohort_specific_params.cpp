@@ -2,6 +2,7 @@
 #include <armadillo>
 #include <memory>
 #include <unordered_map>
+#include <limits>
 
 #include "est_cohort_specific_params.h"
 #include "apm_core.h"
@@ -63,25 +64,60 @@ PanelCtx make_ctx() {
 struct RawPanel {
     std::vector<int> unit_idx, cohort_id, outcome_idx;
     std::vector<double> y, cov1, cov2; // q=2
+    std::vector<double> aux1, aux2;    // d up to 2
 };
 
-RawPanel make_raw(const PanelCtx& ctx, bool with_covars) {
+RawPanel make_raw(const PanelCtx& ctx, bool with_covars, bool with_auxiliary = false) {
     RawPanel rp;
     int global_unit = 0;
     for (int c = 0; c < static_cast<int>(ctx.C); ++c) {
+        // Build observed mask and position map for this cohort
+        std::vector<char> observed(static_cast<std::size_t>(ctx.T), 0);
+        std::vector<int> pos(static_cast<std::size_t>(ctx.T), -1);
+        for (arma::uword k = 0; k < ctx.T_idx[c].n_elem; ++k) {
+            int t_obs = static_cast<int>(ctx.T_idx[c][k]);
+            observed[static_cast<std::size_t>(t_obs)] = 1;
+            pos[static_cast<std::size_t>(t_obs)] = static_cast<int>(k);
+        }
+
         for (int u = 0; u < static_cast<int>(ctx.units_per); ++u, ++global_unit) {
-            for (arma::uword k = 0; k < ctx.T_idx[c].n_elem; ++k) {
-                int t = static_cast<int>(ctx.T_idx[c][k]);
-                // Match R tests: y contains only factor component using cohort-rotated factors
-                double y_val = arma::as_scalar(ctx.cohort_G_list[static_cast<std::size_t>(c)].row(static_cast<arma::uword>(k))
-                                               * ctx.l_unit[global_unit]);
-                rp.unit_idx.push_back(global_unit);
-                rp.cohort_id.push_back(c);
-                rp.outcome_idx.push_back(t);
-                rp.y.push_back(y_val);
-                if (with_covars) {
-                    rp.cov1.push_back(global_unit + 1);
-                    rp.cov2.push_back(c + 1);
+            if (with_covars || with_auxiliary) {
+                // Expand to all outcomes, with NA y for unobserved
+                for (int t = 0; t < static_cast<int>(ctx.T); ++t) {
+                    rp.unit_idx.push_back(global_unit);
+                    rp.cohort_id.push_back(c);
+                    rp.outcome_idx.push_back(t);
+                    if (observed[static_cast<std::size_t>(t)]) {
+                        int k_pos = pos[static_cast<std::size_t>(t)];
+                        double y_val = arma::as_scalar(
+                            ctx.cohort_G_list[static_cast<std::size_t>(c)].row(static_cast<arma::uword>(k_pos))
+                            * ctx.l_unit[global_unit]
+                        );
+                        rp.y.push_back(y_val);
+                    } else {
+                        rp.y.push_back(std::numeric_limits<double>::quiet_NaN());
+                    }
+                    if (with_covars) {
+                        rp.cov1.push_back(global_unit + 1);
+                        rp.cov2.push_back(c + 1);
+                    }
+                    if (with_auxiliary) {
+                        rp.aux1.push_back(static_cast<double>(global_unit + 1));
+                        rp.aux2.push_back(static_cast<double>(10 * c + t + 1));
+                    }
+                }
+            } else {
+                // Observed outcomes only
+                for (arma::uword k = 0; k < ctx.T_idx[c].n_elem; ++k) {
+                    int t = static_cast<int>(ctx.T_idx[c][k]);
+                    double y_val = arma::as_scalar(
+                        ctx.cohort_G_list[static_cast<std::size_t>(c)].row(static_cast<arma::uword>(k))
+                        * ctx.l_unit[global_unit]
+                    );
+                    rp.unit_idx.push_back(global_unit);
+                    rp.cohort_id.push_back(c);
+                    rp.outcome_idx.push_back(t);
+                    rp.y.push_back(y_val);
                 }
             }
         }
@@ -210,11 +246,11 @@ TEST(CohortSpecificRawTest, YXAssembly_WithCovariates_DimensionsAndMeans) {
     const auto& oms0 = out.cohort_outcome_mean_ests[0].suff_stat_estimates;
     ASSERT_TRUE(oms0.has_covar_means());
     const arma::mat& cm = *(oms0.covar_means);
-    // C++ impl uses T = 1 + max(T_idx) per cohort when q>0
-    ASSERT_EQ(cm.n_rows, static_cast<arma::uword>(ctx.T_idx[0].max() + 1));
+    // C++ impl uses global T across cohorts when q>0
+    ASSERT_EQ(cm.n_rows, ctx.T);
     ASSERT_EQ(cm.n_cols, ctx.q);
 
-    for (arma::uword t = 0; t <= ctx.T_idx[0].max(); ++t) {
+    for (arma::uword t = 0; t < ctx.T; ++t) {
         EXPECT_NEAR(cm(t, 0), 1.5, 1e-12);
         EXPECT_NEAR(cm(t, 1), 1.0, 1e-12);
     }
@@ -282,18 +318,14 @@ TEST(CohortSpecificRawTest, Bootstrap_DeterministicReplicates_NoCovariates) {
 
 TEST(CohortSpecificRawTest, AuxiliaryMeans_NoCovariates) {
     PanelCtx ctx = make_ctx();
-    RawPanel rp = make_raw(ctx, /*with_covars=*/false);
+    RawPanel rp = make_raw(ctx, /*with_covars=*/false, /*with_auxiliary=*/true);
 
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;
     specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, ctx.r});
 
     // Build two auxiliary columns as deterministic functions of unit and cohort
-    std::vector<double> aux1(rp.y.size());
-    std::vector<double> aux2(rp.y.size());
-    for (std::size_t i = 0; i < rp.y.size(); ++i) {
-        aux1[i] = static_cast<double>(rp.unit_idx[i] + 1);               // varies by unit only
-        aux2[i] = static_cast<double>(10 * rp.cohort_id[i] + rp.outcome_idx[i] + 1); // varies by cohort/outcome
-    }
+    const std::vector<double>& aux1 = rp.aux1;
+    const std::vector<double>& aux2 = rp.aux2;
 
     std::vector<const double*> covar_cols; // q=0
     std::vector<const double*> auxiliary_cols;
@@ -306,23 +338,33 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_NoCovariates) {
 
     ASSERT_EQ(out.cohort_auxiliary_means.size(), ctx.C);
 
-    // Compute expected per-cohort pop shares and means directly from raw panel
+    // Compute expected per-cohort pop shares (by unit share) and means directly from raw panel
+    // Determine total number of unique units
+    int max_unit = -1;
+    for (std::size_t i = 0; i < rp.unit_idx.size(); ++i) if (rp.unit_idx[i] > max_unit) max_unit = rp.unit_idx[i];
+    const std::size_t total_units = static_cast<std::size_t>(max_unit + 1);
     for (std::size_t c = 0; c < ctx.C; ++c) {
-        // Population share
-        double rows_c = 0.0;
-        for (std::size_t i = 0; i < rp.y.size(); ++i) if (static_cast<std::size_t>(rp.cohort_id[i]) == c) rows_c += 1.0;
-        double share_exp = (rows_c > 0.0) ? (rows_c / static_cast<double>(rp.y.size())) : 0.0;
+        // Population share by unit: fraction of unique units in cohort c
+        std::vector<char> seen(total_units, 0);
+        std::size_t units_c = 0;
+        for (std::size_t i = 0; i < rp.unit_idx.size(); ++i) {
+            if (static_cast<std::size_t>(rp.cohort_id[i]) == c) {
+                const std::size_t u = static_cast<std::size_t>(rp.unit_idx[i]);
+                if (!seen[u]) { seen[u] = 1; ++units_c; }
+            }
+        }
+        double share_exp = (total_units > 0u) ? (static_cast<double>(units_c) / static_cast<double>(total_units)) : 0.0;
 
         const auto& est = out.cohort_auxiliary_means[c].estimates;
         EXPECT_NEAR(est.cohort_pop_share, share_exp, 1e-12);
 
         // Dimensions
-        arma::uword Tc = static_cast<arma::uword>(ctx.T_idx[c].max() + 1);
-        ASSERT_EQ(est.auxiliary_means.n_rows, Tc);
+        arma::uword Tc = static_cast<arma::uword>(ctx.T);
+        ASSERT_EQ(est.auxiliary_means.n_rows, ctx.T);
         ASSERT_EQ(est.auxiliary_means.n_cols, 2u);
 
         // Means per outcome row t
-        for (arma::uword t = 0; t < Tc; ++t) {
+        for (arma::uword t = 0; t < ctx.T; ++t) {
             double s1 = 0.0, s2 = 0.0; std::size_t n = 0;
             for (std::size_t i = 0; i < rp.y.size(); ++i) {
                 if (static_cast<std::size_t>(rp.cohort_id[i]) == c && static_cast<arma::uword>(rp.outcome_idx[i]) == t) {
@@ -342,7 +384,7 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_NoCovariates) {
 
 TEST(CohortSpecificRawTest, AuxiliaryMeans_WithBootstrapReplicatesExist) {
     PanelCtx ctx = make_ctx();
-    RawPanel rp = make_raw(ctx, /*with_covars=*/false);
+    RawPanel rp = make_raw(ctx, /*with_covars=*/false, /*with_auxiliary=*/true);
 
     // Two bootstrap draws with nontrivial partitions over units
     arma::mat W(6, 2, arma::fill::zeros);
@@ -365,10 +407,10 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_WithBootstrapReplicatesExist) {
     for (std::size_t c = 0; c < ctx.C; ++c) {
         const auto& aux = out.cohort_auxiliary_means[c];
         ASSERT_EQ(aux.bootstrap_replicates.size(), 2u);
-        arma::uword Tc = static_cast<arma::uword>(ctx.T_idx[c].max() + 1);
-        ASSERT_EQ(aux.estimates.auxiliary_means.n_rows, Tc);
+        arma::uword Tc = static_cast<arma::uword>(ctx.T);
+        ASSERT_EQ(aux.estimates.auxiliary_means.n_rows, ctx.T);
         ASSERT_EQ(aux.estimates.auxiliary_means.n_cols, 1u);
-        ASSERT_EQ(aux.bootstrap_replicates[0].auxiliary_means.n_rows, Tc);
+        ASSERT_EQ(aux.bootstrap_replicates[0].auxiliary_means.n_rows, ctx.T);
         ASSERT_EQ(aux.bootstrap_replicates[0].auxiliary_means.n_cols, 1u);
     }
 

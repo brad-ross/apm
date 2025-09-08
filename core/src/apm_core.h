@@ -10,11 +10,9 @@
 #include <vector>
 #include <set>
 #include "cohort_specific_param_structs.h"
+#include "utils.h"
 
 namespace apm {
-
-// Alias representing the type of observed_outcome_indices throughout the codebase
-using ObservedOutcomeIndices = std::vector<arma::uvec>;
 
 /**
  * @brief Get library version information
