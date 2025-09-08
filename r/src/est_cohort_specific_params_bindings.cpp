@@ -1,4 +1,6 @@
 #include <RcppArmadillo.h>
+#include <set>
+#include <algorithm>
 #include "../../core/src/est_cohort_specific_params.h"
 #include "../../core/src/apm_core.h"
 #include "r_utils.h"
@@ -46,16 +48,7 @@ to_cpp_specs(const Rcpp::List& est_specs_r) {
     return out;
 }
 
-// Determine the ordered output spec names: preserve names(est_specs) when set; else synthesize
-static Rcpp::CharacterVector ordered_spec_names(const Rcpp::List& est_specs_r) {
-    if (has_valid_names(est_specs_r)) {
-        SEXP nmSxp = Rf_getAttrib(est_specs_r, R_NamesSymbol);
-        return Rcpp::CharacterVector(nmSxp);
-    }
-    Rcpp::CharacterVector out(est_specs_r.size());
-    for (int i = 0; i < est_specs_r.size(); ++i) out[i] = std::string("spec_") + std::to_string(i + 1);
-    return out;
-}
+// (removed) ordered_spec_names: we now source names from the result maps
 
 // Extract 1-based index columns and y from processed_panel and return 0-based vectors and y pointer
 struct PanelRawColumns {
@@ -142,50 +135,64 @@ static std::pair<bool, std::size_t> resolve_num_threads(Rcpp::Nullable<Rcpp::Int
     return {false, 0};
 }
 
-// Convert core results to R list using the given spec name order
-static Rcpp::List build_return_list(const apm::CohortSpecificEstimates& ests, const Rcpp::CharacterVector& spec_names) {
-    Rcpp::List out_factor(spec_names.size());
-    out_factor.attr("names") = spec_names;
-    for (int i = 0; i < spec_names.size(); ++i) {
-        std::string key = Rcpp::as<std::string>(spec_names[i]);
-        auto it = ests.cohort_specific_factor_ests.find(key);
-        if (it == ests.cohort_specific_factor_ests.end()) {
-            Rcpp::stop("Spec key not found in result: " + key);
-        }
-        const auto& vec = it->second;
-        Rcpp::List per_cohort(vec.size());
-        for (std::size_t c = 0; c < vec.size(); ++c) {
-            auto* heap = new apm::FactorModelEstimates(vec[c]);
-            per_cohort[static_cast<int>(c)] = Rcpp::XPtr<apm::FactorModelEstimates>(heap, true);
-        }
-        out_factor[i] = per_cohort;
-    }
-
+// Convert core results to R list; move into heap allocations; source spec names from result maps
+static Rcpp::List build_return_list(apm::CohortSpecificEstimates&& ests) {
+    // Prepare outputs that do not depend on spec names
     Rcpp::List out_oms(ests.cohort_outcome_mean_ests.size());
     for (std::size_t c = 0; c < ests.cohort_outcome_mean_ests.size(); ++c) {
-        auto* heap = new apm::OutcomeMeanSuffStatEstimates(ests.cohort_outcome_mean_ests[c]);
+        auto* heap = new apm::OutcomeMeanSuffStatEstimates(std::move(ests.cohort_outcome_mean_ests[c]));
         out_oms[static_cast<int>(c)] = Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates>(heap, true);
     }
 
-    // Cohort auxiliary means (as external pointers to C++ objects)
     Rcpp::List out_aux(ests.cohort_auxiliary_means.size());
     for (std::size_t c = 0; c < ests.cohort_auxiliary_means.size(); ++c) {
-        auto* heapA = new apm::CohortAuxiliaryDataMeanEstimates(ests.cohort_auxiliary_means[c]);
+        auto* heapA = new apm::CohortAuxiliaryDataMeanEstimates(std::move(ests.cohort_auxiliary_means[c]));
         out_aux[static_cast<int>(c)] = Rcpp::XPtr<apm::CohortAuxiliaryDataMeanEstimates>(heapA, true);
     }
 
-    // Cohort weights per spec (as external pointers to C++ objects)
-    Rcpp::List out_weights(spec_names.size());
-    out_weights.attr("names") = spec_names;
-    for (int i = 0; i < spec_names.size(); ++i) {
-        std::string key = Rcpp::as<std::string>(spec_names[i]);
-        auto wit = ests.cohort_weights.find(key);
-        if (wit == ests.cohort_weights.end()) {
-            Rcpp::stop("Spec key not found in cohort_weights: " + key);
+    // Build factor and weight outputs together, using the union of spec names from both maps
+    auto& factor_map = ests.cohort_specific_factor_ests;
+    auto& weight_map = ests.cohort_weights;
+
+    std::set<std::string> union_keys;
+    for (const auto& kv : factor_map) union_keys.insert(kv.first);
+    for (const auto& kw : weight_map) union_keys.insert(kw.first);
+
+    Rcpp::List out_factor(static_cast<int>(union_keys.size()));
+    Rcpp::List out_weights(static_cast<int>(union_keys.size()));
+    Rcpp::CharacterVector spec_names(static_cast<int>(union_keys.size()));
+
+    int idx = 0;
+    for (const auto& key : union_keys) {
+        auto fit = factor_map.find(key);
+        auto wit = weight_map.find(key);
+        if (fit == factor_map.end()) {
+            Rcpp::stop("Spec key present in cohort weights but missing in factor estimates: " + key);
         }
-        auto* heapW = new apm::CohortWeightEstimates(wit->second);
-        out_weights[i] = Rcpp::XPtr<apm::CohortWeightEstimates>(heapW, true);
+        if (wit == weight_map.end()) {
+            Rcpp::stop("Spec key present in factor estimates but missing in cohort weights: " + key);
+        }
+
+        auto& vec = fit->second; // vector<FactorModelEstimates>
+
+        // Per-cohort factor estimates (move each element into heap)
+        Rcpp::List per_cohort(vec.size());
+        for (std::size_t c = 0; c < vec.size(); ++c) {
+            auto* heap = new apm::FactorModelEstimates(std::move(vec[c]));
+            per_cohort[static_cast<int>(c)] = Rcpp::XPtr<apm::FactorModelEstimates>(heap, true);
+        }
+        out_factor[idx] = per_cohort;
+
+        // Weights object for this spec (move into heap)
+        auto* heapW = new apm::CohortWeightEstimates(std::move(wit->second));
+        out_weights[idx] = Rcpp::XPtr<apm::CohortWeightEstimates>(heapW, true);
+
+        spec_names[idx] = key;
+        ++idx;
     }
+
+    out_factor.attr("names") = spec_names;
+    out_weights.attr("names") = spec_names;
 
     return Rcpp::List::create(
         Rcpp::Named("cohort_specific_factor_ests") = out_factor,
@@ -212,7 +219,6 @@ Rcpp::List est_cohort_specific_params_from_panel_cpp(Rcpp::DataFrame processed_p
     // Convert inputs
     apm::ObservedOutcomeIndices obs_idx_0b = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
     auto cpp_specs = to_cpp_specs(est_specs);
-    auto spec_names = ordered_spec_names(est_specs);
     auto wb = apm::r_utils::xp_to_const_wb_shared(bootstrap_xptr);
     auto [has_threads, nt] = resolve_num_threads(num_threads_in);
 
@@ -247,6 +253,6 @@ Rcpp::List est_cohort_specific_params_from_panel_cpp(Rcpp::DataFrame processed_p
         );
     }
 
-    return build_return_list(ests, spec_names);
+    return build_return_list(std::move(ests));
 }
 
