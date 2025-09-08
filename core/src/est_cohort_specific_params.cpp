@@ -9,6 +9,8 @@
 
 namespace apm {
 
+namespace {
+
 //==============================
 // Grouping data structures
 //==============================
@@ -325,6 +327,8 @@ static std::unordered_map<std::string, CohortWeightEstimates> est_cohort_weights
 
     return out;
 }
+
+} // anonymous namespace
 
 //==============================
 // Main entry
