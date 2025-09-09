@@ -39,7 +39,11 @@ struct CohortSpecificEstimates {
     std::unordered_map<std::string, std::vector<FactorModelEstimates>> cohort_specific_factor_ests;
     std::vector<OutcomeMeanSuffStatEstimates> cohort_outcome_mean_ests;
     std::unordered_map<std::string, CohortWeightEstimates> cohort_weights;
+    // Optional: only non-empty when auxiliary data to be averaged are defined
     std::vector<CohortAuxiliaryDataMeanEstimates> cohort_auxiliary_means;
+    // Optional: present only when masking is applied
+    std::optional<ObservedOutcomeIndices> masked_observed_outcome_indices;
+    std::unordered_map<int, OutcomeMeanSufficientStatistics> masked_cohort_outcome_means;
 };
 
 /**
@@ -62,10 +66,11 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     const ObservedOutcomeIndices& observed_outcome_indices, // 0-based per cohort, index with cohort_id
     std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
 #ifdef APM_HAS_TBB
-    std::size_t num_threads = oneapi::tbb::info::default_concurrency()
+    std::size_t num_threads = oneapi::tbb::info::default_concurrency(),
 #else
-    std::size_t num_threads = 1
+    std::size_t num_threads = 1,
 #endif
+    const CohortOutcomeMask& cohort_outcomes_to_mask = CohortOutcomeMask()
 );
 
 } // namespace apm

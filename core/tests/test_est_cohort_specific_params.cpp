@@ -8,6 +8,7 @@
 #include "apm_core.h"
 #include "linear_algebra_utils.h"
 #include "bootstrap.h"
+#include "utils.h"
 
 namespace {
 
@@ -24,7 +25,7 @@ void expect_same_subspace(const arma::mat& G1, const arma::mat& G2, double tol =
 struct PanelCtx {
     arma::uword T = 5, r = 2, C = 3, units_per = 2, q = 2;
     arma::mat G_true;                    // T x r
-    std::vector<arma::uvec> T_idx;       // size C
+    apm::ObservedOutcomeIndices observed_outcome_indices; // size C
     arma::vec g0_true;                   // length T
     arma::vec a_true;                    // length q
     std::vector<arma::vec> l_unit;       // per unit (global) length r
@@ -39,7 +40,7 @@ PanelCtx make_ctx() {
         ctx.G_true(t, 0) = v;
         ctx.G_true(t, 1) = v + 0.5;
     }
-    ctx.T_idx = { arma::uvec{0, 1, 2}, arma::uvec{1, 2, 3}, arma::uvec{2, 3, 4} };
+    ctx.observed_outcome_indices = { arma::uvec{0, 1, 2}, arma::uvec{1, 2, 3}, arma::uvec{2, 3, 4} };
     ctx.g0_true = arma::linspace(0.1, 0.5, ctx.T);
     ctx.a_true = arma::vec({0.5, 1.0});
     for (int u = 0; u < 6; ++u) ctx.l_unit.push_back(arma::vec({1.0 + u, 2.0 + u}));
@@ -56,7 +57,7 @@ PanelCtx make_ctx() {
         }
         R = 0.5 * (R + R.t());
         R.diag() += static_cast<double>(ctx.r);
-        ctx.cohort_G_list[c] = ctx.G_true.rows(ctx.T_idx[c]) * R;
+        ctx.cohort_G_list[c] = ctx.G_true.rows(ctx.observed_outcome_indices[c]) * R;
     }
     return ctx;
 }
@@ -74,8 +75,8 @@ RawPanel make_raw(const PanelCtx& ctx, bool with_covars, bool with_auxiliary = f
         // Build observed mask and position map for this cohort
         std::vector<char> observed(static_cast<std::size_t>(ctx.T), 0);
         std::vector<int> pos(static_cast<std::size_t>(ctx.T), -1);
-        for (arma::uword k = 0; k < ctx.T_idx[c].n_elem; ++k) {
-            int t_obs = static_cast<int>(ctx.T_idx[c][k]);
+        for (arma::uword k = 0; k < ctx.observed_outcome_indices[c].n_elem; ++k) {
+            int t_obs = static_cast<int>(ctx.observed_outcome_indices[c][k]);
             observed[static_cast<std::size_t>(t_obs)] = 1;
             pos[static_cast<std::size_t>(t_obs)] = static_cast<int>(k);
         }
@@ -108,8 +109,8 @@ RawPanel make_raw(const PanelCtx& ctx, bool with_covars, bool with_auxiliary = f
                 }
             } else {
                 // Observed outcomes only
-                for (arma::uword k = 0; k < ctx.T_idx[c].n_elem; ++k) {
-                    int t = static_cast<int>(ctx.T_idx[c][k]);
+                for (arma::uword k = 0; k < ctx.observed_outcome_indices[c].n_elem; ++k) {
+                    int t = static_cast<int>(ctx.observed_outcome_indices[c][k]);
                     double y_val = arma::as_scalar(
                         ctx.cohort_G_list[static_cast<std::size_t>(c)].row(static_cast<arma::uword>(k))
                         * ctx.l_unit[global_unit]
@@ -139,7 +140,7 @@ TEST(CohortSpecificRawTest, InvalidEstimatorNameThrows) {
     EXPECT_THROW(
         (void)apm::estimate_cohort_specific_params_from_raw(
             rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-            covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, nullptr),
+            covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices),
         std::invalid_argument);
 }
 
@@ -155,7 +156,7 @@ TEST(CohortSpecificRawTest, RGreaterThanTcThrows) {
     EXPECT_THROW(
         (void)apm::estimate_cohort_specific_params_from_raw(
             rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-            covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, nullptr),
+            covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices),
         std::invalid_argument);
 }
 
@@ -171,7 +172,7 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
     std::vector<const double*> auxiliary_cols; // d=0
     apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, nullptr);
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices);
 
     ASSERT_EQ(out.cohort_specific_factor_ests.size(), 2u);
     ASSERT_EQ(out.cohort_outcome_mean_ests.size(), ctx.C);
@@ -183,11 +184,11 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
 
     const auto& est_no_fe = pca_vec[0].parameter_estimates;
     const auto& est_fe    = pca_fe_vec[0].parameter_estimates;
-    EXPECT_EQ(est_no_fe.G.n_rows, ctx.T_idx[0].n_elem);
+    EXPECT_EQ(est_no_fe.G.n_rows, ctx.observed_outcome_indices[0].n_elem);
     EXPECT_EQ(est_no_fe.G.n_cols, ctx.r);
     EXPECT_FALSE(est_no_fe.has_fixed_effects());
     EXPECT_TRUE(est_fe.has_fixed_effects());
-    EXPECT_EQ(est_fe.G.n_rows, ctx.T_idx[0].n_elem);
+    EXPECT_EQ(est_fe.G.n_rows, ctx.observed_outcome_indices[0].n_elem);
     EXPECT_EQ(est_fe.G.n_cols, ctx.r);
 
     arma::mat G0_true = ctx.cohort_G_list[0];
@@ -203,7 +204,7 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
     const auto& oms0 = out.cohort_outcome_mean_ests[0].suff_stat_estimates;
     arma::vec expected_means(oms0.observed_outcome_means.n_elem, arma::fill::zeros);
     int u0 = 0, u1 = 1;
-    for (arma::uword k = 0; k < ctx.T_idx[0].n_elem; ++k) {
+    for (arma::uword k = 0; k < ctx.observed_outcome_indices[0].n_elem; ++k) {
         double m0 = arma::as_scalar(ctx.cohort_G_list[0].row(k) * ctx.l_unit[u0]);
         double m1 = arma::as_scalar(ctx.cohort_G_list[0].row(k) * ctx.l_unit[u1]);
         expected_means(static_cast<arma::uword>(k)) = 0.5 * (m0 + m1);
@@ -241,7 +242,7 @@ TEST(CohortSpecificRawTest, YXAssembly_WithCovariates_DimensionsAndMeans) {
     std::vector<const double*> auxiliary_cols; // d=0
     apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, nullptr);
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices);
 
     const auto& oms0 = out.cohort_outcome_mean_ests[0].suff_stat_estimates;
     ASSERT_TRUE(oms0.has_covar_means());
@@ -277,13 +278,13 @@ TEST(CohortSpecificRawTest, Bootstrap_DeterministicReplicates_NoCovariates) {
     std::vector<const double*> auxiliary_cols; // d=0
     apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, boot);
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices, boot);
 
     // Check suff stat bootstrap replicates exist and have expected lengths for cohort 0
     const auto& oms0 = out.cohort_outcome_mean_ests[0];
     ASSERT_EQ(oms0.bootstrap_replicates.size(), 2u);
-    ASSERT_EQ(oms0.suff_stat_estimates.observed_outcome_means.n_elem, ctx.T_idx[0].n_elem);
-    ASSERT_EQ(oms0.bootstrap_replicates[0].observed_outcome_means.n_elem, ctx.T_idx[0].n_elem);
+    ASSERT_EQ(oms0.suff_stat_estimates.observed_outcome_means.n_elem, ctx.observed_outcome_indices[0].n_elem);
+    ASSERT_EQ(oms0.bootstrap_replicates[0].observed_outcome_means.n_elem, ctx.observed_outcome_indices[0].n_elem);
 
     // Factor estimator replicates exist for both specs
     const auto& pca_vec = out.cohort_specific_factor_ests.at("pca");
@@ -334,7 +335,7 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_NoCovariates) {
 
     apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, nullptr);
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices);
 
     ASSERT_EQ(out.cohort_auxiliary_means.size(), ctx.C);
 
@@ -401,7 +402,7 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_WithBootstrapReplicatesExist) {
 
     apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.T_idx, boot);
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices, boot);
 
     ASSERT_EQ(out.cohort_auxiliary_means.size(), ctx.C);
     for (std::size_t c = 0; c < ctx.C; ++c) {

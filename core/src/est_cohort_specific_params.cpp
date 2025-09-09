@@ -1,6 +1,7 @@
 #include "est_cohort_specific_params.h"
 #include <algorithm>
 #include <limits>
+#include <unordered_set>
 #ifdef APM_HAS_TBB
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/global_control.h>
@@ -104,6 +105,14 @@ static CohortDictionaries make_cohort_dicts(
 {
     CohortDictionaries d;
     d.T_idx_0b = observed_outcome_indices.at(static_cast<std::size_t>(cohort_0b));
+    d.pos_T_idx = make_pos_map(d.T_idx_0b);
+    return d;
+}
+
+static CohortDictionaries make_cohort_dicts_from_indices(const arma::uvec& idx0)
+{
+    CohortDictionaries d;
+    d.T_idx_0b = idx0;
     d.pos_T_idx = make_pos_map(d.T_idx_0b);
     return d;
 }
@@ -223,7 +232,9 @@ static CohortSpecificEstimates build_cohort_specific_estimates(
     std::unordered_map<std::string, std::vector<std::optional<FactorModelEstimates>>>& tmp_factor,
     std::vector<std::optional<OutcomeMeanSuffStatEstimates>>& tmp_outcome,
     std::unordered_map<std::string, CohortWeightEstimates> cohort_weights,
-    std::vector<CohortAuxiliaryDataMeanEstimates>&& aux_out)
+    std::vector<CohortAuxiliaryDataMeanEstimates>&& aux_out,
+    const std::optional<ObservedOutcomeIndices>& masked_indices_opt,
+    std::unordered_map<int, OutcomeMeanSufficientStatistics>&& masked_means)
 {
     const std::size_t C = tmp_outcome.size();
 
@@ -246,6 +257,27 @@ static CohortSpecificEstimates build_cohort_specific_estimates(
     out.cohort_weights = std::move(cohort_weights);
     // Attach auxiliary outputs
     out.cohort_auxiliary_means = std::move(aux_out);
+
+    // Attach masked results when provided
+    if (masked_indices_opt.has_value()) {
+        out.masked_observed_outcome_indices = masked_indices_opt;
+        out.masked_cohort_outcome_means = std::move(masked_means);
+    }
+    return out;
+}
+
+static std::unordered_map<int, OutcomeMeanSufficientStatistics> build_masked_means_map(
+    const std::vector<CohortBlock>& blocks,
+    const std::vector<std::optional<OutcomeMeanSufficientStatistics>>& tmp_masked_means)
+{
+    std::unordered_map<int, OutcomeMeanSufficientStatistics> out;
+    const std::size_t C = tmp_masked_means.size();
+    out.reserve(C);
+    for (std::size_t cidx = 0; cidx < C; ++cidx) {
+        if (tmp_masked_means[cidx].has_value()) {
+            out.emplace(blocks[cidx].cohort, *tmp_masked_means[cidx]);
+        }
+    }
     return out;
 }
 
@@ -344,7 +376,8 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
     const ObservedOutcomeIndices& observed_outcome_indices,
     std::shared_ptr<const WeightedBootstrap> bootstrap,
-    std::size_t num_threads)
+    std::size_t num_threads,
+    const CohortOutcomeMask& cohort_outcomes_to_mask)
 {
     const std::size_t q = covar_cols.size();
     const std::size_t d = auxiliary_cols.size();
@@ -359,6 +392,13 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     }
 #endif
 
+    // Determine effective observed outcome indices after optional masking
+    const bool has_mask = !cohort_outcomes_to_mask.empty();
+    ObservedOutcomeIndices ooi_effective = get_masked_observed_outcome_indices(observed_outcome_indices, cohort_outcomes_to_mask);
+
+    // Total number of outcomes across cohorts (used for covariates and aux means)
+    const std::size_t T = static_cast<std::size_t>(apm::num_outcomes(ooi_effective));
+
     // Single pass: build cohort blocks and their unit runs
     std::vector<CohortBlock> blocks = build_cohort_blocks_with_unit_runs(
         unit_idx, cohort_id, n_rows);
@@ -372,15 +412,16 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     }
     std::vector<std::optional<OutcomeMeanSuffStatEstimates>> tmp_outcome(C);
     std::vector<std::optional<CohortAuxiliaryDataMeanEstimator>> tmp_aux(C);
+    std::vector<std::optional<OutcomeMeanSufficientStatistics>> tmp_masked_means(C);
+    std::vector<const double*> empty_covar_cols; // for masked stats assembly
 
     // Parallelize across cohorts
     auto process_cohort = [&](std::size_t cidx) {
         const CohortBlock& blk = blocks[cidx];
 
         // Dictionaries for this cohort (T_c order)
-        CohortDictionaries dicts = make_cohort_dicts(blk.cohort, observed_outcome_indices);
+        CohortDictionaries dicts = make_cohort_dicts(blk.cohort, ooi_effective);
         const std::size_t T_c = static_cast<std::size_t>(dicts.T_idx_0b.n_elem);
-        const std::size_t T   = static_cast<std::size_t>(apm::num_outcomes(observed_outcome_indices));
 
         // Estimators
         OutcomeMeanSuffStatEstimator omsse(
@@ -400,6 +441,23 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
         if (q > 0) {
             X_full.set_size(static_cast<arma::uword>(T), static_cast<arma::uword>(q));
             X_obs.set_size(static_cast<arma::uword>(T_c), static_cast<arma::uword>(q));
+        }
+
+        // Optional masked outcomes estimator for this cohort (computed in the same pass)
+        bool compute_masked = false;
+        CohortDictionaries dicts_mask;
+        std::optional<OutcomeMeanSuffStatEstimator> omsse_masked;
+        arma::vec Y_mask;
+        arma::mat X_full_unused, X_obs_unused; // not used when q==0 in masked path
+        if (has_mask) {
+            auto itM = cohort_outcomes_to_mask.find(blk.cohort);
+            if (itM != cohort_outcomes_to_mask.end() && itM->second.n_elem > 0) {
+                compute_masked = true;
+                dicts_mask = make_cohort_dicts_from_indices(itM->second);
+                const std::size_t K_mask = static_cast<std::size_t>(itM->second.n_elem);
+                omsse_masked.emplace(K_mask, /*T=*/0, /*q=*/0, bootstrap);
+                Y_mask.set_size(static_cast<arma::uword>(K_mask));
+            }
         }
 
         // Stream units
@@ -429,12 +487,22 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
                 aux_est->add_datum(static_cast<std::size_t>(ur.unit), A);
             }
 
+            // Also accumulate masked outcome means if requested
+            if (compute_masked) {
+                assemble_Y_X_for_unit_run(ur, outcome_idx, y, empty_covar_cols, dicts_mask, Y_mask, X_full_unused, X_obs_unused);
+                omsse_masked->add_datum(static_cast<std::size_t>(ur.unit), Y_mask);
+            }
+
             // Reset buffers for next unit
             Y.fill(std::numeric_limits<double>::quiet_NaN());
             if (q > 0) {
                 X_full.fill(std::numeric_limits<double>::quiet_NaN());
                 X_obs.fill(std::numeric_limits<double>::quiet_NaN());
             }
+        }
+
+        if (compute_masked) {
+            tmp_masked_means[cidx].emplace(omsse_masked->estimate().suff_stat_estimates);
         }
 
         // Estimate and store
@@ -478,7 +546,22 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
         aux_out = finalize_auxiliary_outputs(tmp_aux, total_units);
     }
 
-    return build_cohort_specific_estimates(tmp_factor, tmp_outcome, std::move(weights_by_spec), std::move(aux_out));
+    // Build masked means map if any
+    std::unordered_map<int, OutcomeMeanSufficientStatistics> masked_means_map;
+    std::optional<ObservedOutcomeIndices> masked_indices_opt = std::nullopt;
+    if (has_mask) {
+        masked_means_map = build_masked_means_map(blocks, tmp_masked_means);
+        masked_indices_opt = ooi_effective;
+    }
+
+    return build_cohort_specific_estimates(
+        tmp_factor,
+        tmp_outcome,
+        std::move(weights_by_spec),
+        std::move(aux_out),
+        masked_indices_opt,
+        std::move(masked_means_map)
+    );
 }
 
 } // namespace apm
