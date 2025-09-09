@@ -14,6 +14,17 @@ apm::ObservedOutcomeIndices to_cpp_observed_outcome_indices(const Rcpp::List& r_
     return cpp_vec;
 }
 
+Rcpp::List to_r_observed_outcome_indices(const apm::ObservedOutcomeIndices& cpp_vec) {
+    Rcpp::List out(static_cast<int>(cpp_vec.size()));
+    for (std::size_t i = 0; i < cpp_vec.size(); ++i) {
+        const arma::uvec& idx0 = cpp_vec[i];
+        Rcpp::IntegerVector idx1(static_cast<int>(idx0.n_elem));
+        for (arma::uword k = 0; k < idx0.n_elem; ++k) idx1[k] = static_cast<int>(idx0[k] + 1);
+        out[static_cast<int>(i)] = idx1;
+    }
+    return out;
+}
+
 // Interpret xp as XPtr<std::shared_ptr<WeightedBootstrap>>
 std::shared_ptr<const apm::WeightedBootstrap> xp_to_const_wb_shared(SEXP xp) {
     if (xp == R_NilValue) return nullptr;

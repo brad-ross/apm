@@ -1,5 +1,19 @@
 "_PACKAGE"
 
+validate_mask_arg <- function(mask) {
+    if (is.null(mask)) return(invisible(NULL))
+    if (!is.list(mask)) stop("cohort_outcomes_to_mask must be a named list")
+    if (length(mask) == 0L) return(invisible(NULL))
+    nms <- names(mask)
+    if (is.null(nms) || any(nms == "")) stop("cohort_outcomes_to_mask must have names = cohort ids (1-based)")
+    for (nm in nms) {
+        v <- mask[[nm]]
+        if (!is.integer(v)) stop("each mask entry must be an integer vector (1-based outcome ids)")
+        if (length(v) > 0L && any(is.na(v) | v <= 0L)) stop("mask outcome ids must be positive integers")
+    }
+    invisible(NULL)
+}
+
 #' Cohort-specific parameter estimation (thin wrapper to Rcpp)
 #'
 #' @param panel UnbalancedPanel instance
@@ -20,12 +34,16 @@
 #' @param bootstrap optional WeightedBootstrap
 #' @param num_threads integer number of threads (default 1L). If NULL, uses the
 #'   core default (serial or TBB default, depending on build).
+#' @param cohort_outcomes_to_mask named list: names are cohort ids (1-based); each value is an
+#'   integer vector of 1-based outcome ids to mask in that cohort.
 #' @return list with:
 #'   - cohort_specific_factor_ests: named list over spec keys; each is a list over cohorts of FactorModelEstimates
 #'   - cohort_outcome_means: list over cohorts of OutcomeMeanSuffStatEstimates
 #'   - cohort_weights: named list over spec keys of CohortWeightEstimates
+#'   - optionally masked_observed_outcome_indices, masked_cohort_outcome_means when masking is used
 #' @export
-est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_threads = 1L) {
+est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_threads = 1L,
+                                       cohort_outcomes_to_mask = NULL) {
     stopifnot(inherits(panel, "UnbalancedPanel"))
     if (!is.list(est_specs) || length(est_specs) == 0L) stop("est_specs must be a non-empty list")
     if (!is.null(bootstrap) && !inherits(bootstrap, "WeightedBootstrap")) stop("bootstrap must be a WeightedBootstrap or NULL")
@@ -45,9 +63,9 @@ est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_t
     covar_cols <- panel$get_covar_cols()
     auxiliary_cols <- panel$get_auxiliary_cols()
 
-    xp <- if (is.null(bootstrap)) NULL else bootstrap$.__enclos_env__$private$xp
+    validate_mask_arg(cohort_outcomes_to_mask)
 
-    # If num_threads is NULL, pass NULL so that the C++ binding omits the argument
+    xp <- if (is.null(bootstrap)) NULL else bootstrap$.__enclos_env__$private$xp
     nt <- if (is.null(num_threads)) NULL else as.integer(num_threads)
 
     res <- est_cohort_specific_params_from_panel_cpp(
@@ -58,7 +76,8 @@ est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_t
         auxiliary_cols = auxiliary_cols,
         est_specs = est_specs,
         bootstrap_xptr = xp,
-        num_threads_in = nt
+        num_threads_in = nt,
+        cohort_outcomes_to_mask = cohort_outcomes_to_mask
     )
 
     wrapped_factor <- lapply(res$cohort_specific_factor_ests, function(lst) {
@@ -72,6 +91,12 @@ est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_t
         cohort_outcome_means = wrapped_oms,
         cohort_weights = wrapped_weights
     )
+    if ("masked_observed_outcome_indices" %in% names(res)) {
+        out$masked_observed_outcome_indices <- res$masked_observed_outcome_indices
+    }
+    if ("masked_cohort_outcome_means" %in% names(res)) {
+        out$masked_cohort_outcome_means <- res$masked_cohort_outcome_means
+    }
     if ("cohort_auxiliary_means" %in% names(res)) {
         wrapped_aux <- lapply(res$cohort_auxiliary_means, function(xp) CohortAuxiliaryDataMeanEstimates$new(xp))
         out$cohort_auxiliary_means <- wrapped_aux

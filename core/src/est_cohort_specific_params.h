@@ -65,11 +65,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
     const ObservedOutcomeIndices& observed_outcome_indices, // 0-based per cohort, index with cohort_id
     std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
-#ifdef APM_HAS_TBB
-    std::size_t num_threads = oneapi::tbb::info::default_concurrency(),
-#else
-    std::size_t num_threads = 1,
-#endif
+    std::optional<std::size_t> num_threads = std::nullopt,
     const CohortOutcomeMask& cohort_outcomes_to_mask = CohortOutcomeMask()
 );
 

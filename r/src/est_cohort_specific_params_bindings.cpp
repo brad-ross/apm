@@ -50,6 +50,28 @@ to_cpp_specs(const Rcpp::List& est_specs_r) {
 
 // (removed) ordered_spec_names: we now source names from the result maps
 
+// Convert mask R list (names = cohort ids 1-based, values = integer vectors 1-based outcomes) to C++ 0-based
+static apm::CohortOutcomeMask to_cpp_mask(Rcpp::Nullable<Rcpp::List> mask_in) {
+    apm::CohortOutcomeMask out;
+    if (mask_in.isNull()) return out;
+    Rcpp::List L(mask_in);
+    if (L.size() == 0) return out;
+    Rcpp::CharacterVector nms = Rcpp::as<Rcpp::CharacterVector>(L.names());
+    for (int i = 0; i < L.size(); ++i) {
+        std::string s = Rcpp::as<std::string>(nms[i]);
+        int cohort1 = std::stoi(s);
+        int cohort0 = cohort1 - 1;
+        Rcpp::IntegerVector v = L[i];
+        arma::uvec vv(static_cast<arma::uword>(v.size()));
+        for (int j = 0; j < v.size(); ++j) {
+            if (Rcpp::IntegerVector::is_na(v[j]) || v[j] <= 0) Rcpp::stop("mask outcome ids must be positive integers");
+            vv[static_cast<arma::uword>(j)] = static_cast<arma::uword>(v[j] - 1);
+        }
+        out.emplace(cohort0, std::move(vv));
+    }
+    return out;
+}
+
 // Extract 1-based index columns and y from processed_panel and return 0-based vectors and y pointer
 struct PanelRawColumns {
     std::vector<int> unit_idx0;
@@ -206,6 +228,27 @@ static Rcpp::List build_return_list(apm::CohortSpecificEstimates&& ests) {
     if (has_aux_means) {
         res.push_back(out_aux, "cohort_auxiliary_means");
     }
+    // Attach masked fields if present
+    if (ests.masked_observed_outcome_indices.has_value()) {
+        res.push_back(apm::r_utils::to_r_observed_outcome_indices(*ests.masked_observed_outcome_indices),
+                      "masked_observed_outcome_indices");
+    }
+    if (!ests.masked_cohort_outcome_means.empty()) {
+        Rcpp::List masked_means(ests.masked_cohort_outcome_means.size());
+        Rcpp::CharacterVector keys(ests.masked_cohort_outcome_means.size());
+        int i = 0;
+        for (const auto& kv : ests.masked_cohort_outcome_means) {
+            int cohort1 = kv.first + 1;
+            const auto& s = kv.second;
+            Rcpp::NumericVector mu(s.observed_outcome_means.n_elem);
+            for (arma::uword k = 0; k < s.observed_outcome_means.n_elem; ++k) mu[k] = s.observed_outcome_means[k];
+            masked_means[i] = mu;
+            keys[i] = std::to_string(cohort1);
+            ++i;
+        }
+        masked_means.attr("names") = keys;
+        res.push_back(masked_means, "masked_cohort_outcome_means");
+    }
     return res;
 }
 
@@ -217,7 +260,8 @@ Rcpp::List est_cohort_specific_params_from_panel_cpp(Rcpp::DataFrame processed_p
                                                     Rcpp::CharacterVector auxiliary_cols,
                                                     Rcpp::List est_specs,
                                                     SEXP bootstrap_xptr = R_NilValue,
-                                                    Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue) {
+                                                    Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue,
+                                                    Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue) {
     // Extract columns and pointers
     PanelRawColumns cols = extract_panel_columns_0b(processed_panel, outcome_value_col);
     CovariateColumns covs = extract_covariate_columns(processed_panel, covar_cols, cols.n_rows);
@@ -229,36 +273,24 @@ Rcpp::List est_cohort_specific_params_from_panel_cpp(Rcpp::DataFrame processed_p
     auto wb = apm::r_utils::xp_to_const_wb_shared(bootstrap_xptr);
     auto [has_threads, nt] = resolve_num_threads(num_threads_in);
 
-    // Call core
-    apm::CohortSpecificEstimates ests;
-    if (has_threads) {
-        ests = apm::estimate_cohort_specific_params_from_raw(
-            cols.unit_ptr,
-            cols.cohort_ptr,
-            cols.outcome_ptr,
-            cols.y_ptr,
-            covs.ptrs,
-            auxs.ptrs,
-            cols.n_rows,
-            cpp_specs,
-            obs_idx_0b,
-            wb,
-            nt
-        );
-    } else {
-        ests = apm::estimate_cohort_specific_params_from_raw(
-            cols.unit_ptr,
-            cols.cohort_ptr,
-            cols.outcome_ptr,
-            cols.y_ptr,
-            covs.ptrs,
-            auxs.ptrs,
-            cols.n_rows,
-            cpp_specs,
-            obs_idx_0b,
-            wb
-        );
-    }
+    apm::CohortOutcomeMask mask = to_cpp_mask(cohort_outcomes_to_mask_in);
+
+    // Call core with optional num_threads (NULL -> std::nullopt)
+    std::optional<std::size_t> nt_opt = has_threads ? std::optional<std::size_t>(nt) : std::nullopt;
+    apm::CohortSpecificEstimates ests = apm::estimate_cohort_specific_params_from_raw(
+        cols.unit_ptr,
+        cols.cohort_ptr,
+        cols.outcome_ptr,
+        cols.y_ptr,
+        covs.ptrs,
+        auxs.ptrs,
+        cols.n_rows,
+        cpp_specs,
+        obs_idx_0b,
+        wb,
+        nt_opt,
+        mask
+    );
 
     return build_return_list(std::move(ests));
 }

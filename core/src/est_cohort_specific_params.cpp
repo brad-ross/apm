@@ -376,20 +376,23 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
     const ObservedOutcomeIndices& observed_outcome_indices,
     std::shared_ptr<const WeightedBootstrap> bootstrap,
-    std::size_t num_threads,
+    std::optional<std::size_t> num_threads,
     const CohortOutcomeMask& cohort_outcomes_to_mask)
 {
     const std::size_t q = covar_cols.size();
     const std::size_t d = auxiliary_cols.size();
 
 #ifdef APM_HAS_TBB
+    std::size_t nt = num_threads.has_value() ? *num_threads : oneapi::tbb::info::default_concurrency();
     std::unique_ptr<oneapi::tbb::global_control> tbb_gc;
-    if (num_threads > 1) {
+    if (nt > 1) {
         tbb_gc = std::make_unique<oneapi::tbb::global_control>(
             oneapi::tbb::global_control::max_allowed_parallelism,
-            static_cast<std::size_t>(num_threads)
+            static_cast<std::size_t>(nt)
         );
     }
+#else
+    std::size_t nt = num_threads.has_value() ? *num_threads : 1;
 #endif
 
     // Determine effective observed outcome indices after optional masking
@@ -517,7 +520,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
 
     // Parallelize across cohorts if requested; otherwise use serial loop
 #ifdef APM_HAS_TBB
-    if (num_threads <= 1) {
+    if (nt <= 1) {
         for (std::size_t cidx = 0; cidx < C; ++cidx) {
             process_cohort(cidx);
         }
