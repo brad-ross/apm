@@ -291,6 +291,54 @@ test_that("cohort weights with bootstrap: equal vs by_size behave as expected", 
 })
 
 
+test_that("masking drops outcome and returns correct masked mean", {
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3)
+    units_by_cohort <- make_units_by_cohort(3, 2)
+
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort,
+                                                include_covariates = FALSE, r = 2L)
+    panel <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 2,
+        min_cohort_size = 1
+    )
+
+    est_specs <- list(pc = list(factor_model_estimator = "principal_components",
+                                include_outcome_fes = FALSE, r = 2L))
+
+    # Mask outcome 5 for cohort 3 (1-based)
+    res <- est_cohort_specific_params(panel, est_specs, cohort_outcomes_to_mask = list("3" = 5L))
+
+    # Masked observed outcome indices present and cohort 3 drops 5 -> remains {3,4}
+    expect_true("masked_observed_outcome_indices" %in% names(res))
+    moi <- res$masked_observed_outcome_indices
+    expect_equal(length(moi), length(cohort_indices))
+    expect_equal(as.integer(moi[[3]]), c(3L, 4L))
+
+    # Factor dims: cohort 3 loses one observed row; cohorts 1 and 2 unchanged
+    f_pc <- res$cohort_specific_factor_ests[["pc"]]
+    expect_equal(nrow(f_pc[[1]]$G()), length(cohort_indices[[1]]))
+    expect_equal(nrow(f_pc[[2]]$G()), length(cohort_indices[[2]]))
+    expect_equal(nrow(f_pc[[3]]$G()), length(cohort_indices[[3]]) - 1L)
+
+    # Masked means: for cohort 3, outcome 5 mean equals empirical mean from processed panel
+    expect_true("masked_cohort_outcome_means" %in% names(res))
+    mm <- res$masked_cohort_outcome_means[["3"]]
+    expect_true(is.numeric(mm))
+    expect_equal(length(mm), 1L)
+
+    pp <- panel$get_processed_panel()
+    sub <- pp[cohort_id == 3 & outcome_idx == 5]
+    expect_true(nrow(sub) > 0)
+    exp_mean <- mean(sub$y)
+    expect_equal(as.numeric(mm[1]), exp_mean, tolerance = 1e-12)
+})
+
+
 test_that("auxiliary means: dimensions and values without covariates", {
     T <- 5
     outcomes <- make_outcomes(T)
