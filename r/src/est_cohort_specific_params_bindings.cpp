@@ -1,8 +1,12 @@
 #include <RcppArmadillo.h>
 #include <set>
 #include <algorithm>
+#include <utility>
+#include <unordered_map>
+#include <string>
+#include <vector>
+#include <cstddef>
 #include "../../core/src/est_cohort_specific_params.h"
-#include "../../core/src/apm_core.h"
 #include "r_utils.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]

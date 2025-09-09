@@ -3,9 +3,13 @@
 #include <limits>
 #include <unordered_set>
 #ifdef APM_HAS_TBB
+#include <oneapi/tbb/info.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/global_control.h>
 #endif
+#include "factor_model_estimators/FactorModelEstimator.h"
+#include "factor_model_estimators/pc_estimators.h"
+#include "OutcomeMeanSuffStatEstimator.h"
 #include "nuisance_param_estimators.h"
 
 namespace apm {

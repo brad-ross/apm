@@ -2,31 +2,19 @@
 #ifndef APM_EST_COHORT_SPECIFIC_PARAMS_H
 #define APM_EST_COHORT_SPECIFIC_PARAMS_H
 
-#ifdef USING_R
-#include <RcppArmadillo.h>
-#else
-#include <armadillo>
-#endif
-#ifdef APM_HAS_TBB
-#include <oneapi/tbb/info.h>
-#endif
-
 #include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
-#include "apm_core.h"                 // ObservedOutcomeIndices
-#include "bootstrap.h"
-#include "factor_model_estimators/FactorModelEstimator.h"
-#include "factor_model_estimators/pc_estimators.h"
+#include "utils.h"                    // ObservedOutcomeIndices, CohortOutcomeMask
 #include "cohort_specific_param_structs.h"
-#include "OutcomeMeanSuffStatEstimator.h"
 
 namespace apm {
+
+class WeightedBootstrap; // forward declaration
 
 struct EstimatorSpecification {
     std::string factor_model_estimator; // e.g., "principal_components"
