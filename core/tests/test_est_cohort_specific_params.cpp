@@ -428,3 +428,70 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_WithBootstrapReplicatesExist) {
 }
 
 
+TEST(CohortSpecificRawTest, Masking_LastCohort_Outcome5) {
+    PanelCtx ctx = make_ctx();
+    // Raw panel with observed outcomes only (q=0)
+    RawPanel rp = make_raw(ctx, /*with_covars=*/false);
+
+    // Estimator spec: principal components without fixed effects
+    std::unordered_map<std::string, apm::EstimatorSpecification> specs;
+    specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, ctx.r});
+
+    // Build mask: for last cohort (index 2), mask outcome 4 (0-based; i.e., outcome 5 in 1-based)
+    apm::CohortOutcomeMask mask;
+    mask.emplace(2, arma::uvec{4});
+
+    // Estimate with mask provided (bootstrap omitted, num_threads set to 1 explicitly)
+    std::vector<const double*> covar_cols; // q=0
+    std::vector<const double*> auxiliary_cols; // d=0
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices,
+        /*bootstrap=*/nullptr, /*num_threads=*/1, /*mask=*/mask);
+
+    // 1) Remaining cohort-specific factor estimates are correct (up to rotation):
+    const auto& pca_vec = out.cohort_specific_factor_ests.at("pca");
+    ASSERT_EQ(pca_vec.size(), ctx.C);
+
+    // Cohort 0 and 1 unchanged
+    {
+        const auto& est0 = pca_vec[0].parameter_estimates;
+        expect_same_subspace(est0.G, ctx.cohort_G_list[0]);
+        const auto& est1 = pca_vec[1].parameter_estimates;
+        expect_same_subspace(est1.G, ctx.cohort_G_list[1]);
+    }
+
+    // Cohort 2 should drop the last observed outcome (index 4), so true factors are rows {0,1} of cohort_G_list[2]
+    {
+        const auto& est2 = pca_vec[2].parameter_estimates;
+        ASSERT_EQ(est2.G.n_rows, 2u); // originally 3 observed, now 2 after masking
+        arma::mat G_true_masked = ctx.cohort_G_list[2].rows(0, 1);
+        expect_same_subspace(est2.G, G_true_masked);
+    }
+
+    // 2) Masked outcome mean is estimated correctly for cohort 2, outcome 4
+    ASSERT_TRUE(out.masked_observed_outcome_indices.has_value());
+    const auto& ooi_eff = *(out.masked_observed_outcome_indices);
+    ASSERT_EQ(ooi_eff[2].n_elem, 2u);
+    EXPECT_EQ(static_cast<int>(ooi_eff[2][0]), 2);
+    EXPECT_EQ(static_cast<int>(ooi_eff[2][1]), 3);
+
+    // Compute expected mean of outcome 4 among units in cohort 2 from raw panel
+    double sum_y = 0.0; std::size_t count = 0;
+    for (std::size_t i = 0; i < rp.y.size(); ++i) {
+        if (rp.cohort_id[i] == 2 && rp.outcome_idx[i] == 4) {
+            sum_y += rp.y[i];
+            ++count;
+        }
+    }
+    ASSERT_GT(count, 0u);
+    double expected_mean = sum_y / static_cast<double>(count);
+
+    // Retrieve masked sufficient statistics for cohort 2
+    auto it = out.masked_cohort_outcome_means.find(2);
+    ASSERT_TRUE(it != out.masked_cohort_outcome_means.end());
+    const apm::OutcomeMeanSufficientStatistics& masked_stats = it->second;
+    ASSERT_EQ(masked_stats.observed_outcome_means.n_elem, 1u);
+    EXPECT_NEAR(masked_stats.observed_outcome_means[0], expected_mean, 1e-12);
+}
+
