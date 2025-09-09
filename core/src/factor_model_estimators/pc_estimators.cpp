@@ -35,7 +35,6 @@ void PCBase::add_data_(const arma::uvec& unit_idxs,
     // Update bootstrap-specific aggregates if present
     const std::size_t B = num_bootstraps();
     if (B > 0) {
-        const std::size_t Tc = T_c();
         for (std::size_t b = 0; b < B; ++b) {
             const arma::uword bu = static_cast<arma::uword>(b);
             arma::vec w_b = boot_weights_for_indices(unit_idxs, b); // length batch_N

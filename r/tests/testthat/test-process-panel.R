@@ -2,64 +2,27 @@ context("Testing functions used to process raw panel data")
 
 library(data.table)
 
-# Test helpers to avoid repetition ------------------------------------------------
-build_panel_from_indices <- function(outcomes, cohort_indices, units_by_cohort) {
-    rbindlist(lapply(seq_along(cohort_indices), function(k) {
-        idx <- cohort_indices[[k]]
-        unit_ids <- units_by_cohort[[k]]
-        rbindlist(lapply(unit_ids, function(u) {
-            data.table(unit_id = u, outcome_id = outcomes[idx])
-        }))
-    }))
-}
-
-build_expected_unit_map <- function(units_by_cohort) {
-    rbindlist(mapply(function(units, cid) {
-        data.table(unit_id = units, cohort_id = cid)
-    }, units_by_cohort, seq_along(units_by_cohort), SIMPLIFY = FALSE))
-}
-
-build_expected_processed_panel <- function(cohort_indices, units_by_cohort) {
-    rbindlist(lapply(seq_along(cohort_indices), function(cid) {
-        idxs <- cohort_indices[[cid]]
-        rbindlist(lapply(units_by_cohort[[cid]], function(u) {
-            data.table(
-                unit_id = u,
-                cohort_id = cid,
-                outcome_idx = idxs,
-                y = idxs
-            )
-        }))
-    }))
-}
+# Shared helpers are defined in helper-test-utils.R
 
 test_that("staircase missingness with two units per cohort (matching core test)", {
     # Outcomes and units
-    outcomes <- c("A", "B", "C", "D", "E")
+    outcomes <- make_outcomes(5)
 
     # Define cohorts as staircase matching core test indices (1-based):
-    # {1,2,3}, {2,3,4}, {3,4,5}
-    cohort_indices <- list(
-        1:3,
-        2:4,
-        3:5
-    )
+    cohort_indices <- make_staircase_observed_indices(5, 3)
 
     # Two units per cohort
-    units_by_cohort <- list(
-        c("u1", "u2"),
-        c("u3", "u4"),
-        c("u5", "u6")
-    )
+    units_by_cohort <- make_units_by_cohort(3, 2)
 
-    # Build panel as data.table of (unit_id, outcome_id)
-    panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort)
+    # Build panel with full outcome grid, NA y for unobserved, and covariates
+    panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE)
 
     # Call function under test
     res <- construct_cohorts_from_panel(
         panel_df = panel_dt,
         unit_id_col = "unit_id",
         outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
         model_rank = 2,
         min_cohort_size = 2,
         cohort_observed_outcomes_as_df = FALSE
@@ -87,17 +50,12 @@ test_that("staircase missingness with two units per cohort (matching core test)"
 
 test_that("UnbalancedPanel initializes and processes panel correctly", {
     # Outcomes and units (staircase pattern like existing tests)
-    outcomes <- c("A", "B", "C", "D", "E")
-    cohort_indices <- list(1:3, 2:4, 3:5)
-    units_by_cohort <- list(
-        c("u1", "u2"),
-        c("u3", "u4"),
-        c("u5", "u6")
-    )
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3)
+    units_by_cohort <- make_units_by_cohort(3, 2)
 
-    # Build panel with value column 'y' = match(outcome_id, outcomes)
-    panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort)
-    panel_dt[, y := match(outcome_id, outcomes)]
+    # Build panel with full outcome grid, NA y for unobserved, and covariates
+    panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE)
 
     # Construct object
     obj <- UnbalancedPanel$new(
@@ -105,6 +63,7 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
         unit_id_col = "unit_id",
         outcome_id_col = "outcome_id",
         outcome_value_col = "y",
+        covar_cols = c("cov1", "cov2"),
         model_rank = 2,
         min_cohort_size = 2
     )
@@ -133,7 +92,7 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
     # processed_panel should be correctly joined, indexed, and sorted
     pp <- obj$get_processed_panel()
     expect_true(is.data.table(pp))
-    expect_equal(names(pp), c("unit_idx", "cohort_id", "outcome_idx", "y"))
+    expect_equal(names(pp), c("unit_idx", "cohort_id", "outcome_idx", "y", "cov1", "cov2"))
 
     # Check ordering: cohort_id, unit_idx, outcome_idx
     pp_copy <- copy(pp)
@@ -141,7 +100,49 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
     expect_equal(pp, pp_copy)
 
     # Build expected processed panel
-    expected_pp0 <- build_expected_processed_panel(cohort_indices, units_by_cohort)
+    expected_pp0 <- build_expected_processed_panel(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE)
+    unit_names <- sort(unique(unlist(units_by_cohort)))
+    expected_pp0[, unit_idx := match(unit_id, unit_names)]
+    expected_pp <- expected_pp0[, .(unit_idx, cohort_id, outcome_idx, y, cov1, cov2)]
+    setorder(expected_pp, cohort_id, unit_idx, outcome_idx)
+
+    expect_equal(pp, expected_pp)
+})
+
+test_that("UnbalancedPanel works without covariates provided", {
+    # Outcomes and units (staircase pattern)
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3)
+    units_by_cohort <- make_units_by_cohort(3, 2)
+
+    # Build panel with full outcome grid, NA y for unobserved, and covariates (which we won't pass)
+    panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE)
+
+    # Construct object without covariates
+    obj <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 2,
+        min_cohort_size = 2
+    )
+
+    # covar_cols should be empty
+    expect_equal(obj$get_covar_cols(), character(0))
+
+    # outcome_ids and observed_outcome_indices as expected
+    expect_equal(obj$get_outcome_ids(), outcomes)
+    expected_indices <- lapply(cohort_indices, as.integer)
+    expect_equal(obj$get_observed_outcome_indices(), expected_indices)
+
+    # processed panel should not include covariate columns
+    pp <- obj$get_processed_panel()
+    expect_true(is.data.table(pp))
+    expect_equal(names(pp), c("unit_idx", "cohort_id", "outcome_idx", "y"))
+
+    # Build expected processed panel without covariates
+    expected_pp0 <- build_expected_processed_panel(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE)
     unit_names <- sort(unique(unlist(units_by_cohort)))
     expected_pp0[, unit_idx := match(unit_id, unit_names)]
     expected_pp <- expected_pp0[, .(unit_idx, cohort_id, outcome_idx, y)]
@@ -167,19 +168,14 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         c("u5")         # single unit -> should be dropped
     )
 
-    panel_dt <- rbindlist(lapply(seq_along(cohort_indices), function(k) {
-        idx <- cohort_indices[[k]]
-        unit_ids <- units_by_cohort[[k]]
-        rbindlist(lapply(unit_ids, function(u) {
-            data.table(unit_id = u, outcome_id = outcomes[idx])
-        }))
-    }))
+    panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort)
 
     # Case 1: Drop by size only (third cohort has 1 unit but 1 outcome; rank threshold met/not relevant)
     res <- construct_cohorts_from_panel(
         panel_df = panel_dt,
         unit_id_col = "unit_id",
         outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
         model_rank = 1,         # only require at least 1 outcome
         min_cohort_size = 2,    # require at least 2 units per cohort
         cohort_observed_outcomes_as_df = FALSE
@@ -211,18 +207,13 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         c("u5", "u6")  # now two units in last cohort
     )
 
-    panel_dt_rank <- rbindlist(lapply(seq_along(cohort_indices), function(k) {
-        idx <- cohort_indices[[k]]
-        unit_ids <- units_by_cohort_rank[[k]]
-        rbindlist(lapply(unit_ids, function(u) {
-            data.table(unit_id = u, outcome_id = outcomes[idx])
-        }))
-    }))
+    panel_dt_rank <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort_rank, include_covariates = FALSE)
 
     res_rank <- construct_cohorts_from_panel(
         panel_df = panel_dt_rank,
         unit_id_col = "unit_id",
         outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
         model_rank = 2,         # now require at least 2 outcomes
         min_cohort_size = 1,    # size condition met for all cohorts
         cohort_observed_outcomes_as_df = FALSE
@@ -289,8 +280,8 @@ test_that("validate_required_panel_cols enforces required columns", {
 
 
 test_that("construct_cohort_observed_outcomes_df builds long-form mapping", {
-    outcomes <- c("A", "B", "C", "D", "E")
-    cohort_indices <- list(1:3, 2:4, 3:5)
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3)
 
     res_df <- apm:::construct_cohort_observed_outcomes_df(
         outcome_ids = outcomes,

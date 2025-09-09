@@ -15,6 +15,9 @@ find_package(Boost REQUIRED COMPONENTS graph)
 # Find Arrow using system installation (Homebrew)
 find_package(Arrow REQUIRED)
 
+# Find oneTBB for parallelization (optional; Homebrew installs TBBConfig.cmake)
+find_package(TBB CONFIG QUIET COMPONENTS tbb)
+
 # Arrow found successfully
 
 # Create the core library
@@ -22,8 +25,13 @@ add_library(apm
     src/apm_core.cpp
     src/linear_algebra_utils.cpp
     src/bootstrap.cpp
+    # factor_model_parameter_structs is header-only now
     src/factor_model_estimators/FactorModelEstimator.cpp
     src/factor_model_estimators/pc_estimators.cpp
+    src/OutcomeMeanSuffStatEstimator.cpp
+    src/nuisance_param_estimators.cpp
+    src/est_cohort_specific_params.cpp
+    src/utils.cpp
 )
 target_include_directories(apm PUBLIC src)
 
@@ -34,6 +42,14 @@ target_link_libraries(apm
         Boost::graph
         Arrow::arrow_shared
 )
+
+if(TARGET TBB::tbb)
+    message(STATUS "oneTBB found; building with parallel cohort loop")
+    target_link_libraries(apm PUBLIC TBB::tbb)
+    target_compile_definitions(apm PUBLIC APM_HAS_TBB=1)
+else()
+    message(STATUS "oneTBB NOT found; building with serial cohort loop")
+endif()
 
 # Explicitly link Acero and Compute libraries (needed for Homebrew Arrow)
 find_library(ARROW_ACERO_LIB NAMES arrow_acero libarrow_acero)
@@ -81,6 +97,6 @@ install(TARGETS apm
     RUNTIME DESTINATION bin
 )
 
-install(FILES src/apm_core.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/factor_model_parameter_structs.h
+install(FILES src/apm_core.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/cohort_specific_param_structs.h src/OutcomeMeanSuffStatEstimator.h src/nuisance_param_estimators.h src/est_cohort_specific_params.h src/utils.h
     DESTINATION include/apm
 ) 

@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 #include <set>
+#include "cohort_specific_param_structs.h"
+#include "utils.h"
 
 namespace apm {
 
@@ -24,68 +26,21 @@ std::string get_version();
 //==============================================================================
 
 /**
- * @brief Computes an aligned matrix of factor vectors from cohort-specific ones.
+ * @brief Computes an aligned matrix of factor vectors from cohort-specific ones (optionally weighted).
  *
- * This function constructs an Aggregated Projection Matrix from cohort-specific data and 
- * then returns an orthonormal basis for the null space of this matrix, which 
- * also serves as a basis for the column space of the matrix whose rows are the 
- * factor vectors corresponding to each outcome.
+ * Constructs the Aggregated Projection Matrix (APM) from cohort-specific factor matrices
+ * and returns an orthonormal basis for its null space. If cohort_weights is omitted or
+ * empty, equal weights are used across cohorts.
  *
- * @param cohort_factor_matrices A vector of matrices, one for each cohort, 
- * where the rows of the matrix corresponding to a given cohort contain the factor vectors corresponding to the observed outcomes for that cohort.
- * Each matrix must have the same number of columns equal to the rank 
- * of the factor model.
- * @param observed_outcome_indices A vector of the same length as cohort_factor_matrices.
- *                                 Each element is a vector of indices indicating
- *                                 which outcomes were observed for the
- *                                 corresponding cohort. The number of indices
- *                                 must match the number of rows in the cohort's
- *                                 factor matrix.
- * @return A matrix whose columns form an orthonormal basis for the null space
- *         of the aggregated projection matrix.
+ * @param cohort_factor_matrices A vector of matrices, one for each cohort.
+ * @param observed_outcome_indices Observed outcomes per cohort (0-based indices).
+ * @param cohort_weights Optional weights per cohort; scaled to sum to one if provided.
+ * @return A matrix whose columns form an orthonormal basis for the null space of the APM.
  */
 arma::mat align_factors_using_apm(
     const std::vector<arma::mat>& cohort_factor_matrices,
-    const std::vector<arma::uvec>& observed_outcome_indices);
-
-/**
- * @brief Computes an aligned matrix of factor vectors from cohort-specific ones using cohort-specific weights.
- *
- * This function constructs an Aggregated Projection Matrix (APM) from cohort-specific 
- * factor matrices and then returns an orthonormal basis for the null space of the APM, 
- * which also serves as a basis for the column space of the matrix whose rows are the 
- * factor vectors corresponding to each outcome.
- *
- * @param cohort_factor_matrices A vector of matrices, one for each cohort, 
- * where the rows of the matrix corresponding to a given cohort contain the factor vectors corresponding to the observed outcomes for that cohort.
- * Each matrix must have the same number of columns equal to the rank 
- * of the factor model.
- * @param observed_outcome_indices A vector of the same length as cohort_factor_matrices.
- *                                 Each element is a vector of indices indicating
- *                                 which outcomes were observed for the
- *                                 corresponding cohort. The number of indices
- *                                 must match the number of rows in the cohort's
- *                                 factor matrix.
- * @param cohort_weights A vector of weights for each cohort. The weights are scaled to sum to one.
- * @return A matrix whose columns form an orthonormal basis for the null space
- *         of the aggregated projection matrix.
- */
-arma::mat align_factors_using_apm(
-    const std::vector<arma::mat>& cohort_factor_matrices,
-    const std::vector<arma::uvec>& observed_outcome_indices,
-    const arma::vec& cohort_weights);
-
-/**
- * @brief Aggregates cohort-specific covariate coefficient estimates.
- *
- * This function takes a vector of cohort-specific covariate coefficient estimates
- * and returns their average.
- *
- * @param a_c_vec A vector of arma::vec, where each vector contains cohort-specific
- *                covariate coefficient estimates.
- * @return An arma::vec containing the aggregated covariate coefficient estimates.
- */
-arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>& a_c_vec);
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::vec& cohort_weights = arma::vec());
 
 /**
  * @brief Aggregates cohort-specific outcome fixed effect estimates.
@@ -101,7 +56,53 @@ arma::vec aggregate_cohort_specific_covariate_coefs(const std::vector<arma::vec>
  */
 arma::vec aggregate_cohort_specific_outcome_fes(
     const std::vector<arma::vec>& g_0_c_vec,
-    const std::vector<arma::uvec>& observed_outcome_indices);
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::vec& cohort_weights = arma::vec());
+
+/**
+ * @brief Aggregates cohort-specific covariate coefficient estimates.
+ *
+ * This function takes a vector of cohort-specific covariate coefficient estimates
+ * and returns their (optionally weighted) average.
+ *
+ * @param a_c_vec A vector of arma::vec, where each vector contains cohort-specific
+ *                covariate coefficient estimates.
+ * @return An arma::vec containing the aggregated covariate coefficient estimates.
+ */
+arma::vec aggregate_cohort_specific_covariate_coefs(
+    const std::vector<arma::vec>& a_c_vec,
+    const arma::vec& cohort_weights = arma::vec());
+
+/**
+ * @brief Aggregate cohort-specific parameter estimates into a unified set.
+ *
+ * Given per-cohort FactorModelParameters and observed outcome indices, aligns
+ * factor matrices across cohorts and aggregates optional fixed effects and
+ * covariate coefficients when present for all cohorts.
+ *
+ * @param cohort_specific_factor_model_params Vector of per-cohort parameters.
+ * @param observed_outcome_indices Observed outcome indices per cohort (0-based).
+ * @param cohort_weights Optional cohort weights; scaled to sum to one if provided.
+ * @return Aggregated FactorModelParameters (G and optional g_0, a).
+ */
+FactorModelParameters aggregate_cohort_specific_factor_model_params(
+    const std::vector<FactorModelParameters>& cohort_specific_factor_model_params,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::vec& cohort_weights = arma::vec());
+
+/**
+ * @brief Aggregate cohort-specific parameter estimates including bootstrap replicates.
+ *
+ * Aggregates point estimates and each bootstrap replicate independently using
+ * optional weights (and optional per-bootstrap weights), returning a
+ * FactorModelEstimates containing aggregated point estimates and aggregated
+ * bootstrap replicates.
+ */
+FactorModelEstimates aggregate_cohort_specific_factor_model_params(
+    const std::vector<FactorModelEstimates>& cohort_specific_factor_model_param_ests,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::vec& cohort_weights = arma::vec(),
+    const std::vector<arma::vec>& bootstrap_cohort_weights = {});
 
 //==============================================================================
 // Outcome Imputation
@@ -167,6 +168,29 @@ arma::vec impute_outcomes(
     const arma::uvec& T_c,
     const arma::vec& m_c);
 
+/**
+ * @brief Estimates outcomes using factor model parameters and sufficient statistics.
+ *
+ * Chooses the appropriate imputation routine based on the presence of outcome
+ * fixed effects (g_0) and/or covariate coefficients (a) in
+ * `apm::FactorModelParameters` (defined in `factor_model_parameter_structs.h`),
+ * and the presence of covariate means in
+ * `apm::OutcomeMeanSufficientStatistics` (defined in `factor_model_parameter_structs.h`).
+ * Throws if covariate-related fields are inconsistent between inputs or if
+ * dimensions are incompatible.
+ *
+ * @param factor_model_parameters `apm::FactorModelParameters` containing G (T x r) and optional
+ *                                g_0 (length T) and a (length q).
+ * @param T_c A vector of indices for the observed outcomes for the cohort.
+ * @param outcome_mean_suff_stats `apm::OutcomeMeanSufficientStatistics` with observed_outcome_means
+ *                                (length T_c) and optional covar_means (T x q).
+ * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
+ */
+arma::vec impute_outcomes(
+    const FactorModelParameters& factor_model_parameters,
+    const arma::uvec& T_c,
+    const OutcomeMeanSufficientStatistics& outcome_mean_suff_stats);
+
 //==============================================================================
 // Outcome Mean Estimation Across Cohorts
 //==============================================================================
@@ -185,7 +209,7 @@ arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::vec& a,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec,
     const std::vector<arma::mat>& X_c_vec);
 
@@ -200,7 +224,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec);
 
 /**
@@ -215,7 +239,7 @@ arma::mat estimate_outcome_means_across_cohorts(
 arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
     const arma::vec& a,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec,
     const std::vector<arma::mat>& X_c_vec);
 
@@ -228,8 +252,60 @@ arma::mat estimate_outcome_means_across_cohorts(
  */
 arma::mat estimate_outcome_means_across_cohorts(
     const arma::mat& G,
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec);
+
+/**
+ * @brief Estimates mean outcomes for each cohort using bundled parameters and sufficient statistics.
+ *
+ * Uses `apm::FactorModelParameters` (defined in `factor_model_parameter_structs.h`) and a
+ * vector of `apm::OutcomeMeanSufficientStatistics` (also defined there) to compute cohort
+ * mean outcomes by dispatching to the appropriate imputation routine per cohort.
+ *
+ * @param factor_model_parameters `apm::FactorModelParameters` containing G (T x r) and optional
+ *                                g_0 (length T) and a (length q).
+ * @param observed_outcome_indices A vector where each element is a vector of indices for the
+ *                                 observed outcomes for a cohort.
+ * @param suff_stats_vec A vector of `apm::OutcomeMeanSufficientStatistics`, one per cohort, each
+ *                       with observed_outcome_means (length T_c) and optional covar_means (T x q).
+ * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
+ */
+arma::mat estimate_outcome_means_across_cohorts(
+    const FactorModelParameters& factor_model_parameters,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::vector<OutcomeMeanSufficientStatistics>& suff_stats_vec);
+
+/**
+ * @brief Container for cohort mean outcome estimates with optional bootstrap replicates.
+ */
+struct OutcomeMeansEstimates {
+    arma::mat mean_outcomes;                    // C x T matrix
+    std::vector<arma::mat> bootstrap_replicates; // optional vector of C x T matrices
+
+    OutcomeMeansEstimates(arma::mat point, std::vector<arma::mat> boot = {})
+        : mean_outcomes(std::move(point)), bootstrap_replicates(std::move(boot)) {}
+
+    bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
+};
+
+/**
+ * @brief Estimates cohort mean outcomes using parameter estimates (with optional bootstrap) and
+ *        sufficient statistics estimates (with optional bootstrap).
+ *
+ * Computes point estimates using `apm::FactorModelEstimates::parameter_estimates` and
+ * `apm::OutcomeMeanSuffStatEstimates::suff_stat_estimates` for each cohort. If bootstrap
+ * replicates are present in both inputs, computes mean outcomes for each bootstrap draw using the
+ * corresponding replicate of parameters and sufficient statistics.
+ *
+ * @param factor_model_estimates `apm::FactorModelEstimates` containing point parameters and optional replicates.
+ * @param observed_outcome_indices Observed outcome indices per cohort (0-based).
+ * @param suff_stat_estimates_vec Vector of `apm::OutcomeMeanSuffStatEstimates`, one per cohort.
+ * @return `apm::OutcomeMeansEstimates` containing a C x T point matrix and optional bootstrap matrices.
+ */
+OutcomeMeansEstimates estimate_outcome_means_across_cohorts(
+    const FactorModelEstimates& factor_model_estimates,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::vector<OutcomeMeanSuffStatEstimates>& suff_stat_estimates_vec);
 
 //==============================================================================
 // Identification Verification Via the O^3 Algorithm
@@ -251,7 +327,7 @@ arma::mat estimate_outcome_means_across_cohorts(
  *         corresponding to the original cohorts together forming a super cohort.
  */
 std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     unsigned int r);
 
 /**
@@ -269,7 +345,7 @@ std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
  * @return `true` if the factors are identified, `false` otherwise.
  */
 bool aligned_factors_identified(
-    const std::vector<arma::uvec>& observed_outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
     unsigned int r);
 
 } // namespace apm

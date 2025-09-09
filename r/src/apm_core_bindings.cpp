@@ -44,7 +44,7 @@ arma::mat align_factors_using_apm(
         cpp_factor_matrices.push_back(Rcpp::as<arma::mat>(mat));
     }
 
-    std::vector<arma::uvec> cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+    apm::ObservedOutcomeIndices cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
 
     if (cohort_weights.isNotNull()) {
         arma::vec cpp_cohort_weights = Rcpp::as<arma::vec>(cohort_weights);
@@ -96,7 +96,7 @@ arma::vec aggregate_cohort_specific_outcome_fes(
         cpp_g_0_c_vec.push_back(Rcpp::as<arma::vec>(vec));
     }
 
-    std::vector<arma::uvec> cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+    apm::ObservedOutcomeIndices cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
 
     return apm::aggregate_cohort_specific_outcome_fes(cpp_g_0_c_vec, cpp_observed_outcome_indices);
 } 
@@ -174,7 +174,7 @@ arma::mat estimate_outcome_means_across_cohorts(
     Rcpp::Nullable<Rcpp::NumericVector> a = R_NilValue,
     Rcpp::Nullable<Rcpp::List> X_c_vec = R_NilValue) {
 
-    std::vector<arma::uvec> cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+    apm::ObservedOutcomeIndices cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
 
     std::vector<arma::vec> cpp_m_c_vec;
     for (SEXP vec : m_c_vec) {
@@ -235,7 +235,7 @@ Rcpp::List o3_algorithm(
     Rcpp::List observed_outcome_indices,
     unsigned int r) {
 
-    std::vector<arma::uvec> cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+    apm::ObservedOutcomeIndices cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
 
     auto iterations = apm::o3_algorithm(cpp_observed_outcome_indices, r);
 
