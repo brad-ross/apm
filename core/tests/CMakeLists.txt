@@ -6,6 +6,8 @@ find_package(GTest REQUIRED)
 
 # Create test executable
 add_executable(test_apm
+    test_helpers.cpp
+    test_est_outcome_means.cpp
     test_apm_core.cpp
     test_linear_algebra_utils.cpp
     test_bootstrap.cpp
