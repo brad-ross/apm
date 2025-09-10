@@ -8,6 +8,7 @@
 #endif
 
 #include <vector>
+#include <unordered_map>
 
 #include "cohort_specific_param_structs.h"
 #include "utils.h"
@@ -58,6 +59,18 @@ OutcomeMeansEstimates estimate_outcome_means_across_cohorts(
     const FactorModelEstimates& factor_model_estimates,
     const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<OutcomeMeanSuffStatEstimates>& suff_stat_estimates_vec);
+
+/**
+ * @brief Aggregate factor model estimates per estimator specification.
+ *
+ * Validates keys across maps (symmetric presence) and aggregates per spec by
+ * dispatching to the vector-based overload of
+ * `aggregate_cohort_specific_factor_model_params`.
+ */
+std::unordered_map<std::string, FactorModelEstimates> aggregate_cohort_specific_factor_model_params(
+    const std::unordered_map<std::string, std::vector<FactorModelEstimates>>& cohort_specific_factor_ests,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::unordered_map<std::string, CohortWeightEstimates>& cohort_weights);
 
 } // namespace apm
 

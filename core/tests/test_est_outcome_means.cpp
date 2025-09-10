@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <vector>
+#include <unordered_map>
 #include <stdexcept>
 
 #include "est_outcome_means.h"
@@ -152,6 +153,110 @@ TEST(EstOutcomeMeanTest, AggregateFactorModelParams_WithBootstrap_AllParams) {
         ASSERT_TRUE(arma::approx_equal(*(rep.g_0), g0_true, "absdiff", 1e-12));
         ASSERT_TRUE(rep.a.has_value());
         ASSERT_TRUE(arma::approx_equal(*(rep.a), expected_a, "absdiff", 1e-12));
+    }
+}
+
+
+TEST(EstOutcomeMeanTest, AggregateFactorModelParams_MapOverSpecs_Succeeds) {
+    // Use helpers to construct test data
+    StaircaseData d = make_staircase_data(5, 2, 3);
+    const size_t C = d.observed_outcome_indices.size();
+    const arma::uword r = d.true_factors.n_cols;
+    const arma::uword q = 2;
+    const std::size_t B = 2;
+    std::vector<arma::mat> rotation_matrices = generate_rotation_matrices(C, r);
+
+    std::vector<arma::vec> a_c_vec;
+    std::vector<apm::FactorModelEstimates> cohort_estimates = build_cohort_estimates_all_with_bootstrap(
+        d.true_factors, d.observed_outcome_indices, rotation_matrices, d.g0_true, q, B, a_c_vec);
+
+    // Build two spec maps that share the same per-cohort estimates but use different weights
+    std::unordered_map<std::string, std::vector<apm::FactorModelEstimates>> cohort_specific_factor_ests;
+    cohort_specific_factor_ests.emplace("specA", std::vector<apm::FactorModelEstimates>(cohort_estimates));
+    cohort_specific_factor_ests.emplace("specB", std::vector<apm::FactorModelEstimates>(cohort_estimates));
+
+    std::unordered_map<std::string, apm::CohortWeightEstimates> weight_map;
+
+    // specA: equal weights for point and bootstrap
+    apm::CohortWeightEstimates wA;
+    wA.cohort_weights = arma::vec(C, arma::fill::ones);
+    wA.bootstrap_cohort_weights = std::vector<arma::vec>(B, arma::vec(C, arma::fill::ones));
+    weight_map.emplace("specA", wA);
+
+    // specB: unequal weights for point and bootstrap
+    apm::CohortWeightEstimates wB;
+    arma::vec w_point = {1.0, 2.0, 3.0};
+    wB.cohort_weights = w_point;
+    wB.bootstrap_cohort_weights = std::vector<arma::vec>(B, w_point);
+    weight_map.emplace("specB", wB);
+
+    auto agg_map = apm::aggregate_cohort_specific_factor_model_params(
+        cohort_specific_factor_ests, d.observed_outcome_indices, weight_map);
+
+    ASSERT_EQ(agg_map.size(), 2U);
+
+    // Helper to compute expected weighted mean of a across cohorts
+    auto expected_a_with_weights = [&](const arma::vec& weights) {
+        arma::vec w = weights / arma::sum(weights);
+        arma::vec ea(q, arma::fill::zeros);
+        for (size_t c = 0; c < C; ++c) {
+            ea += a_c_vec[c] * w(static_cast<arma::uword>(c));
+        }
+        return ea;
+    };
+
+    // Validate specA (equal weights)
+    {
+        const auto& agg = agg_map.at("specA");
+        arma::mat proj_aligned = apm::internal::projection_matrix(agg.parameter_estimates.G);
+        arma::mat proj_true = apm::internal::projection_matrix(d.true_factors);
+        ASSERT_TRUE(arma::approx_equal(proj_aligned, proj_true, "absdiff", 1e-9));
+
+        ASSERT_TRUE(agg.parameter_estimates.g_0.has_value());
+        ASSERT_TRUE(arma::approx_equal(*(agg.parameter_estimates.g_0), d.g0_true, "absdiff", 1e-12));
+
+        ASSERT_TRUE(agg.parameter_estimates.a.has_value());
+        arma::vec expected_a = expected_a_with_weights(arma::vec(C, arma::fill::ones));
+        ASSERT_TRUE(arma::approx_equal(*(agg.parameter_estimates.a), expected_a, "absdiff", 1e-12));
+
+        ASSERT_TRUE(agg.has_bootstrap_replicates());
+        ASSERT_EQ(agg.bootstrap_replicates.size(), B);
+        for (std::size_t b = 0; b < B; ++b) {
+            const auto& rep = agg.bootstrap_replicates[b];
+            arma::mat proj_rep = apm::internal::projection_matrix(rep.G);
+            ASSERT_TRUE(arma::approx_equal(proj_rep, proj_true, "absdiff", 1e-9));
+            ASSERT_TRUE(rep.g_0.has_value());
+            ASSERT_TRUE(arma::approx_equal(*(rep.g_0), d.g0_true, "absdiff", 1e-12));
+            ASSERT_TRUE(rep.a.has_value());
+            ASSERT_TRUE(arma::approx_equal(*(rep.a), expected_a, "absdiff", 1e-12));
+        }
+    }
+
+    // Validate specB (unequal weights)
+    {
+        const auto& agg = agg_map.at("specB");
+        arma::mat proj_aligned = apm::internal::projection_matrix(agg.parameter_estimates.G);
+        arma::mat proj_true = apm::internal::projection_matrix(d.true_factors);
+        ASSERT_TRUE(arma::approx_equal(proj_aligned, proj_true, "absdiff", 1e-9));
+
+        ASSERT_TRUE(agg.parameter_estimates.g_0.has_value());
+        ASSERT_TRUE(arma::approx_equal(*(agg.parameter_estimates.g_0), d.g0_true, "absdiff", 1e-12));
+
+        ASSERT_TRUE(agg.parameter_estimates.a.has_value());
+        arma::vec expected_a = expected_a_with_weights(w_point);
+        ASSERT_TRUE(arma::approx_equal(*(agg.parameter_estimates.a), expected_a, "absdiff", 1e-12));
+
+        ASSERT_TRUE(agg.has_bootstrap_replicates());
+        ASSERT_EQ(agg.bootstrap_replicates.size(), B);
+        for (std::size_t b = 0; b < B; ++b) {
+            const auto& rep = agg.bootstrap_replicates[b];
+            arma::mat proj_rep = apm::internal::projection_matrix(rep.G);
+            ASSERT_TRUE(arma::approx_equal(proj_rep, proj_true, "absdiff", 1e-9));
+            ASSERT_TRUE(rep.g_0.has_value());
+            ASSERT_TRUE(arma::approx_equal(*(rep.g_0), d.g0_true, "absdiff", 1e-12));
+            ASSERT_TRUE(rep.a.has_value());
+            ASSERT_TRUE(arma::approx_equal(*(rep.a), expected_a, "absdiff", 1e-12));
+        }
     }
 }
 

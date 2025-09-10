@@ -2,6 +2,9 @@
 #include "apm_core.h"
 
 #include <stdexcept>
+#include <algorithm>
+#include <string>
+#include <set>
 
 namespace apm {
 
@@ -51,6 +54,39 @@ FactorModelEstimates aggregate_cohort_specific_factor_model_params(
     }
 
     return FactorModelEstimates(std::move(agg_point), std::move(agg_bootstrap));
+}
+
+std::unordered_map<std::string, FactorModelEstimates> aggregate_cohort_specific_factor_model_params(
+    const std::unordered_map<std::string, std::vector<FactorModelEstimates>>& cohort_specific_factor_ests,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::unordered_map<std::string, CohortWeightEstimates>& cohort_weights) {
+
+    std::unordered_map<std::string, FactorModelEstimates> out;
+    out.reserve(std::max(cohort_specific_factor_ests.size(), cohort_weights.size()));
+
+    // Build union of keys, mirroring build_return_list pattern
+    std::set<std::string> union_keys;
+    for (const auto& kv : cohort_specific_factor_ests) union_keys.insert(kv.first);
+    for (const auto& kw : cohort_weights) union_keys.insert(kw.first);
+
+    for (const auto& key : union_keys) {
+        auto fit = cohort_specific_factor_ests.find(key);
+        auto wit = cohort_weights.find(key);
+        if (fit == cohort_specific_factor_ests.end()) {
+            throw std::invalid_argument("Spec key present in cohort weights but missing in factor estimates: " + key);
+        }
+        if (wit == cohort_weights.end()) {
+            throw std::invalid_argument("Spec key present in factor estimates but missing in cohort weights: " + key);
+        }
+
+        const auto& ests = fit->second;
+        const auto& weights = wit->second;
+        FactorModelEstimates agg = aggregate_cohort_specific_factor_model_params(
+            ests, observed_outcome_indices, weights);
+        out.emplace(key, std::move(agg));
+    }
+
+    return out;
 }
 
 OutcomeMeansEstimates estimate_outcome_means_across_cohorts(
