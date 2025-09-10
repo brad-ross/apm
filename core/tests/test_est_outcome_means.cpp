@@ -260,4 +260,37 @@ TEST(EstOutcomeMeanTest, AggregateFactorModelParams_MapOverSpecs_Succeeds) {
     }
 }
 
+TEST(EstOutcomeMeanTest, EstimateMeans_MapOverSpecs_Succeeds) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat true_m(data.C, data.T);
+    true_m.row(0) = (data.G * data.l_c[0] + data.X_c_vec[0] * data.a + data.g_0).t();
+    true_m.row(1) = (data.G * data.l_c[1] + data.X_c_vec[1] * data.a + data.g_0).t();
+
+    apm::FactorModelParameters params_point(data.G, data.g_0, data.a);
+
+    const std::size_t B = 2;
+    auto suff_stats_point = make_suff_stats_vec(true_m, data.observed_outcome_indices, data.X_c_vec);
+    auto suff_est_vec = duplicate_bootstrap_suff(suff_stats_point, B);
+
+    apm::FactorModelEstimates param_estimates = duplicate_bootstrap(params_point, B);
+
+    std::unordered_map<std::string, apm::FactorModelEstimates> spec_map;
+    spec_map.emplace("specA", param_estimates);
+    spec_map.emplace("specB", param_estimates);
+
+    auto out_map = apm::estimate_outcome_means_across_cohorts(
+        spec_map, data.observed_outcome_indices, suff_est_vec);
+
+    ASSERT_EQ(out_map.size(), 2U);
+    for (const auto& kv : out_map) {
+        const auto& out = kv.second;
+        ASSERT_TRUE(arma::approx_equal(out.mean_outcomes, true_m, "absdiff", 1e-9));
+        ASSERT_EQ(out.bootstrap_replicates.size(), B);
+        for (std::size_t b = 0; b < B; ++b) {
+            ASSERT_TRUE(arma::approx_equal(out.bootstrap_replicates[b], out.mean_outcomes, "absdiff", 1e-9));
+        }
+    }
+}
+
 

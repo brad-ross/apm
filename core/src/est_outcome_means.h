@@ -16,19 +16,6 @@
 namespace apm {
 
 /**
- * @brief Container for cohort mean outcome estimates with optional bootstrap replicates.
- */
-struct OutcomeMeansEstimates {
-    arma::mat mean_outcomes;                    // C x T matrix
-    std::vector<arma::mat> bootstrap_replicates; // optional vector of C x T matrices
-
-    OutcomeMeansEstimates(arma::mat point, std::vector<arma::mat> boot = {})
-        : mean_outcomes(std::move(point)), bootstrap_replicates(std::move(boot)) {}
-
-    bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
-};
-
-/**
  * @brief Aggregate cohort-specific parameter estimates including bootstrap replicates.
  *
  * Aggregates point estimates and each bootstrap replicate independently using
@@ -40,6 +27,31 @@ FactorModelEstimates aggregate_cohort_specific_factor_model_params(
     const std::vector<FactorModelEstimates>& cohort_specific_factor_model_param_ests,
     const ObservedOutcomeIndices& observed_outcome_indices,
     const CohortWeightEstimates& cohort_weight_estimates = CohortWeightEstimates());
+
+/**
+ * @brief Aggregate factor model estimates per estimator specification.
+ *
+ * Validates keys across maps (symmetric presence) and aggregates per spec by
+ * dispatching to the vector-based overload of
+ * `aggregate_cohort_specific_factor_model_params`.
+ */
+std::unordered_map<std::string, FactorModelEstimates> aggregate_cohort_specific_factor_model_params(
+    const std::unordered_map<std::string, std::vector<FactorModelEstimates>>& cohort_specific_factor_ests,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::unordered_map<std::string, CohortWeightEstimates>& cohort_weights);
+
+/**
+ * @brief Container for cohort mean outcome estimates with optional bootstrap replicates.
+ */
+struct OutcomeMeansEstimates {
+    arma::mat mean_outcomes;                    // C x T matrix
+    std::vector<arma::mat> bootstrap_replicates; // optional vector of C x T matrices
+
+    OutcomeMeansEstimates(arma::mat point, std::vector<arma::mat> boot = {})
+        : mean_outcomes(std::move(point)), bootstrap_replicates(std::move(boot)) {}
+
+    bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
+};
 
 /**
  * @brief Estimates cohort mean outcomes using parameter estimates (with optional bootstrap) and
@@ -61,19 +73,16 @@ OutcomeMeansEstimates estimate_outcome_means_across_cohorts(
     const std::vector<OutcomeMeanSuffStatEstimates>& suff_stat_estimates_vec);
 
 /**
- * @brief Aggregate factor model estimates per estimator specification.
+ * @brief Estimates cohort mean outcomes per estimator specification.
  *
- * Validates keys across maps (symmetric presence) and aggregates per spec by
- * dispatching to the vector-based overload of
- * `aggregate_cohort_specific_factor_model_params`.
+ * Iterates over input map keys and dispatches to the single-spec overload,
+ * returning an unordered_map keyed by estimator specification.
  */
-std::unordered_map<std::string, FactorModelEstimates> aggregate_cohort_specific_factor_model_params(
-    const std::unordered_map<std::string, std::vector<FactorModelEstimates>>& cohort_specific_factor_ests,
+std::unordered_map<std::string, OutcomeMeansEstimates> estimate_outcome_means_across_cohorts(
+    const std::unordered_map<std::string, FactorModelEstimates>& factor_model_estimates_map,
     const ObservedOutcomeIndices& observed_outcome_indices,
-    const std::unordered_map<std::string, CohortWeightEstimates>& cohort_weights);
+    const std::vector<OutcomeMeanSuffStatEstimates>& suff_stat_estimates_vec);
 
 } // namespace apm
 
 #endif // APM_EST_OUTCOME_MEANS_H
-
-

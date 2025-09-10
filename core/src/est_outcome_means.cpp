@@ -139,6 +139,25 @@ OutcomeMeansEstimates estimate_outcome_means_across_cohorts(
     return OutcomeMeansEstimates(std::move(point_means), std::move(bootstrap_means));
 }
 
+std::unordered_map<std::string, OutcomeMeansEstimates> estimate_outcome_means_across_cohorts(
+    const std::unordered_map<std::string, FactorModelEstimates>& factor_model_estimates_map,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::vector<OutcomeMeanSuffStatEstimates>& suff_stat_estimates_vec) {
+
+    std::unordered_map<std::string, OutcomeMeansEstimates> out;
+    out.reserve(factor_model_estimates_map.size());
+
+    for (const auto& kv : factor_model_estimates_map) {
+        const std::string& key = kv.first;
+        const FactorModelEstimates& ests = kv.second;
+        OutcomeMeansEstimates ome = estimate_outcome_means_across_cohorts(
+            ests, observed_outcome_indices, suff_stat_estimates_vec);
+        out.emplace(key, std::move(ome));
+    }
+
+    return out;
+}
+
 } // namespace apm
 
 
