@@ -54,7 +54,7 @@ test_that("EstimateMeans_FactorsCovariatesFixedEffects", {
     true_m[2, data$observed_outcome_indices[[2]]]
   )
   
-  estimated_m <- estimate_outcome_means_across_cohorts(
+  estimated_m <- estimate_outcome_means_across_cohorts_raw(
     data$G, data$observed_outcome_indices, m_c_vec, 
     g_0 = data$g_0, a = data$a, X_c_vec = data$X_c_vec)
   
@@ -73,7 +73,7 @@ test_that("EstimateMeans_FactorsAndFixedEffects", {
     true_m[2, data$observed_outcome_indices[[2]]]
   )
   
-  estimated_m <- estimate_outcome_means_across_cohorts(
+  estimated_m <- estimate_outcome_means_across_cohorts_raw(
     data$G, data$observed_outcome_indices, m_c_vec, g_0 = data$g_0)
   
   expect_equal(estimated_m, true_m, tolerance = 1e-9)
@@ -91,7 +91,7 @@ test_that("EstimateMeans_FactorsAndCovariates", {
     true_m[2, data$observed_outcome_indices[[2]]]
   )
   
-  estimated_m <- estimate_outcome_means_across_cohorts(
+  estimated_m <- estimate_outcome_means_across_cohorts_raw(
     data$G, data$observed_outcome_indices, m_c_vec, 
     a = data$a, X_c_vec = data$X_c_vec)
   
@@ -110,7 +110,7 @@ test_that("EstimateMeans_FactorsOnly", {
     true_m[2, data$observed_outcome_indices[[2]]]
   )
   
-  estimated_m <- estimate_outcome_means_across_cohorts(
+  estimated_m <- estimate_outcome_means_across_cohorts_raw(
     data$G, data$observed_outcome_indices, m_c_vec)
   
   expect_equal(estimated_m, true_m, tolerance = 1e-9)
