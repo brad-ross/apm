@@ -98,7 +98,6 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
  * FactorModelEstimates containing aggregated point estimates and aggregated
  * bootstrap replicates.
  */
-// moved to est_outcome_means.h/est_outcome_means.cpp
 
 //==============================================================================
 // Outcome Imputation
@@ -271,7 +270,6 @@ arma::mat estimate_outcome_means_across_cohorts(
     const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<OutcomeMeanSufficientStatistics>& suff_stats_vec);
 
-// moved to est_outcome_means.h/est_outcome_means.cpp
 
 //==============================================================================
 // Identification Verification Via the O^3 Algorithm

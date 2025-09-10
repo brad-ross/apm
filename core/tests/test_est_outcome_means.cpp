@@ -2,10 +2,9 @@
 #include <vector>
 #include <stdexcept>
 
-#include "apm_core.h"
 #include "est_outcome_means.h"
-#include "test_helpers.h"
 #include "linear_algebra_utils.h"
+#include "test_helpers.h"
 
 // Tests focused on functions in est_outcome_means.{h,cpp} that use *Estimates types
 

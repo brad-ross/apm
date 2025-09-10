@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <iostream>
 #include "apm_core.h"
-#include "est_outcome_means.h"
 #include "linear_algebra_utils.h"
 #include "test_helpers.h"
 
@@ -23,8 +22,6 @@ TEST(APMTest, AlignFactorsAPMStaircasePatternWeighted) {
     arma::vec cohort_weights = {1.0, 2.0, 1.0};
     run_alignment_test(s.true_factors, s.observed_outcome_indices, cohort_weights);
 }
-
-// Helper struct and function for estimation tests moved to test_helpers.h/.cpp
 
 TEST(APMTest, EstimateMeans_FactorsCovariatesFixedEffects) {
     auto data = setup_estimation_test_data();
@@ -186,7 +183,6 @@ TEST(APMTest, EstimateMeans_ParamsAndSuffStats_FactorsOnly) {
     ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
 }
 
-// Moved bootstrap-aware estimate_outcome_means_across_cohorts tests to EstOutcomeMeanTest
 
 TEST(APMTest, ImputeOutcomes_Dispatcher_AllComponents) {
     auto data = setup_estimation_test_data();
@@ -305,7 +301,6 @@ TEST(APMTest, AggregateFactorModelParams_WithAllParams_Weighted) {
     ASSERT_TRUE(arma::approx_equal(*(agg.a), expected_a, "absdiff", 1e-12));
 }
 
-// Moved bootstrap-aware aggregate_cohort_specific_factor_model_params tests to EstOutcomeMeanTest
 
 //==============================================================================
 // O3 Algorithm Tests
