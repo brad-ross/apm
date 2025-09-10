@@ -116,8 +116,12 @@ TEST(EstOutcomeMeanTest, AggregateFactorModelParams_WithBootstrap_AllParams) {
     // Bootstrap cohort weights: B vectors of length C; use ones
     std::vector<arma::vec> bootstrap_cohort_weights(B, arma::vec(C, arma::fill::ones));
 
+    apm::CohortWeightEstimates w;
+    w.cohort_weights = cohort_weights;
+    w.bootstrap_cohort_weights = bootstrap_cohort_weights;
+
     apm::FactorModelEstimates agg = apm::aggregate_cohort_specific_factor_model_params(
-        cohort_estimates, observed_outcome_indices, cohort_weights, bootstrap_cohort_weights);
+        cohort_estimates, observed_outcome_indices, w);
 
     // Check aligned G subspace matches true_factors
     arma::mat proj_aligned = apm::internal::projection_matrix(agg.parameter_estimates.G);

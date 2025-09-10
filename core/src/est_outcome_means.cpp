@@ -8,8 +8,7 @@ namespace apm {
 FactorModelEstimates aggregate_cohort_specific_factor_model_params(
     const std::vector<FactorModelEstimates>& cohort_specific_factor_model_param_ests,
     const ObservedOutcomeIndices& observed_outcome_indices,
-    const arma::vec& cohort_weights,
-    const std::vector<arma::vec>& bootstrap_cohort_weights) {
+    const CohortWeightEstimates& cohort_weight_estimates) {
     const std::size_t C = cohort_specific_factor_model_param_ests.size();
 
     // Aggregate point estimates
@@ -20,14 +19,14 @@ FactorModelEstimates aggregate_cohort_specific_factor_model_params(
     }
 
     FactorModelParameters agg_point = aggregate_cohort_specific_factor_model_params(
-        point_params, observed_outcome_indices, cohort_weights);
+        point_params, observed_outcome_indices, cohort_weight_estimates.cohort_weights);
 
     // Determine number of bootstrap replicates from first cohort (0 if none)
     std::size_t B = cohort_specific_factor_model_param_ests.empty()
         ? 0
         : cohort_specific_factor_model_param_ests.front().n_bootstrap_replicates();
 
-    if (bootstrap_cohort_weights.size() != B) {
+    if (cohort_weight_estimates.bootstrap_cohort_weights.size() != B) {
         throw std::invalid_argument("bootstrap_cohort_weights must have length equal to number of bootstrap replicates.");
     }
 
@@ -48,7 +47,7 @@ FactorModelEstimates aggregate_cohort_specific_factor_model_params(
 
         agg_bootstrap.push_back(
             aggregate_cohort_specific_factor_model_params(
-                params_b, observed_outcome_indices, bootstrap_cohort_weights[b]));
+                params_b, observed_outcome_indices, cohort_weight_estimates.bootstrap_cohort_weights[b]));
     }
 
     return FactorModelEstimates(std::move(agg_point), std::move(agg_bootstrap));

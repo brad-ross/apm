@@ -38,8 +38,7 @@ struct OutcomeMeansEstimates {
 FactorModelEstimates aggregate_cohort_specific_factor_model_params(
     const std::vector<FactorModelEstimates>& cohort_specific_factor_model_param_ests,
     const ObservedOutcomeIndices& observed_outcome_indices,
-    const arma::vec& cohort_weights = arma::vec(),
-    const std::vector<arma::vec>& bootstrap_cohort_weights = {});
+    const CohortWeightEstimates& cohort_weight_estimates = CohortWeightEstimates());
 
 /**
  * @brief Estimates cohort mean outcomes using parameter estimates (with optional bootstrap) and
