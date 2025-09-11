@@ -1,5 +1,3 @@
-"_PACKAGE"
-
 validate_mask_arg <- function(mask) {
     if (is.null(mask)) return(invisible(NULL))
     if (!is.list(mask)) stop("cohort_outcomes_to_mask must be a named list")

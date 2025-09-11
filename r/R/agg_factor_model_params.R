@@ -1,32 +1,31 @@
- 
-
-#' Estimate outcome means across cohorts (single spec; R6 estimates API)
+#' Aggregate factor model parameters across cohorts
 #'
-#' Computes cohort mean outcomes using a single `FactorModelEstimates` object and
-#' per-cohort `OutcomeMeanSuffStatEstimates`. If bootstrap replicates are present
-#' in both inputs, outcomes are computed per bootstrap draw.
+#' Aggregates per-cohort factor model parameter estimates (factors `G`, optional
+#' outcome fixed effects `g0`, and optional covariate coefficients `a`) into a
+#' single set of parameters. Bootstrap replicates, when present in the inputs and
+#' weights, are aggregated per draw.
 #'
-#' @param factor_model_estimates a `FactorModelEstimates` R6 object with point
-#'   parameters and optional bootstrap replicates.
+#' @param per_cohort_factor_estimates list of `FactorModelEstimates` R6 objects
+#'   (length = number of cohorts). Each element must carry point estimates and
+#'   optionally bootstrap replicates with consistent `B` across cohorts.
 #' @param observed_outcome_indices list of integer vectors (1-based indices) of
 #'   observed outcomes for each cohort.
-#' @param suff_stat_estimates list of `OutcomeMeanSuffStatEstimates` R6 objects
-#'   (one per cohort).
+#' @param cohort_weights either a single `CohortWeightEstimates` R6 object, or a
+#'   named list of `CohortWeightEstimates` R6 objects (by-spec aggregation).
 #'
-#' @return An `OutcomeMeansEstimates` R6 object with fields:
-#'   - `mean_outcomes()` → C x T matrix (point) or replicate b via `mean_outcomes(b)`
-#'   - `has_bootstrap()`, `num_bootstraps()`
+#' @return If `cohort_weights` is a single `CohortWeightEstimates`, returns a
+#'   `FactorModelEstimates` R6 object. If `cohort_weights` is a named list,
+#'   returns a named list of `FactorModelEstimates` R6 objects.
 #'
 #' @export
-estimate_outcome_means_across_cohorts <- function(factor_model_estimates, observed_outcome_indices, suff_stat_estimates) {
-  .validate_suff_stat_list(suff_stat_estimates)
-  if (inherits(factor_model_estimates, "FactorModelEstimates")) {
-    return(.estimate_means_single(factor_model_estimates, observed_outcome_indices, suff_stat_estimates))
+aggregate_factor_model_params <- function(per_cohort_factor_estimates, observed_outcome_indices, cohort_weights) {
+  if (inherits(cohort_weights, "CohortWeightEstimates")) {
+    return(.agg_params_single(per_cohort_factor_estimates, observed_outcome_indices, cohort_weights))
   }
-  if (is.list(factor_model_estimates)) {
-    return(.estimate_means_by_spec(factor_model_estimates, observed_outcome_indices, suff_stat_estimates))
+  if (is.list(cohort_weights) && is.list(per_cohort_factor_estimates)) {
+    return(.agg_params_by_spec(per_cohort_factor_estimates, observed_outcome_indices, cohort_weights))
   }
-  stop("Invalid 'factor_model_estimates': expected a FactorModelEstimates object or a named list of them.")
+  stop("Invalid inputs: expected either (1) a list of per-cohort FactorModelEstimates plus a CohortWeightEstimates, or (2) named lists for by-spec aggregation.")
 }
 
 # -----------------------------------------------------------------------------
@@ -75,16 +74,6 @@ estimate_outcome_means_across_cohorts <- function(factor_model_estimates, observ
   invisible(TRUE)
 }
 
-.validate_suff_stat_list <- function(x) {
-  if (!is.list(x) || length(x) == 0L) {
-    stop("'suff_stat_estimates' must be a non-empty list of OutcomeMeanSuffStatEstimates (one per cohort).")
-  }
-  if (!all(vapply(x, function(e) inherits(e, "OutcomeMeanSuffStatEstimates"), logical(1)))) {
-    stop("All elements of 'suff_stat_estimates' must inherit from class 'OutcomeMeanSuffStatEstimates'.")
-  }
-  invisible(TRUE)
-}
-
 .agg_params_single <- function(per_cohort_factor_estimates, observed_outcome_indices, cohort_weights) {
   .validate_fme_list(per_cohort_factor_estimates)
   xplist <- lapply(per_cohort_factor_estimates, function(fme) fme$.__enclos_env__$private$xp)
@@ -102,27 +91,3 @@ estimate_outcome_means_across_cohorts <- function(factor_model_estimates, observ
   for (i in seq_along(res)) out[[i]] <- FactorModelEstimates$new(res[[i]])
   out
 }
-
-.estimate_means_single <- function(factor_model_estimates, observed_outcome_indices, suff_stat_estimates) {
-  xplist <- lapply(suff_stat_estimates, function(om) om$.__enclos_env__$private$xp)
-  xp_res <- estimate_outcome_means_across_cohorts_cpp(factor_model_estimates$.__enclos_env__$private$xp, observed_outcome_indices, xplist)
-  OutcomeMeansEstimates$new(xp_res)
-}
-
-.estimate_means_by_spec <- function(factor_model_estimates, observed_outcome_indices, suff_stat_estimates) {
-  if (is.null(names(factor_model_estimates)) || any(!nzchar(names(factor_model_estimates)))) {
-    stop("When providing by-spec inputs, 'factor_model_estimates' must be a named list. Hint: use something like list(specA = FactorModelEstimates(...), specB = ...).")
-  }
-  if (!all(vapply(factor_model_estimates, function(x) inherits(x, "FactorModelEstimates"), logical(1)))) {
-    stop("All elements of 'factor_model_estimates' must inherit from class 'FactorModelEstimates'.")
-  }
-  fmap <- lapply(factor_model_estimates, function(fme) fme$.__enclos_env__$private$xp)
-  xplist <- lapply(suff_stat_estimates, function(om) om$.__enclos_env__$private$xp)
-  res <- estimate_outcome_means_across_cohorts_by_spec_cpp(fmap, observed_outcome_indices, xplist)
-  nms <- names(res)
-  out <- setNames(vector("list", length(res)), nms)
-  for (i in seq_along(res)) out[[i]] <- OutcomeMeansEstimates$new(res[[i]])
-  out
-}
-
-
