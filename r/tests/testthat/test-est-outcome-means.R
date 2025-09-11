@@ -64,7 +64,7 @@ test_that("AggregateFactorModelParams_MapOverSpecs_Succeeds (R6 + map)", {
   w_point <- c(1.0, 2.0, 3.0)
   wB <- CohortWeightEstimates$new(make_cohort_weight_estimates_cpp(w_point, bootstrap_weights = replicate(B, w_point, simplify = FALSE)))
 
-  res <- aggregate_factor_model_params_by_spec(
+  res <- aggregate_factor_model_params(
     list(specA = cohort_estimates, specB = cohort_estimates),
     observed_outcome_indices,
     list(specA = wA, specB = wB)
@@ -94,7 +94,7 @@ test_that("EstimateMeans_MapOverSpecs_Succeeds (R6 + map)", {
     OutcomeMeanSuffStatEstimates$new(xp)
   })
 
-  out_map <- estimate_outcome_means_across_cohorts_by_spec(fmap, data$observed_outcome_indices, suff_est_vec)
+  out_map <- estimate_outcome_means_across_cohorts(fmap, data$observed_outcome_indices, suff_est_vec)
   expect_true(all(c("specA", "specB") %in% names(out_map)))
   expect_equal(out_map$specA$mean_outcomes(), true_m, tolerance = 1e-9)
   expect_equal(out_map$specB$mean_outcomes(), true_m, tolerance = 1e-9)

@@ -64,7 +64,6 @@ std::unordered_map<std::string, FactorModelEstimates> aggregate_cohort_specific_
     std::unordered_map<std::string, FactorModelEstimates> out;
     out.reserve(std::max(cohort_specific_factor_ests.size(), cohort_weights.size()));
 
-    // Build union of keys, mirroring build_return_list pattern
     std::set<std::string> union_keys;
     for (const auto& kv : cohort_specific_factor_ests) union_keys.insert(kv.first);
     for (const auto& kw : cohort_weights) union_keys.insert(kw.first);
@@ -159,5 +158,3 @@ std::unordered_map<std::string, OutcomeMeansEstimates> estimate_outcome_means_ac
 }
 
 } // namespace apm
-
-
