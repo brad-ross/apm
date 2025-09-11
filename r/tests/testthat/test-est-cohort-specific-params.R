@@ -180,7 +180,7 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
     # Content: estimated cohort factor spans should match true rotated spans
     T_idx <- cohort_indices[[1]]
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
-    G1_true <- ctx$cohort_G_list[[1]]
+    G1_true <- ctx$true_factors[T_idx, , drop = FALSE]
 
     proj_est <- projection_matrix_r(out_no_fe$G())
     proj_true <- projection_matrix_r(G1_true)

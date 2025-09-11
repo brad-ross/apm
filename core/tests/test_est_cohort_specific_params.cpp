@@ -91,8 +91,7 @@ RawPanel make_raw(const PanelCtx& ctx, bool with_covars, bool with_auxiliary = f
                     if (observed[static_cast<std::size_t>(t)]) {
                         int k_pos = pos[static_cast<std::size_t>(t)];
                         double y_val = arma::as_scalar(
-                            ctx.cohort_G_list[static_cast<std::size_t>(c)].row(static_cast<arma::uword>(k_pos))
-                            * ctx.l_unit[global_unit]
+                            ctx.G_true.row(static_cast<arma::uword>(t)) * ctx.l_unit[global_unit]
                         );
                         rp.y.push_back(y_val);
                     } else {
@@ -112,8 +111,7 @@ RawPanel make_raw(const PanelCtx& ctx, bool with_covars, bool with_auxiliary = f
                 for (arma::uword k = 0; k < ctx.observed_outcome_indices[c].n_elem; ++k) {
                     int t = static_cast<int>(ctx.observed_outcome_indices[c][k]);
                     double y_val = arma::as_scalar(
-                        ctx.cohort_G_list[static_cast<std::size_t>(c)].row(static_cast<arma::uword>(k))
-                        * ctx.l_unit[global_unit]
+                        ctx.G_true.row(static_cast<arma::uword>(t)) * ctx.l_unit[global_unit]
                     );
                     rp.unit_idx.push_back(global_unit);
                     rp.cohort_id.push_back(c);
@@ -191,7 +189,7 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
     EXPECT_EQ(est_fe.G.n_rows, ctx.observed_outcome_indices[0].n_elem);
     EXPECT_EQ(est_fe.G.n_cols, ctx.r);
 
-    arma::mat G0_true = ctx.cohort_G_list[0];
+    arma::mat G0_true = ctx.G_true.rows(ctx.observed_outcome_indices[0]);
     arma::mat P_est_no_fe = proj(est_no_fe.G);
     arma::mat P_est_fe    = proj(est_fe.G);
     arma::mat P_true      = proj(G0_true);
@@ -205,8 +203,9 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
     arma::vec expected_means(oms0.observed_outcome_means.n_elem, arma::fill::zeros);
     int u0 = 0, u1 = 1;
     for (arma::uword k = 0; k < ctx.observed_outcome_indices[0].n_elem; ++k) {
-        double m0 = arma::as_scalar(ctx.cohort_G_list[0].row(k) * ctx.l_unit[u0]);
-        double m1 = arma::as_scalar(ctx.cohort_G_list[0].row(k) * ctx.l_unit[u1]);
+        arma::uword t = ctx.observed_outcome_indices[0][k];
+        double m0 = arma::as_scalar(ctx.G_true.row(t) * ctx.l_unit[u0]);
+        double m1 = arma::as_scalar(ctx.G_true.row(t) * ctx.l_unit[u1]);
         expected_means(static_cast<arma::uword>(k)) = 0.5 * (m0 + m1);
     }
     ASSERT_TRUE(arma::approx_equal(oms0.observed_outcome_means, expected_means, "absdiff", 1e-12));
@@ -456,16 +455,17 @@ TEST(CohortSpecificRawTest, Masking_LastCohort_Outcome5) {
     // Cohort 0 and 1 unchanged
     {
         const auto& est0 = pca_vec[0].parameter_estimates;
-        expect_same_subspace(est0.G, ctx.cohort_G_list[0]);
+        expect_same_subspace(est0.G, ctx.G_true.rows(ctx.observed_outcome_indices[0]));
         const auto& est1 = pca_vec[1].parameter_estimates;
-        expect_same_subspace(est1.G, ctx.cohort_G_list[1]);
+        expect_same_subspace(est1.G, ctx.G_true.rows(ctx.observed_outcome_indices[1]));
     }
 
     // Cohort 2 should drop the last observed outcome (index 4), so true factors are rows {0,1} of cohort_G_list[2]
     {
         const auto& est2 = pca_vec[2].parameter_estimates;
         ASSERT_EQ(est2.G.n_rows, 2u); // originally 3 observed, now 2 after masking
-        arma::mat G_true_masked = ctx.cohort_G_list[2].rows(0, 1);
+        arma::uvec kept = ctx.observed_outcome_indices[2].head(2);
+        arma::mat G_true_masked = ctx.G_true.rows(kept);
         expect_same_subspace(est2.G, G_true_masked);
     }
 

@@ -59,13 +59,17 @@ build_panel_from_indices <- function(outcomes, cohort_indices, units_by_cohort, 
 # Deterministic general true factor generator used in tests
 make_true_factors_general <- function(T, r) {
     if (T == 5L && r == 2L) return(make_true_factors_5x2())
-    F <- matrix(0, nrow = T, ncol = r)
-    for (t in seq_len(T)) {
-        for (j in seq_len(r)) {
-            F[t, j] <- 0.1 * t + 0.05 * j
-        }
-    }
-    F
+    # Build a deterministic, full-rank, well-conditioned T x r matrix
+    # using orthonormal columns from a smooth basis, to avoid near-collinearity.
+    t <- seq_len(T)
+    base <- sapply(seq_len(r), function(j) {
+        # Mix sine and cosine at different frequencies deterministically
+        sin(2 * pi * j * t / (T + 1)) + 0.5 * cos(2 * pi * (j + 1) * t / (T + 1))
+    })
+    # Orthonormalize columns via QR
+    qr_fac <- qr(base)
+    Q <- qr.Q(qr_fac)
+    Q[, seq_len(r), drop = FALSE]
 }
 
 make_rotations <- function(C, r, rotate = TRUE) {
@@ -100,10 +104,16 @@ build_factor_model_context <- function(outcomes, cohort_indices, units_by_cohort
 }
 
 expected_Y_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
-    G_c <- ctx$cohort_G_list[[cohort_id]]
+    G_c <- ctx$true_factors[T_idx, ]
     do.call(rbind, lapply(unit_ids, function(u) {
         l_u <- unit_loading_from_all_units(u, ctx$all_units, ctx$r)
-        as.numeric(G_c %*% l_u)
+        if (is.null(dim(G_c))) {
+            # G_c is a vector (length T), l_u is scalar
+            as.numeric(G_c * l_u)
+        } else {
+            # G_c is a matrix (T x r), l_u is a vector (r)
+            as.numeric(G_c %*% l_u)
+        }
     }))
 }
 
@@ -120,8 +130,11 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                                             include_covariates = FALSE,
                                             include_auxiliary = FALSE,
                                             r = 2L,
-                                            rotate = TRUE) {
-    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = rotate)
+                                            rotate = TRUE,
+                                            ctx = NULL) {
+    if (is.null(ctx)) {
+        ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = rotate)
+    }
 
     data.table::rbindlist(lapply(seq_along(cohort_indices), function(k) {
         observed_idxs <- cohort_indices[[k]]
