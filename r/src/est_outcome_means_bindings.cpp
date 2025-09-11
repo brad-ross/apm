@@ -3,6 +3,7 @@
 #include <string>
 #include <set>
 #include "r_utils.h"
+#include "cohort_specific_estimates_helpers.h"
 #include "../../core/src/est_outcome_means.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
@@ -99,6 +100,68 @@ Rcpp::List aggregate_factor_model_params_by_spec_cpp(
     for (const auto& kv : out_map) {
         names[k] = kv.first;
         out[k] = make_xptr(apm::FactorModelEstimates(kv.second));
+        ++k;
+    }
+    out.attr("names") = names;
+    return out;
+}
+
+//------------------------------------------------------------------------------
+// End-to-end: estimate target parameter components from panel (by spec)
+//------------------------------------------------------------------------------
+
+// [[Rcpp::export]]
+Rcpp::List est_target_param_components_from_panel_cpp(
+    Rcpp::DataFrame processed_panel,
+    Rcpp::List observed_outcome_indices, // 1-based
+    const std::string& outcome_value_col,
+    Rcpp::CharacterVector covar_cols,
+    Rcpp::CharacterVector auxiliary_cols,
+    Rcpp::List est_specs,
+    SEXP bootstrap_xptr = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue)
+{
+    // 1) Cohort-specific estimates (raw C++)
+    apm::CohortSpecificEstimates ests = cohort_specific_estimates_from_panel_cpp_core(
+        processed_panel,
+        observed_outcome_indices,
+        outcome_value_col,
+        covar_cols,
+        auxiliary_cols,
+        est_specs,
+        bootstrap_xptr,
+        num_threads_in,
+        cohort_outcomes_to_mask_in
+    );
+
+    // 2) Observed outcome indices (prefer masked if present)
+    apm::ObservedOutcomeIndices obs_idx = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+    const apm::ObservedOutcomeIndices& obs_idx_eff = ests.masked_observed_outcome_indices.has_value()
+        ? *ests.masked_observed_outcome_indices
+        : obs_idx;
+
+    // 3) Aggregate factor model params by spec (use obs_idx_eff)
+    std::unordered_map<std::string, apm::FactorModelEstimates> agg_by_spec =
+        apm::aggregate_cohort_specific_factor_model_params(
+            ests.cohort_specific_factor_ests,
+            obs_idx_eff,
+            ests.cohort_weights);
+
+    // 4) Estimate outcome means by spec (use obs_idx_eff)
+    std::unordered_map<std::string, apm::OutcomeMeansEstimates> ome_by_spec =
+        apm::estimate_outcome_means_across_cohorts(
+            agg_by_spec,
+            obs_idx_eff,
+            ests.cohort_outcome_mean_ests);
+
+    // 5) Return named list of XPtr<OutcomeMeansEstimates>
+    Rcpp::List out(static_cast<int>(ome_by_spec.size()));
+    Rcpp::CharacterVector names(static_cast<int>(ome_by_spec.size()));
+    int k = 0;
+    for (auto& kv : ome_by_spec) {
+        names[k] = kv.first;
+        out[k] = make_xptr(std::move(kv.second));
         ++k;
     }
     out.attr("names") = names;

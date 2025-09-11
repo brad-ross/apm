@@ -8,6 +8,7 @@
 #include <cstddef>
 #include "../../core/src/est_cohort_specific_params.h"
 #include "r_utils.h"
+#include "cohort_specific_estimates_helpers.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
@@ -256,6 +257,49 @@ static Rcpp::List build_return_list(apm::CohortSpecificEstimates&& ests) {
     return res;
 }
 
+// Returns raw C++ outputs (no R wrapping)
+apm::CohortSpecificEstimates cohort_specific_estimates_from_panel_cpp_core(
+	Rcpp::DataFrame processed_panel,
+	Rcpp::List observed_outcome_indices, // 1-based
+	const std::string& outcome_value_col,
+	Rcpp::CharacterVector covar_cols,
+	Rcpp::CharacterVector auxiliary_cols,
+	Rcpp::List est_specs,
+	SEXP bootstrap_xptr,
+	Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in,
+	Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in)
+{
+	// Extract columns and pointers
+	PanelRawColumns cols = extract_panel_columns_0b(processed_panel, outcome_value_col);
+	CovariateColumns covs = extract_covariate_columns(processed_panel, covar_cols, cols.n_rows);
+	CovariateColumns auxs = extract_auxiliary_columns(processed_panel, auxiliary_cols, cols.n_rows);
+
+	// Convert inputs
+	apm::ObservedOutcomeIndices obs_idx_0b = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+	auto cpp_specs = to_cpp_specs(est_specs);
+	auto wb = apm::r_utils::xp_to_const_wb_shared(bootstrap_xptr);
+	auto [has_threads, nt] = resolve_num_threads(num_threads_in);
+
+	apm::CohortOutcomeMask mask = to_cpp_mask(cohort_outcomes_to_mask_in);
+
+	// Call core with optional num_threads (NULL -> std::nullopt)
+	std::optional<std::size_t> nt_opt = has_threads ? std::optional<std::size_t>(nt) : std::nullopt;
+	return apm::estimate_cohort_specific_params_from_raw(
+		cols.unit_ptr,
+		cols.cohort_ptr,
+		cols.outcome_ptr,
+		cols.y_ptr,
+		covs.ptrs,
+		auxs.ptrs,
+		cols.n_rows,
+		cpp_specs,
+		obs_idx_0b,
+		wb,
+		nt_opt,
+		mask
+	);
+}
+
 // [[Rcpp::export]]
 Rcpp::List est_cohort_specific_params_from_panel_cpp(Rcpp::DataFrame processed_panel,
                                                     Rcpp::List observed_outcome_indices, // 1-based
@@ -266,34 +310,16 @@ Rcpp::List est_cohort_specific_params_from_panel_cpp(Rcpp::DataFrame processed_p
                                                     SEXP bootstrap_xptr = R_NilValue,
                                                     Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue,
                                                     Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue) {
-    // Extract columns and pointers
-    PanelRawColumns cols = extract_panel_columns_0b(processed_panel, outcome_value_col);
-    CovariateColumns covs = extract_covariate_columns(processed_panel, covar_cols, cols.n_rows);
-    CovariateColumns auxs = extract_auxiliary_columns(processed_panel, auxiliary_cols, cols.n_rows);
-
-    // Convert inputs
-    apm::ObservedOutcomeIndices obs_idx_0b = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
-    auto cpp_specs = to_cpp_specs(est_specs);
-    auto wb = apm::r_utils::xp_to_const_wb_shared(bootstrap_xptr);
-    auto [has_threads, nt] = resolve_num_threads(num_threads_in);
-
-    apm::CohortOutcomeMask mask = to_cpp_mask(cohort_outcomes_to_mask_in);
-
-    // Call core with optional num_threads (NULL -> std::nullopt)
-    std::optional<std::size_t> nt_opt = has_threads ? std::optional<std::size_t>(nt) : std::nullopt;
-    apm::CohortSpecificEstimates ests = apm::estimate_cohort_specific_params_from_raw(
-        cols.unit_ptr,
-        cols.cohort_ptr,
-        cols.outcome_ptr,
-        cols.y_ptr,
-        covs.ptrs,
-        auxs.ptrs,
-        cols.n_rows,
-        cpp_specs,
-        obs_idx_0b,
-        wb,
-        nt_opt,
-        mask
+    apm::CohortSpecificEstimates ests = cohort_specific_estimates_from_panel_cpp_core(
+        processed_panel,
+        observed_outcome_indices,
+        outcome_value_col,
+        covar_cols,
+        auxiliary_cols,
+        est_specs,
+        bootstrap_xptr,
+        num_threads_in,
+        cohort_outcomes_to_mask_in
     );
 
     return build_return_list(std::move(ests));

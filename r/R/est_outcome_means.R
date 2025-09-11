@@ -30,6 +30,50 @@ estimate_outcome_means_across_cohorts <- function(factor_model_estimates, observ
 }
 
 # -----------------------------------------------------------------------------
+# End-to-end wrapper
+# -----------------------------------------------------------------------------
+#' End-to-end: estimate target parameter components across cohorts (by spec)
+#'
+#' This runs cohort-specific estimation and immediately aggregates/estimates
+#' cohort mean outcomes across cohorts, returning a named list (by spec) of
+#' `OutcomeMeansEstimates` objects, equivalent to running
+#' `estimate_outcome_means_across_cohorts()` after aggregating factor params.
+#'
+#' @inheritParams est_cohort_specific_params
+#' @return Named list of `OutcomeMeansEstimates` (one per estimator spec).
+#' @export
+est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_threads = 1L,
+                                       cohort_outcomes_to_mask = NULL) {
+  stopifnot(inherits(panel, "UnbalancedPanel"))
+  if (!is.null(bootstrap) && !inherits(bootstrap, "WeightedBootstrap")) stop("bootstrap must be a WeightedBootstrap or NULL")
+  .validate_est_specs(est_specs)
+
+  pp <- panel$get_processed_panel()
+  obs_idx <- panel$get_observed_outcome_indices()
+  y_col <- panel$get_outcome_value_col()
+  covar_cols <- panel$get_covar_cols()
+  auxiliary_cols <- panel$get_auxiliary_cols()
+
+  validate_mask_arg(cohort_outcomes_to_mask)
+
+  xp <- if (is.null(bootstrap)) NULL else bootstrap$.__enclos_env__$private$xp
+  nt <- if (is.null(num_threads)) NULL else as.integer(num_threads)
+
+  res <- est_target_param_components_from_panel_cpp(
+    processed_panel = pp,
+    observed_outcome_indices = obs_idx,
+    outcome_value_col = y_col,
+    covar_cols = covar_cols,
+    auxiliary_cols = auxiliary_cols,
+    est_specs = est_specs,
+    bootstrap_xptr = xp,
+    num_threads_in = nt,
+    cohort_outcomes_to_mask_in = cohort_outcomes_to_mask
+  )
+  .wrap_outcome_means_xptr_list(res)
+}
+
+# -----------------------------------------------------------------------------
 # Internal helpers (not exported)
 # -----------------------------------------------------------------------------
 
@@ -124,5 +168,3 @@ estimate_outcome_means_across_cohorts <- function(factor_model_estimates, observ
   for (i in seq_along(res)) out[[i]] <- OutcomeMeansEstimates$new(res[[i]])
   out
 }
-
-
