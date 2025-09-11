@@ -82,10 +82,19 @@ test_that("recovers true cohort mean outcomes on staircase data", {
   P_hat  <- projection_matrix_r(fme_agg$G())
   expect_equal(P_hat, P_true, tolerance = comp_rel_tol(1e-8, P_hat, P_true))
 
-  # Check cohort-specific observed outcome means against truth
+  # Check cohort-specific factor estimates and observed outcome means against truth
   for (c in seq_len(C)) {
     observed_idxs <- cohort_indices[[c]]
     unit_ids <- units_by_cohort[[c]]
+    
+    G_hat_c <- matrix(0.0, nrow = length(outcomes), ncol = r)
+    G_hat_c[observed_idxs, ] <- fmes_by_cohort[[c]]$G()
+    P_hat_c <- projection_matrix_r(G_hat_c)
+    G_true_c <- matrix(0.0, nrow = length(outcomes), ncol = r)
+    G_true_c[observed_idxs, ] <- ctx$true_factors[observed_idxs, ]
+    P_true_c <- projection_matrix_r(G_true_c)
+    expect_equal(P_hat_c, P_true_c, tolerance = comp_rel_tol(1e-8, P_hat_c, P_true_c))
+    
     Y_c <- expected_Y_for_units_ctx(ctx, c, unit_ids = unit_ids, T_idx = observed_idxs) # N x T_c
     m_true_c <- colMeans(Y_c)
     m_hat_c <- est1$cohort_outcome_means[[c]]$observed_outcome_means()
