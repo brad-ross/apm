@@ -167,4 +167,53 @@ Rcpp::List estimate_outcome_means_across_cohorts_by_spec_cpp(
     return out;
 }
 
+//------------------------------------------------------------------------------
+// Simple factories to aid tests
+//------------------------------------------------------------------------------
+
+// [[Rcpp::export]]
+SEXP make_factor_model_estimates_cpp(const arma::mat& G,
+                                     Rcpp::Nullable<arma::vec> g0 = R_NilValue,
+                                     Rcpp::Nullable<arma::vec> a = R_NilValue,
+                                     int B = 0) {
+    std::optional<arma::vec> g0_opt;
+    std::optional<arma::vec> a_opt;
+    if (g0.isNotNull()) g0_opt = Rcpp::as<arma::vec>(g0);
+    if (a.isNotNull()) a_opt = Rcpp::as<arma::vec>(a);
+    apm::FactorModelParameters point(G, g0_opt, a_opt);
+    std::vector<apm::FactorModelParameters> boots;
+    if (B > 0) boots = std::vector<apm::FactorModelParameters>(static_cast<std::size_t>(B), point);
+    apm::FactorModelEstimates out(std::move(point), std::move(boots));
+    return make_xptr(std::move(out));
+}
+
+// [[Rcpp::export]]
+SEXP make_outcome_mean_suff_stat_estimates_cpp(const arma::vec& observed_means,
+                                               Rcpp::Nullable<arma::mat> covar_means = R_NilValue,
+                                               int B = 0) {
+    std::optional<arma::mat> X_opt;
+    if (covar_means.isNotNull()) X_opt = Rcpp::as<arma::mat>(covar_means);
+    apm::OutcomeMeanSufficientStatistics point(observed_means, X_opt);
+    std::vector<apm::OutcomeMeanSufficientStatistics> boots;
+    if (B > 0) boots = std::vector<apm::OutcomeMeanSufficientStatistics>(static_cast<std::size_t>(B), point);
+    apm::OutcomeMeanSuffStatEstimates out(std::move(point), std::move(boots));
+    return make_xptr(std::move(out));
+}
+
+// [[Rcpp::export]]
+SEXP make_cohort_weight_estimates_cpp(const arma::vec& cohort_weights,
+                                      Rcpp::Nullable<Rcpp::List> bootstrap_weights = R_NilValue) {
+    apm::CohortWeightEstimates w;
+    w.cohort_weights = cohort_weights;
+    if (bootstrap_weights.isNotNull()) {
+        Rcpp::List L(bootstrap_weights);
+        w.bootstrap_cohort_weights.reserve(L.size());
+        for (int i = 0; i < L.size(); ++i) {
+            w.bootstrap_cohort_weights.push_back(Rcpp::as<arma::vec>(L[i]));
+        }
+    }
+    auto* heap = new apm::CohortWeightEstimates(std::move(w));
+    return Rcpp::XPtr<apm::CohortWeightEstimates>(heap, true);
+}
+
 
