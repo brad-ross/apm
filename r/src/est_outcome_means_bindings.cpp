@@ -231,6 +231,15 @@ Rcpp::List estimate_outcome_means_across_cohorts_by_spec_cpp(
 }
 
 //------------------------------------------------------------------------------
+// oneTBB helpers
+//------------------------------------------------------------------------------
+
+// [[Rcpp::export]]
+int get_cpp_default_concurrency() {
+    return static_cast<int>(apm::get_cpp_default_concurrency());
+}
+
+//------------------------------------------------------------------------------
 // Simple factories to aid tests
 //------------------------------------------------------------------------------
 

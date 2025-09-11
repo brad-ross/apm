@@ -8,6 +8,18 @@ PKG_CXXFLAGS = -std=c++17
 # RcppArmadillo is header-only, no special linking needed. Add Boost lib path.
 PKG_LIBS = -L/opt/homebrew/lib $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
+# oneTBB detection with pkg-config; define APM_HAS_TBB if found
+TBB_CFLAGS := $(shell pkg-config --cflags tbb 2>/dev/null)
+TBB_LIBS   := $(shell pkg-config --libs   tbb 2>/dev/null)
+ifneq ($(strip $(TBB_LIBS)),)
+  PKG_CPPFLAGS += $(TBB_CFLAGS) -DAPM_HAS_TBB=1
+  PKG_LIBS     += $(TBB_LIBS)
+else
+  # Homebrew fallback (common on macOS); uncomment if pkg-config is unavailable
+  # PKG_CPPFLAGS += -I/opt/homebrew/include -DAPM_HAS_TBB=1
+  # PKG_LIBS     += -L/opt/homebrew/lib -ltbb
+endif
+
 # Object files (including the core library)
 OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o \
            ../../core/src/apm_core.o ../../core/src/linear_algebra_utils.o ../../core/src/bootstrap.o \

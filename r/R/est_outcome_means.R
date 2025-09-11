@@ -42,7 +42,7 @@ estimate_outcome_means_across_cohorts <- function(factor_model_estimates, observ
 #' @inheritParams est_cohort_specific_params
 #' @return Named list of `OutcomeMeansEstimates` (one per estimator spec).
 #' @export
-est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_threads = 1L,
+est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_threads = NULL,
                                        cohort_outcomes_to_mask = NULL) {
   stopifnot(inherits(panel, "UnbalancedPanel"))
   if (!is.null(bootstrap) && !inherits(bootstrap, "WeightedBootstrap")) stop("bootstrap must be a WeightedBootstrap or NULL")

@@ -2,7 +2,7 @@ context("Integration tests of est_target_param_components")
 
 test_that("recovers true cohort mean outcomes on staircase data", {
   # Problem size and staircase layout
-  Tval <- 5L
+  Tval <- 7L
   r <- 2L
   window <- 3L
 
@@ -61,7 +61,7 @@ test_that("recovers true cohort mean outcomes on staircase data", {
     true_M[c, ] <- as.numeric(ctx$true_factors %*% lbar)
   }
 
-  expect_equal(M_hat, true_M, tolerance = 1e-8, scale = 1)
+  expect_equal(M_hat, true_M, tolerance = comp_rel_tol(1e-8, M_hat, true_M), scale = 1)
 
   # Also test the constituent steps yield the same result
   est1 <- est_cohort_specific_params(panel_obj, est_specs = est_specs, num_threads = 1L)
@@ -80,7 +80,7 @@ test_that("recovers true cohort mean outcomes on staircase data", {
   # Projection equivalence of aggregated factors to true global factors
   P_true <- projection_matrix_r(ctx$true_factors)
   P_hat  <- projection_matrix_r(fme_agg$G())
-  expect_equal(P_hat, P_true, tolerance = 5e-8)
+  expect_equal(P_hat, P_true, tolerance = comp_rel_tol(1e-8, P_hat, P_true))
 
   # Check cohort-specific observed outcome means against truth
   for (c in seq_len(C)) {
@@ -89,45 +89,69 @@ test_that("recovers true cohort mean outcomes on staircase data", {
     Y_c <- expected_Y_for_units_ctx(ctx, c, unit_ids = unit_ids, T_idx = observed_idxs) # N x T_c
     m_true_c <- colMeans(Y_c)
     m_hat_c <- est1$cohort_outcome_means[[c]]$observed_outcome_means()
-    expect_equal(m_hat_c, as.numeric(m_true_c), tolerance = 1e-8, scale = 1)
+    expect_equal(m_hat_c, as.numeric(m_true_c), tolerance = comp_rel_tol(1e-8, m_hat_c, m_true_c), scale = 1)
   }
 
-  expect_equal(ome$mean_outcomes(), true_M, tolerance = 1e-8, scale = 1)
+  expect_equal(ome$mean_outcomes(), true_M, tolerance = comp_rel_tol(1e-8, ome$mean_outcomes(), true_M), scale = 1)
 
   # One-shot and three-step pipelines must match exactly
-  expect_equal(M_hat, ome$mean_outcomes(), tolerance = 1e-8, scale = 1)
+  expect_equal(M_hat, ome$mean_outcomes(), tolerance = comp_rel_tol(1e-8, M_hat, ome$mean_outcomes()), scale = 1)
 })
 
 test_that("pipeline runs reasonably fast on a larger panel (optional perf check)", {
   skip_on_cran()
   if (!isTRUE(getOption("apm_run_perf_tests", FALSE))) skip("Set options(apm_run_perf_tests = TRUE) to enable perf checks.")
 
-  Tval <- 50L
+  Tval <- 10L
   r <- 2L
-  window <- 5L
+  window <- 3L
 
   outcomes <- make_outcomes(Tval)
   cohort_indices <- make_staircase_observed_indices(Tval, window)
+  print(cohort_indices)
   C <- length(cohort_indices)
-  units_per_cohort <- 150L
+  units_per_cohort <- 1000L
   units_by_cohort <- make_units_by_cohort(n_cohorts = C, units_per_cohort = units_per_cohort)
 
   ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE)
   panel <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE, ctx = ctx)
   panel <- panel[sample(nrow(panel))]
 
-  panel_obj <- UnbalancedPanel$new(panel, "unit_id", "outcome_id", "y", model_rank = r)
+  panel_construction_time <- system.time(panel_obj <- UnbalancedPanel$new(panel, "unit_id", "outcome_id", "y", model_rank = r))["elapsed"]
+  set_apm_threads(get_cpp_default_concurrency())
+  panel_construction_time_multi <- system.time(panel_obj_multi <- UnbalancedPanel$new(panel, "unit_id", "outcome_id", "y", model_rank = r))["elapsed"]
+
+  print(sprintf("Single-threaded panel construction time: %f", panel_construction_time))
+  print(sprintf("Multi-threaded panel construction time: %f", panel_construction_time_multi))
+
+  # Soft perf sanity: multi-thread not egregiously slower than single-thread
+  expect_lt(panel_construction_time_multi, panel_construction_time * 2.0 + 1.0)
+
   est_specs <- list(pc = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = r))
 
   t1 <- system.time(res1 <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = 1L))["elapsed"]
-  t2 <- system.time(res2 <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = 2L))["elapsed"]
+  t2 <- system.time(res2 <- est_target_param_components(panel_obj, est_specs = est_specs))["elapsed"]
+
+  print(sprintf("Elapsed time (1 thread): %f", t1))
+  print(sprintf("Elapsed time (%d threads): %f", get_cpp_default_concurrency(), t2))
 
   M1 <- res1$pc$mean_outcomes()
   M2 <- res2$pc$mean_outcomes()
-  expect_equal(M1, M2, tolerance = 1e-10)
+  expect_equal(M1, M2, tolerance = comp_rel_tol(1e-10, M1, M2))
+
+  # Correctness: both single- and multi-threaded results match truth
+  true_M <- matrix(NA_real_, nrow = C, ncol = length(outcomes))
+  for (c in seq_len(C)) {
+    unit_ids <- units_by_cohort[[c]]
+    L_mat <- do.call(rbind, lapply(unit_ids, function(u) unit_loading_from_all_units(u, ctx$all_units, ctx$r)))
+    lbar <- colMeans(L_mat)
+    true_M[c, ] <- as.numeric(ctx$true_factors %*% lbar)
+  }
+  print(comp_rel_tol(1e-8, M2, true_M))
+
+  expect_equal(M1, true_M, tolerance = comp_rel_tol(1e-8, M1, true_M), scale = 1)
+  expect_equal(M2, true_M, tolerance = comp_rel_tol(1e-8, M2, true_M), scale = 1)
 
   # Soft perf sanity: multi-thread not egregiously slower than single-thread
   expect_lt(as.numeric(t2), as.numeric(t1) * 2.0 + 1.0)
 })
-
-

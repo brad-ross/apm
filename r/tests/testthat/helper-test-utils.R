@@ -78,7 +78,7 @@ make_rotations <- function(C, r, rotate = TRUE) {
 
 unit_loading_from_all_units <- function(u_name, all_units, r) {
     u_idx <- match(u_name, all_units)
-    as.numeric(0.3 * u_idx + 0.1 * seq_len(r))
+    as.numeric(0.3 * u_idx/length(all_units) + 0.1 * seq_len(r))
 }
 
 build_factor_model_context <- function(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE) {
@@ -294,4 +294,8 @@ make_true_factors_5x2 <- function() {
         0.4, 0.9,
         0.5, 1.0
     ), nrow = 5, ncol = 2, byrow = TRUE)
+}
+
+comp_rel_tol <- function(p, x, y, smallest_tol = 1e-10) {
+    pmax(smallest_tol, p*max(c(abs(x), abs(y))))
 }

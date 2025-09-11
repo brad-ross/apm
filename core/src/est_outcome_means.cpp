@@ -5,6 +5,9 @@
 #include <algorithm>
 #include <string>
 #include <set>
+#ifdef APM_HAS_TBB
+#include <oneapi/tbb/info.h>
+#endif
 
 namespace apm {
 
@@ -155,6 +158,14 @@ std::unordered_map<std::string, OutcomeMeansEstimates> estimate_outcome_means_ac
     }
 
     return out;
+}
+
+std::size_t get_cpp_default_concurrency() {
+#ifdef APM_HAS_TBB
+    return oneapi::tbb::info::default_concurrency();
+#else
+    return static_cast<std::size_t>(1);
+#endif
 }
 
 } // namespace apm
