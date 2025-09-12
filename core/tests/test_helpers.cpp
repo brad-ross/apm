@@ -4,6 +4,9 @@
 
 #include <stdexcept>
 #include <algorithm>
+#include <limits>
+
+// -------- Utilities and assertions --------
 
 std::vector<arma::mat> generate_rotation_matrices(size_t C, arma::uword size) {
     std::vector<arma::mat> matrices;
@@ -23,25 +26,30 @@ std::vector<arma::mat> generate_rotation_matrices(size_t C, arma::uword size) {
     return matrices;
 }
 
+std::vector<std::vector<std::set<arma::uword>>> canonicalize_o3_output(
+    std::vector<std::vector<std::set<arma::uword>>> output) {
+    for (auto& iteration : output) {
+        std::sort(iteration.begin(), iteration.end());
+    }
+    return output;
+}
+
+void expect_same_subspace(const arma::mat& G1, const arma::mat& G2, double tol) {
+    arma::mat P1 = apm::internal::projection_matrix(G1);
+    arma::mat P2 = apm::internal::projection_matrix(G2);
+    ASSERT_TRUE(arma::approx_equal(P1, P2, "absdiff", tol));
+}
+
+// -------- Estimation fixtures --------
+
 StaircaseData make_staircase_data(arma::uword T, arma::uword r, arma::uword C) {
+    // Unify with panel context builder: infer T_c from T and C
+    arma::uword T_c = T - C + 1;
+    StaircasePanelContext ctx = make_staircase_panel_context(T, r, T_c);
     StaircaseData d;
-    d.true_factors.set_size(T, r);
-    for (arma::uword t = 0; t < T; ++t) {
-        double v = 0.1 * static_cast<double>(t + 1);
-        d.true_factors(t, 0) = v;
-        if (r >= 2) d.true_factors(t, 1) = v + 0.5;
-        for (arma::uword j = 2; j < r; ++j) {
-            d.true_factors(t, j) = v + 0.1 * static_cast<double>(j);
-        }
-    }
-
-    const arma::uword win = T - C + 1;
-    d.observed_outcome_indices.resize(C);
-    for (arma::uword c = 0; c < C; ++c) {
-        d.observed_outcome_indices[c] = arma::regspace<arma::uvec>(c, c + win - 1);
-    }
-
-    d.g0_true = arma::linspace(0.1, 0.1 * static_cast<double>(T), T);
+    d.true_factors = ctx.G_true;
+    d.observed_outcome_indices = ctx.observed_outcome_indices;
+    d.g0_true = ctx.g0_true;
     return d;
 }
 
@@ -99,14 +107,6 @@ std::vector<apm::FactorModelEstimates> build_cohort_estimates_all_with_bootstrap
         cohort_estimates.push_back(duplicate_bootstrap(point, B));
     }
     return cohort_estimates;
-}
-
-std::vector<std::vector<std::set<arma::uword>>> canonicalize_o3_output(
-    std::vector<std::vector<std::set<arma::uword>>> output) {
-    for (auto& iteration : output) {
-        std::sort(iteration.begin(), iteration.end());
-    }
-    return output;
 }
 
 void run_alignment_test(
@@ -167,4 +167,113 @@ EstimationTestData setup_estimation_test_data() {
     return data;
 }
 
+// -------- Staircase panel helpers --------
 
+std::vector<arma::uvec> make_staircase_observed_indices(arma::uword T, arma::uword T_c) {
+    if (T_c > T) {
+        throw std::invalid_argument("Staircase window length T_c exceeds T");
+    }
+    const arma::uword C = T - T_c + 1;
+    std::vector<arma::uvec> observed;
+    observed.resize(static_cast<std::size_t>(C));
+    for (arma::uword c = 0; c < C; ++c) {
+        observed[static_cast<std::size_t>(c)] = arma::regspace<arma::uvec>(c, c + T_c - 1);
+    }
+    return observed;
+}
+
+StaircasePanelContext make_staircase_panel_context(
+    arma::uword T,
+    arma::uword r,
+    arma::uword T_c,
+    arma::uword units_per,
+    arma::uword q) {
+    StaircasePanelContext ctx;
+    ctx.T = T;
+    ctx.r = r;
+    ctx.T_c = T_c;
+    ctx.units_per = units_per;
+    ctx.q = q;
+
+    ctx.G_true.set_size(T, r);
+    for (arma::uword t = 0; t < T; ++t) {
+        double v = static_cast<double>(t + 1) / static_cast<double>(T);
+        if (r >= 1) ctx.G_true(t, 0) = v;
+        if (r >= 2) ctx.G_true(t, 1) = v + 0.5;
+        for (arma::uword j = 2; j < r; ++j) {
+            ctx.G_true(t, j) = v + 0.1 * static_cast<double>(j);
+        }
+    }
+
+    ctx.observed_outcome_indices = make_staircase_observed_indices(T, T_c);
+    ctx.C = static_cast<arma::uword>(ctx.observed_outcome_indices.size());
+    ctx.g0_true = arma::linspace(0.1, 0.5, T);
+    ctx.a_true.set_size(q);
+    for (arma::uword j = 0; j < q; ++j) ctx.a_true(j) = 0.5 + 0.5 * static_cast<double>(j)/static_cast<double>(q);
+
+    ctx.l_unit.clear();
+    std::size_t total_units = static_cast<std::size_t>(ctx.C * units_per);
+    ctx.l_unit.reserve(total_units);
+    for (arma::uword u = 0; u < ctx.C * units_per; ++u) {
+        arma::vec l(r);
+        for (arma::uword j = 0; j < r; ++j) l(j) = 1.0 + static_cast<double>(u)/static_cast<double>(total_units) + static_cast<double>(j)/static_cast<double>(r);
+        // if (r >= 2) { l(0) = 1.0 + static_cast<double>(u); l(1) = 2.0 + static_cast<double>(u); }
+        ctx.l_unit.push_back(std::move(l));
+    }
+    return ctx;
+}
+
+RawPanelData make_raw_panel(
+    const StaircasePanelContext& ctx,
+    bool with_covariates,
+    bool with_auxiliary) {
+    RawPanelData rp;
+    int global_unit = 0;
+    for (int c = 0; c < static_cast<int>(ctx.C); ++c) {
+        std::vector<char> observed(static_cast<std::size_t>(ctx.T), 0);
+        std::vector<int> pos(static_cast<std::size_t>(ctx.T), -1);
+        for (arma::uword k = 0; k < ctx.observed_outcome_indices[static_cast<std::size_t>(c)].n_elem; ++k) {
+            int t_obs = static_cast<int>(ctx.observed_outcome_indices[static_cast<std::size_t>(c)][k]);
+            observed[static_cast<std::size_t>(t_obs)] = 1;
+            pos[static_cast<std::size_t>(t_obs)] = static_cast<int>(k);
+        }
+
+        for (int u = 0; u < static_cast<int>(ctx.units_per); ++u, ++global_unit) {
+            if (with_covariates || with_auxiliary) {
+                for (int t = 0; t < static_cast<int>(ctx.T); ++t) {
+                    rp.unit_idx.push_back(global_unit);
+                    rp.cohort_id.push_back(c);
+                    rp.outcome_idx.push_back(t);
+                    if (observed[static_cast<std::size_t>(t)]) {
+                        double y_val = arma::as_scalar(
+                            ctx.G_true.row(static_cast<arma::uword>(t)) * ctx.l_unit[static_cast<std::size_t>(global_unit)]
+                        );
+                        rp.y.push_back(y_val);
+                    } else {
+                        rp.y.push_back(std::numeric_limits<double>::quiet_NaN());
+                    }
+                    if (with_covariates) {
+                        rp.cov1.push_back(static_cast<double>(global_unit + 1));
+                        rp.cov2.push_back(static_cast<double>(c + 1));
+                    }
+                    if (with_auxiliary) {
+                        rp.aux1.push_back(static_cast<double>(global_unit + 1));
+                        rp.aux2.push_back(static_cast<double>(10 * c + t + 1));
+                    }
+                }
+            } else {
+                for (arma::uword k = 0; k < ctx.observed_outcome_indices[static_cast<std::size_t>(c)].n_elem; ++k) {
+                    int t = static_cast<int>(ctx.observed_outcome_indices[static_cast<std::size_t>(c)][k]);
+                    double y_val = arma::as_scalar(
+                        ctx.G_true.row(static_cast<arma::uword>(t)) * ctx.l_unit[static_cast<std::size_t>(global_unit)]
+                    );
+                    rp.unit_idx.push_back(global_unit);
+                    rp.cohort_id.push_back(c);
+                    rp.outcome_idx.push_back(t);
+                    rp.y.push_back(y_val);
+                }
+            }
+        }
+    }
+    return rp;
+}
