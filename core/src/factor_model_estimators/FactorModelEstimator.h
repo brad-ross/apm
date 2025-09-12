@@ -18,8 +18,6 @@
 
 namespace apm {
 
-// FactorModelEstimates moved to factor_model_parameter_structs.h
-
 /**
  * @brief Abstract base class for linear factor model estimators.
  *

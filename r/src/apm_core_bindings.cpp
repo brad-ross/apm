@@ -166,7 +166,7 @@ arma::vec impute_outcomes(
 //' @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
 //' @export
 // [[Rcpp::export]]
-arma::mat estimate_outcome_means_across_cohorts(
+arma::mat estimate_outcome_means_across_cohorts_raw(
     const arma::mat& G,
     Rcpp::List observed_outcome_indices,
     Rcpp::List m_c_vec,

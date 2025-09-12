@@ -6,7 +6,8 @@ utils::globalVariables(c(
 
 # Outcome helpers
 make_outcomes <- function(T) {
-    LETTERS[seq_len(T)]
+    width <- nchar(as.character(T))
+    sprintf("%0*d", width, seq_len(T))
 }
 
 make_staircase_observed_indices <- function(T, window) {
@@ -58,23 +59,25 @@ build_panel_from_indices <- function(outcomes, cohort_indices, units_by_cohort, 
 
 # Deterministic general true factor generator used in tests
 make_true_factors_general <- function(T, r) {
-    if (T == 5L && r == 2L) return(make_true_factors_5x2())
-    F <- matrix(0, nrow = T, ncol = r)
-    for (t in seq_len(T)) {
-        for (j in seq_len(r)) {
-            F[t, j] <- 0.1 * t + 0.05 * j
-        }
-    }
-    F
+    # Match C++: polynomial basis B(t,j) = x^(j), j = 1..r with x = (t)/(T+1), then thin-QR,
+    # then set.seed(42) and permute rows deterministically.
+    x <- (seq_len(T)) / (T + 1)
+    base <- sapply(seq_len(r), function(j) x^j)
+    qr_fac <- qr(base)
+    set.seed(42)
+    Q <- qr.Q(qr_fac)[sample(seq_len(T)), , drop = FALSE]
+    Q
 }
 
 make_rotations <- function(C, r, rotate = TRUE) {
     if (isTRUE(rotate)) generate_symmetric_rotation_matrices(C, r) else rep(list(diag(r)), C)
 }
 
-unit_loading_from_all_units <- function(u_name, all_units, r) {
-    u_idx <- match(u_name, all_units)
-    as.numeric(0.3 * u_idx + 0.1 * seq_len(r))
+unit_loading_from_all_units <- function(u_name, all_units, r, cohort_id, C) {
+    # Match C++: for global unit index u (0-based), l_j = 1.0 + u/total_units + j/r for j=0..r-1
+    N <- length(all_units)
+    u_idx <- match(u_name, all_units) - 1L
+    sapply(0:(r - 1L), function(j) 1.0 + (u_idx / N) + (j / r))
 }
 
 build_factor_model_context <- function(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE) {
@@ -100,10 +103,22 @@ build_factor_model_context <- function(outcomes, cohort_indices, units_by_cohort
 }
 
 expected_Y_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
-    G_c <- ctx$cohort_G_list[[cohort_id]]
+    G_c <- ctx$true_factors[T_idx, ]
     do.call(rbind, lapply(unit_ids, function(u) {
-        l_u <- unit_loading_from_all_units(u, ctx$all_units, ctx$r)
-        as.numeric(G_c %*% l_u)
+        l_u <- unit_loading_from_all_units(
+            u,
+            ctx$all_units,
+            ctx$r,
+            cohort_id,
+            length(ctx$units_by_cohort)
+        )
+        if (is.null(dim(G_c))) {
+            # G_c is a vector (length T), l_u is scalar
+            as.numeric(G_c * l_u)
+        } else {
+            # G_c is a matrix (T x r), l_u is a vector (r)
+            as.numeric(G_c %*% l_u)
+        }
     }))
 }
 
@@ -115,14 +130,36 @@ expected_covariates_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
     array(c(cov1, cov2), dim = c(N, TT, 2L))
 }
 
+# Cohort index matching helpers ------------------------------------------------
+
+# Return the position in list_vecs of the first vector exactly equal to target;
+# NA_integer_ if no exact match is found. Comparison is on integer values.
+match_panel_index <- function(target, list_vecs) {
+    for (i in seq_along(list_vecs)) {
+        v <- list_vecs[[i]]
+        if (length(v) == length(target) && all(as.integer(v) == as.integer(target))) return(i)
+    }
+    NA_integer_
+}
+
+# Given original cohort_indices (list of integer vectors) and ooi_panel (list of
+# integer vectors from the panel), return an integer vector mapping each original
+# cohort to its index in the panel's order. Length equals length(cohort_indices).
+match_cohorts_panel_order <- function(cohort_indices, ooi_panel) {
+    vapply(cohort_indices, function(idx) match_panel_index(idx, ooi_panel), integer(1))
+}
+
 # Factor-based outcome generator to avoid signature conflicts with older helpers
 build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_cohort,
                                             include_covariates = FALSE,
                                             include_auxiliary = FALSE,
                                             r = 2L,
-                                            rotate = TRUE) {
-    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = rotate)
-
+                                            rotate = TRUE,
+                                            ctx = NULL) {
+    if (is.null(ctx)) {
+        ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = rotate)
+    }
+    
     data.table::rbindlist(lapply(seq_along(cohort_indices), function(k) {
         observed_idxs <- cohort_indices[[k]]
         observed_outcomes <- outcomes[observed_idxs]
@@ -159,9 +196,11 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
 }
 
 build_expected_unit_map <- function(units_by_cohort) {
-    data.table::rbindlist(mapply(function(units, cid) {
+    expected_unit_map <- data.table::rbindlist(mapply(function(units, cid) {
         data.table::data.table(unit_id = units, cohort_id = cid)
     }, units_by_cohort, seq_along(units_by_cohort), SIMPLIFY = FALSE))
+    setkey(expected_unit_map, unit_id)
+    expected_unit_map
 }
 
 build_expected_processed_panel <- function(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE) {
@@ -281,4 +320,8 @@ make_true_factors_5x2 <- function() {
         0.4, 0.9,
         0.5, 1.0
     ), nrow = 5, ncol = 2, byrow = TRUE)
+}
+
+comp_rel_tol <- function(p, x, y, smallest_tol = 1e-10) {
+    pmax(smallest_tol, p*max(c(abs(x), abs(y))))
 }

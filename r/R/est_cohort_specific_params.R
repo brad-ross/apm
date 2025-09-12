@@ -1,5 +1,3 @@
-"_PACKAGE"
-
 validate_mask_arg <- function(mask) {
     if (is.null(mask)) return(invisible(NULL))
     if (!is.list(mask)) stop("cohort_outcomes_to_mask must be a named list")
@@ -48,14 +46,7 @@ est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_t
     if (!is.list(est_specs) || length(est_specs) == 0L) stop("est_specs must be a non-empty list")
     if (!is.null(bootstrap) && !inherits(bootstrap, "WeightedBootstrap")) stop("bootstrap must be a WeightedBootstrap or NULL")
 
-    # Minimal validation of specs
-    for (i in seq_along(est_specs)) {
-        sp <- est_specs[[i]]
-        if (!is.list(sp)) stop(sprintf("est_specs[[%d]] must be a list", i))
-        req <- c("factor_model_estimator", "include_outcome_fes", "r")
-        miss <- setdiff(req, names(sp))
-        if (length(miss) > 0L) stop(sprintf("spec %d missing fields: %s", i, paste(miss, collapse = ", ")))
-    }
+    .validate_est_specs(est_specs)
 
     pp <- panel$get_processed_panel()
     obs_idx <- panel$get_observed_outcome_indices()

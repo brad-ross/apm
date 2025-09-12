@@ -25,6 +25,7 @@ test_that("staircase missingness with two units per cohort (matching core test)"
         outcome_value_col = "y",
         model_rank = 2,
         min_cohort_size = 2,
+        sort_cohorts_lexicographically = TRUE,
         cohort_observed_outcomes_as_df = FALSE
     )
 
@@ -34,6 +35,10 @@ test_that("staircase missingness with two units per cohort (matching core test)"
     # 2) observed_outcome_indices should match defined cohorts in cohort_id order
     expected_indices <- lapply(cohort_indices, as.integer)
     expect_equal(res$observed_outcome_indices, expected_indices)
+    # Re-indexing sanity: mapping is a permutation of original cohort indices
+    panel_idx_for_orig <- match_cohorts_panel_order(expected_indices, res$observed_outcome_indices)
+    expect_true(!any(is.na(panel_idx_for_orig)))
+    expect_equal(sort(panel_idx_for_orig), seq_len(length(expected_indices)))
 
     # 3) unit_cohorts should map two units per cohort correctly
     expect_true(is.data.table(res$unit_cohorts))
@@ -65,7 +70,8 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
         outcome_value_col = "y",
         covar_cols = c("cov1", "cov2"),
         model_rank = 2,
-        min_cohort_size = 2
+        min_cohort_size = 2,
+        sort_cohorts_lexicographically = TRUE
     )
 
     # outcome_ids should be sorted unique outcomes
@@ -76,6 +82,10 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
     # observed_outcome_indices should match defined cohorts
     expected_indices <- lapply(cohort_indices, as.integer)
     expect_equal(obj$get_observed_outcome_indices(), expected_indices)
+    # Re-indexing sanity: mapping is a permutation of original cohort indices
+    panel_idx_for_orig <- match_cohorts_panel_order(expected_indices, obj$get_observed_outcome_indices())
+    expect_true(!any(is.na(panel_idx_for_orig)))
+    expect_equal(sort(panel_idx_for_orig), seq_len(length(expected_indices)))
 
     # unit_cohorts should map two units per cohort correctly and include unit_idx
     unit_cohorts <- obj$get_unit_cohorts()
@@ -125,7 +135,8 @@ test_that("UnbalancedPanel works without covariates provided", {
         outcome_id_col = "outcome_id",
         outcome_value_col = "y",
         model_rank = 2,
-        min_cohort_size = 2
+        min_cohort_size = 2,
+        sort_cohorts_lexicographically = TRUE
     )
 
     # covar_cols should be empty
@@ -135,6 +146,10 @@ test_that("UnbalancedPanel works without covariates provided", {
     expect_equal(obj$get_outcome_ids(), outcomes)
     expected_indices <- lapply(cohort_indices, as.integer)
     expect_equal(obj$get_observed_outcome_indices(), expected_indices)
+    # Re-indexing sanity: mapping is a permutation of original cohort indices
+    panel_idx_for_orig <- match_cohorts_panel_order(expected_indices, obj$get_observed_outcome_indices())
+    expect_true(!any(is.na(panel_idx_for_orig)))
+    expect_equal(sort(panel_idx_for_orig), seq_len(length(expected_indices)))
 
     # processed panel should not include covariate columns
     pp <- obj$get_processed_panel()
@@ -153,7 +168,7 @@ test_that("UnbalancedPanel works without covariates provided", {
 
 test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)", {
 
-    outcomes <- c("A", "B", "C")
+    outcomes <- sprintf("%03d", 1:3)
 
     # Two large cohorts and one small cohort with a single unit
     cohort_indices <- list(
@@ -178,6 +193,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         outcome_value_col = "y",
         model_rank = 1,         # only require at least 1 outcome
         min_cohort_size = 2,    # require at least 2 units per cohort
+        sort_cohorts_lexicographically = TRUE,
         cohort_observed_outcomes_as_df = FALSE
     )
 
@@ -196,6 +212,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         data.table(unit_id = c("u1", "u2"), cohort_id = 1L),
         data.table(unit_id = c("u3", "u4"), cohort_id = 2L)
     ))
+    setkey(expected_map, unit_id)
 
     setorder(res$unit_cohorts, unit_id)
     setorder(expected_map, unit_id)
@@ -216,6 +233,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         outcome_value_col = "y",
         model_rank = 2,         # now require at least 2 outcomes
         min_cohort_size = 1,    # size condition met for all cohorts
+        sort_cohorts_lexicographically = TRUE,
         cohort_observed_outcomes_as_df = FALSE
     )
 
@@ -231,6 +249,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         data.table(unit_id = c("u1", "u2"), cohort_id = 1L),
         data.table(unit_id = c("u3", "u4"), cohort_id = 2L)
     ))
+    setkey(expected_map_rank, unit_id)
     setorder(res_rank$unit_cohorts, unit_id)
     setorder(expected_map_rank, unit_id)
     expect_equal(res_rank$unit_cohorts, expected_map_rank)
@@ -241,7 +260,7 @@ test_that("to_data_table converts base data.frame to data.table", {
     # Build a simple panel as data.table
     dt0 <- data.table(
         unit_id = c("u1", "u1", "u2", "u3"),
-        outcome_id = c("A", "B", "B", "C")
+        outcome_id = c("001", "002", "002", "003")
     )
 
     # Convert to base data.frame
@@ -259,7 +278,7 @@ test_that("to_data_table converts base data.frame to data.table", {
 
 test_that("validate_required_panel_cols enforces required columns", {
 
-    dt <- data.table(unit_id = c("u1", "u2"), outcome_id = c("A", "B"), y = 1:2)
+    dt <- data.table(unit_id = c("u1", "u2"), outcome_id = c("001", "002"), y = 1:2)
 
     # Passes with required cols present
     expect_silent(apm:::validate_required_panel_cols(dt, "unit_id", "outcome_id"))
@@ -294,7 +313,7 @@ test_that("construct_cohort_observed_outcomes_df builds long-form mapping", {
     expected_df <- data.frame(
         cohort_id = c(rep(1L, 3), rep(2L, 3), rep(3L, 3)),
         outcome_idx = c(1L, 2L, 3L, 2L, 3L, 4L, 3L, 4L, 5L),
-        outcome_name = c("A", "B", "C", "B", "C", "D", "C", "D", "E"),
+        outcome_name = outcomes[c(1L, 2L, 3L, 2L, 3L, 4L, 3L, 4L, 5L)],
         stringsAsFactors = FALSE
     )
 
