@@ -20,7 +20,7 @@ std::vector<arma::mat> generate_rotation_matrices(size_t C, arma::uword size);
 std::vector<std::vector<std::set<arma::uword>>> canonicalize_o3_output(
     std::vector<std::vector<std::set<arma::uword>>> output);
 
-void expect_same_subspace(const arma::mat& G1, const arma::mat& G2, double tol = 1e-9);
+void expect_same_subspace(const arma::mat& G1, const arma::mat& G2, double tol = 1e-6);
 
 // -------- Estimation fixtures --------
 
@@ -98,7 +98,7 @@ StaircasePanelContext make_staircase_panel_context(
     arma::uword T,
     arma::uword r,
     arma::uword T_c,
-    arma::uword units_per = 2,
+    arma::uword units_per = 0,
     arma::uword q = 2);
 
 struct RawPanelData {

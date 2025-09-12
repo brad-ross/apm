@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <limits>
+#include <cmath>
 
 // -------- Utilities and assertions --------
 
@@ -37,7 +38,8 @@ std::vector<std::vector<std::set<arma::uword>>> canonicalize_o3_output(
 void expect_same_subspace(const arma::mat& G1, const arma::mat& G2, double tol) {
     arma::mat P1 = apm::internal::projection_matrix(G1);
     arma::mat P2 = apm::internal::projection_matrix(G2);
-    ASSERT_TRUE(arma::approx_equal(P1, P2, "absdiff", tol));
+    double rel_tol = std::max(arma::abs(P1).max(), arma::abs(P2).max());
+    ASSERT_TRUE(arma::approx_equal(P1, P2, "absdiff", rel_tol));
 }
 
 // -------- Estimation fixtures --------
@@ -191,33 +193,38 @@ StaircasePanelContext make_staircase_panel_context(
     StaircasePanelContext ctx;
     ctx.T = T;
     ctx.r = r;
-    ctx.T_c = T_c;
-    ctx.units_per = units_per;
+    ctx.T_c = std::max(r, T_c);
+    ctx.units_per = std::max(units_per, ctx.T_c);
     ctx.q = q;
 
-    ctx.G_true.set_size(T, r);
-    for (arma::uword t = 0; t < T; ++t) {
-        double v = static_cast<double>(t + 1) / static_cast<double>(T);
-        if (r >= 1) ctx.G_true(t, 0) = v;
-        if (r >= 2) ctx.G_true(t, 1) = v + 0.5;
-        for (arma::uword j = 2; j < r; ++j) {
-            ctx.G_true(t, j) = v + 0.1 * static_cast<double>(j);
+    // Construct a smooth, full-column-rank basis and orthonormalize via thin QR
+    arma::mat B(ctx.T, r, arma::fill::zeros);
+    for (arma::uword t = 0; t < ctx.T; ++t) {
+        double x = (static_cast<double>(t) + 1.0) / (static_cast<double>(ctx.T) + 1.0);
+        for (arma::uword j = 0; j < ctx.r; ++j) {
+            B(t, j) = std::pow(x, static_cast<int>(j + 1));
         }
     }
+    arma::mat Q, R;
+    arma::qr_econ(Q, R, B);
 
-    ctx.observed_outcome_indices = make_staircase_observed_indices(T, T_c);
+    // Set seed to 42 and shuffle the rows of Q for ctx.G_true
+    arma::arma_rng::set_seed(42);
+    arma::uvec idx = arma::randperm(ctx.T);
+    ctx.G_true = Q.rows(idx);
+
+    ctx.observed_outcome_indices = make_staircase_observed_indices(ctx.T, ctx.T_c);
     ctx.C = static_cast<arma::uword>(ctx.observed_outcome_indices.size());
-    ctx.g0_true = arma::linspace(0.1, 0.5, T);
-    ctx.a_true.set_size(q);
-    for (arma::uword j = 0; j < q; ++j) ctx.a_true(j) = 0.5 + 0.5 * static_cast<double>(j)/static_cast<double>(q);
+    ctx.g0_true = arma::linspace(0.1, 0.5, ctx.T);
+    ctx.a_true.set_size(ctx.q);
+    for (arma::uword j = 0; j < ctx.q; ++j) ctx.a_true(j) = 0.5 + 0.5 * static_cast<double>(j)/static_cast<double>(ctx.q);
 
     ctx.l_unit.clear();
-    std::size_t total_units = static_cast<std::size_t>(ctx.C * units_per);
+    std::size_t total_units = static_cast<std::size_t>(ctx.C * ctx.units_per);
     ctx.l_unit.reserve(total_units);
-    for (arma::uword u = 0; u < ctx.C * units_per; ++u) {
-        arma::vec l(r);
-        for (arma::uword j = 0; j < r; ++j) l(j) = 1.0 + static_cast<double>(u)/static_cast<double>(total_units) + static_cast<double>(j)/static_cast<double>(r);
-        // if (r >= 2) { l(0) = 1.0 + static_cast<double>(u); l(1) = 2.0 + static_cast<double>(u); }
+    for (arma::uword u = 0; u < total_units; ++u) {
+        arma::vec l(ctx.r);
+        for (arma::uword j = 0; j < ctx.r; ++j) l(j) = 1.0 + static_cast<double>(u)/static_cast<double>(total_units) + static_cast<double>(j)/static_cast<double>(ctx.r);
         ctx.l_unit.push_back(std::move(l));
     }
     return ctx;

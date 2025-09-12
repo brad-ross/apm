@@ -54,7 +54,7 @@ TEST(CohortSpecificRawTest, RGreaterThanTcThrows) {
 }
 
 TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
-    auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3);
+    auto ctx = make_staircase_panel_context(/*T=*/50, /*r=*/2, /*T_c=*/3);
     auto rp = make_raw_panel(ctx, /*with_covariates=*/false);
 
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;
@@ -75,33 +75,42 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
     ASSERT_EQ(pca_vec.size(), ctx.C);
     ASSERT_EQ(pca_fe_vec.size(), ctx.C);
 
-    const auto& est_no_fe = pca_vec[0].parameter_estimates;
-    const auto& est_fe    = pca_fe_vec[0].parameter_estimates;
-    EXPECT_EQ(est_no_fe.G.n_rows, ctx.observed_outcome_indices[0].n_elem);
-    EXPECT_EQ(est_no_fe.G.n_cols, ctx.r);
-    EXPECT_FALSE(est_no_fe.has_fixed_effects());
-    EXPECT_TRUE(est_fe.has_fixed_effects());
-    EXPECT_EQ(est_fe.G.n_rows, ctx.observed_outcome_indices[0].n_elem);
-    EXPECT_EQ(est_fe.G.n_cols, ctx.r);
+    double largest_diff = 0.0;
+    for (std::size_t c = 0; c < ctx.C; ++c) {
+        const auto& est_no_fe = pca_vec[c].parameter_estimates;
+        const auto& est_fe    = pca_fe_vec[c].parameter_estimates;
+        EXPECT_EQ(est_no_fe.G.n_rows, ctx.observed_outcome_indices[c].n_elem);
+        EXPECT_EQ(est_no_fe.G.n_cols, ctx.r);
+        EXPECT_FALSE(est_no_fe.has_fixed_effects());
+        EXPECT_TRUE(est_fe.has_fixed_effects());
+        EXPECT_EQ(est_fe.G.n_rows, ctx.observed_outcome_indices[c].n_elem);
+        EXPECT_EQ(est_fe.G.n_cols, ctx.r);
 
-    arma::mat G0_true = ctx.G_true.rows(ctx.observed_outcome_indices[0]);
-    arma::mat P_est_no_fe = apm::internal::projection_matrix(est_no_fe.G);
-    arma::mat P_est_fe    = apm::internal::projection_matrix(est_fe.G);
-    arma::mat P_true      = apm::internal::projection_matrix(G0_true);
-    if (!arma::approx_equal(P_est_no_fe, P_true, "absdiff", 1e-9)) {
-        std::cerr << "P_est_no_fe:\n" << P_est_no_fe << "\nP_true:\n" << P_true << std::endl;
+        arma::mat G0_true = ctx.G_true.rows(ctx.observed_outcome_indices[c]);
+        arma::mat P_est_no_fe = apm::internal::projection_matrix(est_no_fe.G);
+        arma::mat P_est_fe    = apm::internal::projection_matrix(est_fe.G);
+        arma::mat P_true      = apm::internal::projection_matrix(G0_true);
+        if (!arma::approx_equal(P_est_no_fe, P_true, "absdiff", 1e-9)) {
+            largest_diff = std::max(largest_diff, arma::abs(P_est_no_fe - P_true).max());
+            // std::cerr << "P_est_no_fe:\n" << P_est_no_fe << "\nP_true:\n" << P_true
+            //     << "\nabsdiff: " << arma::abs(P_est_no_fe - P_true).max() << std::endl;
+        }
+        // Align with R tests: assert span match for no-FE estimator only
+        expect_same_subspace(est_no_fe.G, G0_true);
     }
-    // Align with R tests: assert span match for no-FE estimator only
-    expect_same_subspace(est_no_fe.G, G0_true);
+    if (largest_diff > 0.0) {
+        std::cerr << "largest_diff: " << largest_diff << std::endl;
+    }
 
     const auto& oms0 = out.cohort_outcome_mean_ests[0].suff_stat_estimates;
     arma::vec expected_means(oms0.observed_outcome_means.n_elem, arma::fill::zeros);
-    int u0 = 0, u1 = 1;
     for (arma::uword k = 0; k < ctx.observed_outcome_indices[0].n_elem; ++k) {
         arma::uword t = ctx.observed_outcome_indices[0][k];
-        double m0 = arma::as_scalar(ctx.G_true.row(t) * ctx.l_unit[u0]);
-        double m1 = arma::as_scalar(ctx.G_true.row(t) * ctx.l_unit[u1]);
-        expected_means(static_cast<arma::uword>(k)) = 0.5 * (m0 + m1);
+        double sum_m = 0.0;
+        for (arma::uword u = 0; u < ctx.units_per; ++u) {
+            sum_m += arma::as_scalar(ctx.G_true.row(t) * ctx.l_unit[static_cast<std::size_t>(u)]);
+        }
+        expected_means(static_cast<arma::uword>(k)) = sum_m / static_cast<double>(ctx.units_per);
     }
     ASSERT_TRUE(arma::approx_equal(oms0.observed_outcome_means, expected_means, "absdiff", 1e-12));
     EXPECT_FALSE(oms0.has_covar_means());
@@ -145,9 +154,11 @@ TEST(CohortSpecificRawTest, YXAssembly_WithCovariates_DimensionsAndMeans) {
     ASSERT_EQ(cm.n_rows, ctx.T);
     ASSERT_EQ(cm.n_cols, ctx.q);
 
+    double exp_cov1 = 0.5 * (1.0 + static_cast<double>(ctx.units_per)); // mean of 1..units_per
+    double exp_cov2 = 1.0; // cohort 0 has c+1 = 1
     for (arma::uword t = 0; t < ctx.T; ++t) {
-        EXPECT_NEAR(cm(t, 0), 1.5, 1e-12);
-        EXPECT_NEAR(cm(t, 1), 1.0, 1e-12);
+        EXPECT_NEAR(cm(t, 0), exp_cov1, 1e-12);
+        EXPECT_NEAR(cm(t, 1), exp_cov2, 1e-12);
     }
 }
 
@@ -155,10 +166,15 @@ TEST(CohortSpecificRawTest, Bootstrap_DeterministicReplicates_NoCovariates) {
     auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3);
     auto rp = make_raw_panel(ctx, /*with_covariates=*/false);
 
-    // 6 units total; build W with two bootstrap draws: first uses units 0..2, second uses 3..5 equally
+    // 3 cohorts x units_per units; build W with two bootstrap draws:
+    // draw 1 uses cohort 0 units only; draw 2 uses cohort 2 units only
     arma::mat W(static_cast<arma::uword>(ctx.C * ctx.units_per), 2, arma::fill::zeros);
-    for (int i = 0; i < static_cast<int>(ctx.units_per + 1); ++i) W(i, 0) = 1.0 / 3.0; // units 0..2
-    for (int i = static_cast<int>(ctx.units_per + 1); i < static_cast<int>(ctx.C * ctx.units_per); ++i) W(i, 1) = 1.0 / 3.0; // units 3..5
+    for (int i = 0; i < static_cast<int>(ctx.units_per); ++i) {
+        W(i, 0) = 1.0 / static_cast<double>(ctx.units_per); // units 0..units_per-1 (cohort 0)
+    }
+    for (int i = static_cast<int>(2 * ctx.units_per); i < static_cast<int>(ctx.C * ctx.units_per); ++i) {
+        W(i, 1) = 1.0 / static_cast<double>(ctx.units_per); // units of cohort 2 only
+    }
     auto boot = std::make_shared<TestBootstrap>(W);
 
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;
@@ -192,8 +208,9 @@ TEST(CohortSpecificRawTest, Bootstrap_DeterministicReplicates_NoCovariates) {
     const auto& w_eq = out.cohort_weights.at("pca_fe");
 
     // Expected S columns per draw given W
-    arma::vec S1 = {2.0/3.0, 1.0/3.0, 0.0};
-    arma::vec S2 = {0.0, 1.0/3.0, 2.0/3.0};
+    // Draw 1: all mass on cohort 0; Draw 2: all mass on cohort 2
+    arma::vec S1 = {1.0, 0.0, 0.0};
+    arma::vec S2 = {0.0, 0.0, 1.0};
     arma::vec meanS = 0.5 * (S1 + S2);
 
     // by_size: point = mean across draws; bootstrap replicates equal S columns
