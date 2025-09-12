@@ -25,6 +25,7 @@ test_that("staircase missingness with two units per cohort (matching core test)"
         outcome_value_col = "y",
         model_rank = 2,
         min_cohort_size = 2,
+        sort_cohorts_lexicographically = TRUE,
         cohort_observed_outcomes_as_df = FALSE
     )
 
@@ -69,7 +70,8 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
         outcome_value_col = "y",
         covar_cols = c("cov1", "cov2"),
         model_rank = 2,
-        min_cohort_size = 2
+        min_cohort_size = 2,
+        sort_cohorts_lexicographically = TRUE
     )
 
     # outcome_ids should be sorted unique outcomes
@@ -133,7 +135,8 @@ test_that("UnbalancedPanel works without covariates provided", {
         outcome_id_col = "outcome_id",
         outcome_value_col = "y",
         model_rank = 2,
-        min_cohort_size = 2
+        min_cohort_size = 2,
+        sort_cohorts_lexicographically = TRUE
     )
 
     # covar_cols should be empty
@@ -190,6 +193,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         outcome_value_col = "y",
         model_rank = 1,         # only require at least 1 outcome
         min_cohort_size = 2,    # require at least 2 units per cohort
+        sort_cohorts_lexicographically = TRUE,
         cohort_observed_outcomes_as_df = FALSE
     )
 
@@ -208,6 +212,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         data.table(unit_id = c("u1", "u2"), cohort_id = 1L),
         data.table(unit_id = c("u3", "u4"), cohort_id = 2L)
     ))
+    setkey(expected_map, unit_id)
 
     setorder(res$unit_cohorts, unit_id)
     setorder(expected_map, unit_id)
@@ -228,6 +233,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         outcome_value_col = "y",
         model_rank = 2,         # now require at least 2 outcomes
         min_cohort_size = 1,    # size condition met for all cohorts
+        sort_cohorts_lexicographically = TRUE,
         cohort_observed_outcomes_as_df = FALSE
     )
 
@@ -243,6 +249,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         data.table(unit_id = c("u1", "u2"), cohort_id = 1L),
         data.table(unit_id = c("u3", "u4"), cohort_id = 2L)
     ))
+    setkey(expected_map_rank, unit_id)
     setorder(res_rank$unit_cohorts, unit_id)
     setorder(expected_map_rank, unit_id)
     expect_equal(res_rank$unit_cohorts, expected_map_rank)

@@ -196,9 +196,11 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
 }
 
 build_expected_unit_map <- function(units_by_cohort) {
-    data.table::rbindlist(mapply(function(units, cid) {
+    expected_unit_map <- data.table::rbindlist(mapply(function(units, cid) {
         data.table::data.table(unit_id = units, cohort_id = cid)
     }, units_by_cohort, seq_along(units_by_cohort), SIMPLIFY = FALSE))
+    setkey(expected_unit_map, unit_id)
+    expected_unit_map
 }
 
 build_expected_processed_panel <- function(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE) {

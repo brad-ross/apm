@@ -137,6 +137,7 @@ construct_cohorts_from_panel <- function(panel_df,
                                          outcome_value_col,
                                          model_rank,
                                          min_cohort_size = 0,
+                                         sort_cohorts_lexicographically = FALSE,
                                          cohort_observed_outcomes_as_df = TRUE) {
     panel_dt <- to_data_table(panel_df)
 
@@ -144,53 +145,95 @@ construct_cohorts_from_panel <- function(panel_df,
     validate_required_panel_cols(panel_dt, unit_id_col, outcome_id_col, outcome_value_col)
     panel_dt <- panel_dt[!is.na(get(outcome_value_col))]
 
-    # Build the globally sorted unique outcome vector and an inverse index map
+    # Build globally sorted unique outcomes and index map (atomic types)
     outcome_ids <- sort(unique(panel_dt[[outcome_id_col]]))
     outcome_to_index <- setNames(seq_along(outcome_ids), as.character(outcome_ids))
 
-    # For each unit, compute sorted indices of its unique outcomes using the map
-    # Also compute a canonical string key for grouping cohorts
-    unit_observed_outcomes <- panel_dt[, {
-        idx <- sort(unique(outcome_to_index[as.character(get(outcome_id_col))]))
-        list(
-            observed_outcomes_list = list(idx),
-            observed_key = paste(idx, collapse = ",")
-        )
-    }, by = c(unit_id_col)]
+    # Keep only unit and outcome; map outcome to integer index (atomic)
+    dt <- panel_dt[, .(
+        unit_id = get(unit_id_col),
+        outcome_id = get(outcome_id_col)
+    )]
+    dt[, outcome_idx := outcome_to_index[as.character(outcome_id)]]
+    dt[, outcome_id := NULL]
 
-    # Build cohort summary by unique observed outcome sets in a single aggregation
-    cohorts_dt <- unit_observed_outcomes[, list(
-        observed_outcomes_list = observed_outcomes_list[1L],
+    # Unique unit-outcome pairs and sort by (unit_id, outcome_idx)
+    uo <- unique(dt, by = c("unit_id", "outcome_idx"))
+    setkey(uo, unit_id, outcome_idx)
+    # setorder(uo, unit_id, outcome_idx)
+
+    # Per-unit canonical key: prefer fast C-level hashing via xxhashlite; fallback to zero-padded string
+    if (requireNamespace("xxhashlite", quietly = TRUE)) {
+        unit_keys <- uo[, .(
+            outcome_count = .N,
+            cohort_key = as.character(xxhashlite::xxhash(outcome_idx, algo = "xxh64"))
+        ), by = unit_id]
+    } else {
+        # Determine width for zero-padding based on the maximum outcome index
+        pad_width <- nchar(as.character(length(outcome_ids)))
+        pad_fmt <- paste0("%0", pad_width, "d")
+        unit_keys <- uo[, .(
+            outcome_count = .N,
+            cohort_key = paste(sprintf(pad_fmt, outcome_idx), collapse = ",")
+        ), by = unit_id]
+    }
+
+    # Cohort map: units sharing key; cohort-level counts (atomic-only ops)
+    coh_map <- unit_keys[, .(
         num_units = .N,
-        outcome_count = length(observed_outcomes_list[[1L]])
-    ), by = observed_key]
+        outcome_count = outcome_count[1L]
+    ), by = cohort_key]
 
-    # Filter out cohorts that are too small in either dimension
-    cohorts_dt <- cohorts_dt[outcome_count >= model_rank & num_units >= min_cohort_size]
+    # Filter cohorts by requirements
+    coh_map <- coh_map[outcome_count >= model_rank & num_units >= min_cohort_size]
 
-    # Sort by observed_key and assign cohort_id
-    setorder(cohorts_dt, observed_key)
-    cohorts_dt[, "cohort_id"] <- seq_len(nrow(cohorts_dt))
+    # Stable ordering and cohort_id assignment
+    if (isTRUE(sort_cohorts_lexicographically)) {
+        pad_width <- nchar(as.character(length(outcome_ids)))
+        pad_fmt <- paste0("%0", pad_width, "d")
+        uo_with_key <- uo[unit_keys, on = .(unit_id), nomatch = 0L][, .(cohort_key, outcome_idx)]
+        order_key_dt <- unique(uo_with_key, by = c("cohort_key", "outcome_idx"))[
+            , .(cohort_order_key = paste(sprintf(pad_fmt, sort(outcome_idx)), collapse = ",")), by = cohort_key
+        ]
+        coh_map <- order_key_dt[coh_map, on = .(cohort_key)]
+        setkey(coh_map, cohort_order_key)
+    } else {
+        setkey(coh_map, cohort_key)
+    }
+    coh_map[, cohort_id := seq_len(.N)]
 
-    # Join cohort ids back to units; keep only unit id and cohort id
-    unit_cohorts <- unit_observed_outcomes[
-        cohorts_dt[, list(observed_key, cohort_id)],
-        on = "observed_key",
-        nomatch = 0L
-    ][, c(unit_id_col, "cohort_id"), with = FALSE]
+    # Assign cohort_id to units (inner join keeps only filtered cohorts)
+    unit_cohorts <- unit_keys[coh_map[, .(cohort_key, cohort_id)], on = .(cohort_key), nomatch = 0L][
+        , .(unit_id, cohort_id)
+    ]
+    setkey(unit_cohorts, unit_id)
 
-    # Build list of observed outcome index vectors per cohort, ordered by cohort_id
-    observed_outcome_indices <- cohorts_dt[order(cohort_id)][["observed_outcomes_list"]]
+    # Drop key columns from coh_map after cohort_id has been defined
+    if (isTRUE(sort_cohorts_lexicographically)) {
+        coh_map[, c("cohort_key", "cohort_order_key") := NULL]
+    } else {
+        coh_map[, cohort_key := NULL]
+    }
 
+    # Long-form cohort-outcome mapping via atomic joins; dedupe at cohort level
+    cohort_outcomes <- unique(
+        uo[unit_cohorts, on = .(unit_id), nomatch = 0L][, .(cohort_id, outcome_idx)],
+        by = c("cohort_id", "outcome_idx")
+    )
+    setorder(cohort_outcomes, cohort_id, outcome_idx)
+    cohort_outcomes[, outcome_name := as.character(outcome_ids[outcome_idx])]
+
+    # Prepare return values
     if (isTRUE(cohort_observed_outcomes_as_df)) {
         return(list(
-            cohort_observed_outcomes_df = construct_cohort_observed_outcomes_df(
-                outcome_ids = outcome_ids,
-                observed_outcome_indices = observed_outcome_indices
-            ),
+            cohort_observed_outcomes_df = cohort_outcomes,
             unit_cohorts = unit_cohorts
         ))
     } else {
+        # Reconstruct list-of-indices per cohort (only at the very end)
+        split_list <- split(cohort_outcomes$outcome_idx, cohort_outcomes$cohort_id)
+        cohort_order <- as.integer(names(split_list))
+        observed_outcome_indices <- unname(split_list[order(cohort_order)])
         return(list(
             outcome_ids = outcome_ids,
             outcome_to_index = outcome_to_index,
@@ -234,6 +277,7 @@ UnbalancedPanel <- R6Class(
                               outcome_value_col,
                               model_rank,
                               min_cohort_size = 0,
+                              sort_cohorts_lexicographically = FALSE,
                               covar_cols = character(0),
                               auxiliary_cols = character(0)) {
             private$original_panel <- to_data_table(panel_df)
@@ -280,6 +324,7 @@ UnbalancedPanel <- R6Class(
                 outcome_value_col = private$outcome_value_col,
                 model_rank = private$model_rank,
                 min_cohort_size = private$min_cohort_size,
+                sort_cohorts_lexicographically = sort_cohorts_lexicographically,
                 cohort_observed_outcomes_as_df = FALSE
             )
             private$outcome_ids <- coh$outcome_ids

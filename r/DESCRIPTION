@@ -19,7 +19,8 @@ Imports:
     RcppArmadillo (>= 0.9.000.0.0),
     data.table (>= 1.14.0),
     parallel,
-    R6
+    R6,
+    xxhashlite
 LinkingTo: 
     Rcpp,
     RcppArmadillo

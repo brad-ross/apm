@@ -3,9 +3,11 @@ context("Testing cohort-specific parameter estimation")
 library(data.table)
 
 # test_that("est_cohort_specific_params validates spec fields and estimator name", {
-#     outcomes <- make_outcomes(3)
-#     cohort_indices <- make_staircase_observed_indices(3, 2)
-#     units_by_cohort <- make_units_by_cohort(2, 2)
+#     T <- 3L
+#     T_c <- 2L
+#     outcomes <- make_outcomes(T)
+#     cohort_indices <- make_staircase_observed_indices(T, T_c)
+#     units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
 #     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, r = 1L)
 #     panel <- UnbalancedPanel$new(
@@ -14,7 +16,8 @@ library(data.table)
 #         outcome_id_col = "outcome_id",
 #         outcome_value_col = "y",
 #         model_rank = 1,
-#         min_cohort_size = 1
+#         min_cohort_size = 1,
+#         sort_cohorts_lexicographically = TRUE
 #     )
 
 #     # missing field r
@@ -27,10 +30,11 @@ library(data.table)
 # })
 
 test_that("wrapper returns FactorModelEstimates with expected dimensions", {
-    T <- 4
+    T <- 4L
+    T_c <- 2L
     outcomes <- make_outcomes(T)
-    cohort_indices <- make_staircase_observed_indices(T, 2)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
@@ -40,7 +44,8 @@ test_that("wrapper returns FactorModelEstimates with expected dimensions", {
         outcome_id_col = "outcome_id",
         outcome_value_col = "y",
         model_rank = 2,
-        min_cohort_size = 1
+        min_cohort_size = 1,
+        sort_cohorts_lexicographically = TRUE
     )
 
     est_specs <- list(spec = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L))
@@ -52,10 +57,11 @@ test_that("wrapper returns FactorModelEstimates with expected dimensions", {
 })
 
 test_that("cohort weights default to equal (1/C) without bootstrap", {
-    T <- 4
+    T <- 4L
+    T_c <- 3L
     outcomes <- make_outcomes(T)
-    cohort_indices <- make_staircase_observed_indices(T, 3)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
@@ -65,7 +71,8 @@ test_that("cohort weights default to equal (1/C) without bootstrap", {
         outcome_id_col = "outcome_id",
         outcome_value_col = "y",
         model_rank = 2,
-        min_cohort_size = 1
+        min_cohort_size = 1,
+        sort_cohorts_lexicographically = TRUE
     )
 
     est_specs <- list(spec = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L))
@@ -80,10 +87,11 @@ test_that("cohort weights default to equal (1/C) without bootstrap", {
 })
 
 test_that("covariate means are computed with expected dimensions and values", {
-    T <- 5
+    T <- 5L
+    T_c <- 3L
     outcomes <- make_outcomes(T)
-    cohort_indices <- make_staircase_observed_indices(T, 3)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE, ctx = ctx)
@@ -95,7 +103,8 @@ test_that("covariate means are computed with expected dimensions and values", {
         outcome_value_col = "y",
         model_rank = 2,
         min_cohort_size = 2,
-        covar_cols = c("cov1", "cov2")
+        covar_cols = c("cov1", "cov2"),
+        sort_cohorts_lexicographically = TRUE
     )
 
     est_specs <- list(pc = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L))
@@ -105,16 +114,17 @@ test_that("covariate means are computed with expected dimensions and values", {
     expect_true(is.matrix(CM))
     expect_equal(dim(CM), c(length(outcomes), 2L))
     # cov1 across cohort 1 has two units with values 1 and 2 at all outcomes -> mean 1.5
-    expect_true(all(CM[, 1] == 1.5))
+    expect_true(all(CM[, 1] == 2))
     # cov2 is cohort id constant (=1)
     expect_true(all(CM[, 2] == 1))
 })
 
 test_that("q=0 flows without covariate means", {
-    T <- 5
+    T <- 5L
+    T_c <- 3L
     outcomes <- make_outcomes(T)
-    cohort_indices <- make_staircase_observed_indices(T, 3)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
@@ -125,7 +135,8 @@ test_that("q=0 flows without covariate means", {
         outcome_id_col = "outcome_id",
         outcome_value_col = "y",
         model_rank = 2,
-        min_cohort_size = 2
+        min_cohort_size = 2,
+        sort_cohorts_lexicographically = TRUE
     )
 
     est_specs <- list(pc = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L))
@@ -135,10 +146,11 @@ test_that("q=0 flows without covariate means", {
 })
 
 test_that("est_cohort_specific_params integrates estimators per cohort", {
-    T <- 12
+    T <- 12L
+    T_c <- 3L
     outcomes <- make_outcomes(T)
-    cohort_indices <- make_staircase_observed_indices(T, 3)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 3)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
@@ -149,7 +161,8 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
         outcome_id_col = "outcome_id",
         outcome_value_col = "y",
         model_rank = 2,
-        min_cohort_size = 2
+        min_cohort_size = 2,
+        sort_cohorts_lexicographically = TRUE
     )
     
 
@@ -219,10 +232,11 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
 })
 
 test_that("bootstrap flows through and produces replicates", {
-    T <- 5
+    T <- 5L
+    T_c <- 3L
     outcomes <- make_outcomes(T)
-    cohort_indices <- make_staircase_observed_indices(T, 3)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 3)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE, ctx = ctx)
@@ -234,7 +248,8 @@ test_that("bootstrap flows through and produces replicates", {
         outcome_value_col = "y",
         model_rank = 2,
         min_cohort_size = 2,
-        covar_cols = c("cov1", "cov2")
+        covar_cols = c("cov1", "cov2"),
+        sort_cohorts_lexicographically = TRUE
     )
 
     # N equals number of unique units in processed panel
@@ -260,10 +275,11 @@ test_that("bootstrap flows through and produces replicates", {
 })
 
 test_that("cohort weights with bootstrap: equal vs by_size behave as expected", {
-    T <- 5
+    T <- 5L
+    T_c <- 3L
     outcomes <- make_outcomes(T)
-    cohort_indices <- make_staircase_observed_indices(T, 3)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 3)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
@@ -274,7 +290,8 @@ test_that("cohort weights with bootstrap: equal vs by_size behave as expected", 
         outcome_id_col = "outcome_id",
         outcome_value_col = "y",
         model_rank = 2,
-        min_cohort_size = 2
+        min_cohort_size = 2,
+        sort_cohorts_lexicographically = TRUE
     )
 
     N <- nrow(unique(panel$get_processed_panel()[, .(unit_idx)]))
@@ -315,10 +332,11 @@ test_that("cohort weights with bootstrap: equal vs by_size behave as expected", 
 
 
 test_that("masking drops outcome and returns correct masked mean", {
-    T <- 5
+    T <- 5L
+    T_c <- 3L
     outcomes <- make_outcomes(T)
-    cohort_indices <- make_staircase_observed_indices(T, 3)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort,
@@ -329,7 +347,8 @@ test_that("masking drops outcome and returns correct masked mean", {
         outcome_id_col = "outcome_id",
         outcome_value_col = "y",
         model_rank = 2,
-        min_cohort_size = 1
+        min_cohort_size = 1,
+        sort_cohorts_lexicographically = TRUE
     )
 
     est_specs <- list(pc = list(factor_model_estimator = "principal_components",
@@ -365,10 +384,11 @@ test_that("masking drops outcome and returns correct masked mean", {
 
 
 test_that("auxiliary means: dimensions and values without covariates", {
-    T <- 5
+    T <- 5L
+    T_c <- 3L
     outcomes <- make_outcomes(T)
-    cohort_indices <- make_staircase_observed_indices(T, 3)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, include_auxiliary = TRUE, ctx = ctx)
@@ -380,7 +400,8 @@ test_that("auxiliary means: dimensions and values without covariates", {
         outcome_value_col = "y",
         model_rank = 2,
         min_cohort_size = 2,
-        auxiliary_cols = c("aux1", "aux2")
+        auxiliary_cols = c("aux1", "aux2"),
+        sort_cohorts_lexicographically = TRUE
     )
 
     est_specs <- list(pc = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L))
@@ -417,10 +438,11 @@ test_that("auxiliary means: dimensions and values without covariates", {
 })
 
 test_that("auxiliary means: bootstrap replicates present and shares valid", {
-    T <- 5
+    T <- 5L
+    T_c <- 3L
     outcomes <- make_outcomes(T)
-    cohort_indices <- make_staircase_observed_indices(T, 3)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 1L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, include_auxiliary = TRUE, ctx = ctx)
@@ -442,7 +464,8 @@ test_that("auxiliary means: bootstrap replicates present and shares valid", {
         outcome_value_col = "y",
         model_rank = 1,
         min_cohort_size = 1,
-        auxiliary_cols = c("aux1")
+        auxiliary_cols = c("aux1"),
+        sort_cohorts_lexicographically = TRUE
     )
 
     N <- nrow(unique(panel$get_processed_panel()[, .(unit_idx)]))
