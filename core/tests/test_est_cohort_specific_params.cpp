@@ -54,7 +54,7 @@ TEST(CohortSpecificRawTest, RGreaterThanTcThrows) {
 }
 
 TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
-    auto ctx = make_staircase_panel_context(/*T=*/50, /*r=*/2, /*T_c=*/3);
+    auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3);
     auto rp = make_raw_panel(ctx, /*with_covariates=*/false);
 
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;

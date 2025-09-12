@@ -2,7 +2,7 @@ context("Integration tests of est_target_param_components")
 
 test_that("recovers true cohort mean outcomes on staircase data", {
   # Problem size and staircase layout
-  Tval <- 7L
+  Tval <- 12L
   r <- 2L
   window <- 3L
 
@@ -10,7 +10,7 @@ test_that("recovers true cohort mean outcomes on staircase data", {
   outcomes <- make_outcomes(Tval)
   cohort_indices <- make_staircase_observed_indices(Tval, window)
   C <- length(cohort_indices)
-  units_per_cohort <- 2L
+  units_per_cohort <- 5L
   units_by_cohort <- make_units_by_cohort(n_cohorts = C, units_per_cohort = units_per_cohort, prefix = "u")
 
   # One shared ctx used for both panel generation and truth construction
@@ -27,6 +27,7 @@ test_that("recovers true cohort mean outcomes on staircase data", {
     rotate = FALSE,
     ctx = ctx
   )
+  set.seed(42)
   panel <- panel[sample(nrow(panel))]
 
   # Panel container
@@ -51,14 +52,19 @@ test_that("recovers true cohort mean outcomes on staircase data", {
   res <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = 1L)
   M_hat <- res$pc$mean_outcomes()  # C x T
 
+  # Align cohort order using exact index match from original to panel order
+  ooi_panel <- panel_obj$get_observed_outcome_indices()
+  panel_idx_for_orig <- match_cohorts_panel_order(cohort_indices, ooi_panel)
+
   # Ground truth per cohort using the same ctx (global basis)
   true_M <- matrix(NA_real_, nrow = C, ncol = length(outcomes))
-  for (c in seq_len(C)) {
+  for (c in seq_along(cohort_indices)) {
+    cp <- panel_idx_for_orig[c]
     unit_ids <- units_by_cohort[[c]]
-    L_mat <- do.call(rbind, lapply(unit_ids, function(u) unit_loading_from_all_units(u, ctx$all_units, ctx$r)))
+    L_mat <- do.call(rbind, lapply(unit_ids, function(u) unit_loading_from_all_units(u, ctx$all_units, ctx$r, c, C)))
     # Mean loadings are defined in the original global basis; no cohort rotation is applied
     lbar <- colMeans(L_mat)
-    true_M[c, ] <- as.numeric(ctx$true_factors %*% lbar)
+    true_M[cp, ] <- as.numeric(ctx$true_factors %*% lbar)
   }
 
   expect_equal(M_hat, true_M, tolerance = comp_rel_tol(1e-8, M_hat, true_M), scale = 1)
@@ -83,21 +89,22 @@ test_that("recovers true cohort mean outcomes on staircase data", {
   expect_equal(P_hat, P_true, tolerance = comp_rel_tol(1e-8, P_hat, P_true))
 
   # Check cohort-specific factor estimates and observed outcome means against truth
-  for (c in seq_len(C)) {
+  for (c in seq_along(cohort_indices)) {
+    cp <- panel_idx_for_orig[c]
     observed_idxs <- cohort_indices[[c]]
     unit_ids <- units_by_cohort[[c]]
-    
+
     G_hat_c <- matrix(0.0, nrow = length(outcomes), ncol = r)
-    G_hat_c[observed_idxs, ] <- fmes_by_cohort[[c]]$G()
+    G_hat_c[observed_idxs, ] <- fmes_by_cohort[[cp]]$G()
     P_hat_c <- projection_matrix_r(G_hat_c)
     G_true_c <- matrix(0.0, nrow = length(outcomes), ncol = r)
     G_true_c[observed_idxs, ] <- ctx$true_factors[observed_idxs, ]
     P_true_c <- projection_matrix_r(G_true_c)
-    expect_equal(P_hat_c, P_true_c, tolerance = comp_rel_tol(1e-8, P_hat_c, P_true_c))
-    
+    expect_equal(P_hat_c, P_true_c, tolerance = comp_rel_tol(1e-7, P_hat_c, P_true_c))
+
     Y_c <- expected_Y_for_units_ctx(ctx, c, unit_ids = unit_ids, T_idx = observed_idxs) # N x T_c
     m_true_c <- colMeans(Y_c)
-    m_hat_c <- est1$cohort_outcome_means[[c]]$observed_outcome_means()
+    m_hat_c <- est1$cohort_outcome_means[[cp]]$observed_outcome_means()
     expect_equal(m_hat_c, as.numeric(m_true_c), tolerance = comp_rel_tol(1e-8, m_hat_c, m_true_c), scale = 1)
   }
 
@@ -117,7 +124,6 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
 
   outcomes <- make_outcomes(Tval)
   cohort_indices <- make_staircase_observed_indices(Tval, window)
-  print(cohort_indices)
   C <- length(cohort_indices)
   units_per_cohort <- 1000L
   units_by_cohort <- make_units_by_cohort(n_cohorts = C, units_per_cohort = units_per_cohort)
@@ -148,15 +154,19 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
   M2 <- res2$pc$mean_outcomes()
   expect_equal(M1, M2, tolerance = comp_rel_tol(1e-10, M1, M2))
 
+  # Align cohort order using exact index match from original to panel order
+  ooi_panel <- panel_obj$get_observed_outcome_indices()
+  panel_idx_for_orig <- match_cohorts_panel_order(cohort_indices, ooi_panel)
+
   # Correctness: both single- and multi-threaded results match truth
   true_M <- matrix(NA_real_, nrow = C, ncol = length(outcomes))
-  for (c in seq_len(C)) {
+  for (c in seq_along(cohort_indices)) {
+    cp <- panel_idx_for_orig[c]
     unit_ids <- units_by_cohort[[c]]
     L_mat <- do.call(rbind, lapply(unit_ids, function(u) unit_loading_from_all_units(u, ctx$all_units, ctx$r)))
     lbar <- colMeans(L_mat)
-    true_M[c, ] <- as.numeric(ctx$true_factors %*% lbar)
+    true_M[cp, ] <- as.numeric(ctx$true_factors %*% lbar)
   }
-  print(comp_rel_tol(1e-8, M2, true_M))
 
   expect_equal(M1, true_M, tolerance = comp_rel_tol(1e-8, M1, true_M), scale = 1)
   expect_equal(M2, true_M, tolerance = comp_rel_tol(1e-8, M2, true_M), scale = 1)

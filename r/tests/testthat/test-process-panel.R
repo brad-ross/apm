@@ -34,6 +34,10 @@ test_that("staircase missingness with two units per cohort (matching core test)"
     # 2) observed_outcome_indices should match defined cohorts in cohort_id order
     expected_indices <- lapply(cohort_indices, as.integer)
     expect_equal(res$observed_outcome_indices, expected_indices)
+    # Re-indexing sanity: mapping is a permutation of original cohort indices
+    panel_idx_for_orig <- match_cohorts_panel_order(expected_indices, res$observed_outcome_indices)
+    expect_true(!any(is.na(panel_idx_for_orig)))
+    expect_equal(sort(panel_idx_for_orig), seq_len(length(expected_indices)))
 
     # 3) unit_cohorts should map two units per cohort correctly
     expect_true(is.data.table(res$unit_cohorts))
@@ -76,6 +80,10 @@ test_that("UnbalancedPanel initializes and processes panel correctly", {
     # observed_outcome_indices should match defined cohorts
     expected_indices <- lapply(cohort_indices, as.integer)
     expect_equal(obj$get_observed_outcome_indices(), expected_indices)
+    # Re-indexing sanity: mapping is a permutation of original cohort indices
+    panel_idx_for_orig <- match_cohorts_panel_order(expected_indices, obj$get_observed_outcome_indices())
+    expect_true(!any(is.na(panel_idx_for_orig)))
+    expect_equal(sort(panel_idx_for_orig), seq_len(length(expected_indices)))
 
     # unit_cohorts should map two units per cohort correctly and include unit_idx
     unit_cohorts <- obj$get_unit_cohorts()
@@ -135,6 +143,10 @@ test_that("UnbalancedPanel works without covariates provided", {
     expect_equal(obj$get_outcome_ids(), outcomes)
     expected_indices <- lapply(cohort_indices, as.integer)
     expect_equal(obj$get_observed_outcome_indices(), expected_indices)
+    # Re-indexing sanity: mapping is a permutation of original cohort indices
+    panel_idx_for_orig <- match_cohorts_panel_order(expected_indices, obj$get_observed_outcome_indices())
+    expect_true(!any(is.na(panel_idx_for_orig)))
+    expect_equal(sort(panel_idx_for_orig), seq_len(length(expected_indices)))
 
     # processed panel should not include covariate columns
     pp <- obj$get_processed_panel()

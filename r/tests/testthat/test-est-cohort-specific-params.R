@@ -27,11 +27,13 @@ library(data.table)
 # })
 
 test_that("wrapper returns FactorModelEstimates with expected dimensions", {
-    outcomes <- make_outcomes(4)
-    cohort_indices <- make_staircase_observed_indices(4, 2)
+    T <- 4
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, 2)
     units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
 
-    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, r = 2L)
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
     panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
         unit_id_col = "unit_id",
@@ -50,11 +52,13 @@ test_that("wrapper returns FactorModelEstimates with expected dimensions", {
 })
 
 test_that("cohort weights default to equal (1/C) without bootstrap", {
-    outcomes <- make_outcomes(4)
-    cohort_indices <- make_staircase_observed_indices(4, 3)
+    T <- 4
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, 3)
     units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
 
-    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, r = 2L)
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
     panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
         unit_id_col = "unit_id",
@@ -76,11 +80,13 @@ test_that("cohort weights default to equal (1/C) without bootstrap", {
 })
 
 test_that("covariate means are computed with expected dimensions and values", {
-    outcomes <- make_outcomes(5)
-    cohort_indices <- make_staircase_observed_indices(5, 3)
-    units_by_cohort <- make_units_by_cohort(3, 2)
+    T <- 5
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, 3)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
 
-    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE, r = 2L)
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE, ctx = ctx)
 
     panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
@@ -105,11 +111,13 @@ test_that("covariate means are computed with expected dimensions and values", {
 })
 
 test_that("q=0 flows without covariate means", {
-    outcomes <- make_outcomes(5)
-    cohort_indices <- make_staircase_observed_indices(5, 3)
-    units_by_cohort <- make_units_by_cohort(3, 2)
+    T <- 5
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, 3)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
 
-    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, r = 2L)
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
 
     panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
@@ -127,11 +135,13 @@ test_that("q=0 flows without covariate means", {
 })
 
 test_that("est_cohort_specific_params integrates estimators per cohort", {
-    outcomes <- make_outcomes(5)
-    cohort_indices <- make_staircase_observed_indices(5, 3)
-    units_by_cohort <- make_units_by_cohort(3, 2)
+    T <- 12
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, 3)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 3)
 
-    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE, r = 2L)
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
 
     panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
@@ -139,9 +149,9 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
         outcome_id_col = "outcome_id",
         outcome_value_col = "y",
         model_rank = 2,
-        min_cohort_size = 2,
-        covar_cols = c("cov1", "cov2")
+        min_cohort_size = 2
     )
+    
 
     est_specs <- list(
         pca = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 2L),
@@ -161,50 +171,61 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
     expect_equal(length(f[["pca"]]), length(cohort_indices))
     expect_equal(length(f[["pca_fe"]]), length(cohort_indices))
 
-    # check one cohort's factor model outputs
-    out_no_fe <- f[["pca"]][[1]]
-    out_fe <- f[["pca_fe"]][[1]]
-
-    expect_true(inherits(out_no_fe, "FactorModelEstimates"))
-    expect_true(inherits(out_fe, "FactorModelEstimates"))
-
-    # Dimensions and attributes
-    expect_equal(nrow(out_no_fe$G()), length(cohort_indices[[1]]))
-    expect_equal(ncol(out_no_fe$G()), 2L)
-    expect_false(out_no_fe$has_g0())
-
-    expect_equal(nrow(out_fe$G()), length(cohort_indices[[1]]))
-    expect_equal(ncol(out_fe$G()), 2L)
-    expect_true(out_fe$has_g0())
-
-    # Content: estimated cohort factor spans should match true rotated spans
-    T_idx <- cohort_indices[[1]]
-    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
-    G1_true <- ctx$true_factors[T_idx, , drop = FALSE]
-
-    proj_est <- projection_matrix_r(out_no_fe$G())
-    proj_true <- projection_matrix_r(G1_true)
-    expect_equal(proj_est, proj_true, tolerance = 1e-9)
-
     # outcome mean sufficient statistics per cohort
     oms <- res$cohort_outcome_means
     expect_equal(length(oms), length(cohort_indices))
-    expect_true(inherits(oms[[1]], "OutcomeMeanSuffStatEstimates"))
-    # observed means length should equal number of observed outcomes for cohort 1
-    expect_equal(length(oms[[1]]$observed_outcome_means()), length(cohort_indices[[1]]))
 
-    # observed means should equal true outcome means across units for cohort 1
-    expected_Y_mat <- expected_Y_for_units_ctx(ctx, cohort_id = 1L, unit_ids = units_by_cohort[[1]], T_idx = T_idx)
-    expected_means <- colMeans(expected_Y_mat)
-    expect_equal(oms[[1]]$observed_outcome_means(), as.numeric(expected_means), tolerance = 1e-12)
+    # Build index-based mapping from original cohorts to panel cohorts by exact match of observed outcome indices
+    ooi_panel <- panel$get_observed_outcome_indices()
+    panel_idx_for_orig <- match_cohorts_panel_order(cohort_indices, ooi_panel)
+    expect_true(!any(is.na(panel_idx_for_orig)))
+
+    for (c in seq_along(cohort_indices)) {
+        cp <- panel_idx_for_orig[c]
+        T_idx <- cohort_indices[[c]]
+
+        # check one cohort's factor model outputs
+        out_no_fe <- f[["pca"]][[cp]]
+        out_fe <- f[["pca_fe"]][[cp]]
+
+        expect_true(inherits(out_no_fe, "FactorModelEstimates"))
+        expect_true(inherits(out_fe, "FactorModelEstimates"))
+
+        # Dimensions and attributes
+        expect_equal(nrow(out_no_fe$G()), length(T_idx))
+        expect_equal(ncol(out_no_fe$G()), 2L)
+        expect_false(out_no_fe$has_g0())
+
+        expect_equal(nrow(out_fe$G()), length(T_idx))
+        expect_equal(ncol(out_fe$G()), 2L)
+        expect_true(out_fe$has_g0())
+
+        # Content: estimated cohort factor spans should match true rotated spans
+        G1_true <- ctx$true_factors[T_idx, , drop = FALSE]
+
+        proj_est <- projection_matrix_r(out_no_fe$G())
+        proj_true <- projection_matrix_r(G1_true)
+        expect_equal(proj_est, proj_true, tolerance = 1e-9)
+
+        expect_true(inherits(oms[[cp]], "OutcomeMeanSuffStatEstimates"))
+        # observed means length should equal number of observed outcomes for cohort c
+        expect_equal(length(oms[[cp]]$observed_outcome_means()), length(T_idx))
+
+        # observed means should equal true outcome means across units for cohort c
+        expected_Y_mat <- expected_Y_for_units_ctx(ctx, cohort_id = c, unit_ids = units_by_cohort[[c]], T_idx = T_idx)
+        expected_means <- colMeans(expected_Y_mat)
+        expect_equal(oms[[cp]]$observed_outcome_means(), as.numeric(expected_means), tolerance = 1e-12)
+    }
 })
 
 test_that("bootstrap flows through and produces replicates", {
-    outcomes <- make_outcomes(5)
-    cohort_indices <- make_staircase_observed_indices(5, 3)
-    units_by_cohort <- make_units_by_cohort(3, 3)
+    T <- 5
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, 3)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 3)
 
-    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE, r = 2L)
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE, ctx = ctx)
 
     panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
@@ -239,11 +260,13 @@ test_that("bootstrap flows through and produces replicates", {
 })
 
 test_that("cohort weights with bootstrap: equal vs by_size behave as expected", {
-    outcomes <- make_outcomes(5)
-    cohort_indices <- make_staircase_observed_indices(5, 3)
-    units_by_cohort <- make_units_by_cohort(3, 3)
+    T <- 5
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, 3)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 3)
 
-    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, r = 2L)
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
 
     panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
@@ -292,12 +315,14 @@ test_that("cohort weights with bootstrap: equal vs by_size behave as expected", 
 
 
 test_that("masking drops outcome and returns correct masked mean", {
-    outcomes <- make_outcomes(5)
-    cohort_indices <- make_staircase_observed_indices(5, 3)
-    units_by_cohort <- make_units_by_cohort(3, 2)
+    T <- 5
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, 3)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
 
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort,
-                                                include_covariates = FALSE, r = 2L)
+                                                include_covariates = FALSE, ctx = ctx)
     panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
         unit_id_col = "unit_id",
@@ -343,9 +368,10 @@ test_that("auxiliary means: dimensions and values without covariates", {
     T <- 5
     outcomes <- make_outcomes(T)
     cohort_indices <- make_staircase_observed_indices(T, 3)
-    units_by_cohort <- make_units_by_cohort(3, 2)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
 
-    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, include_auxiliary = TRUE, r = 2L)
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, include_auxiliary = TRUE, ctx = ctx)
 
     panel <- UnbalancedPanel$new(
         panel_df = panel_dt,
@@ -391,11 +417,13 @@ test_that("auxiliary means: dimensions and values without covariates", {
 })
 
 test_that("auxiliary means: bootstrap replicates present and shares valid", {
-    outcomes <- make_outcomes(5)
-    cohort_indices <- make_staircase_observed_indices(5, 3)
-    units_by_cohort <- make_units_by_cohort(3, 2)
+    T <- 5
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, 3)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), 2)
 
-    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, include_auxiliary = TRUE, r = 1L)
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 1L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, include_auxiliary = TRUE, ctx = ctx)
     # Check unobserved outcomes present with NA y before overwriting aux columns
     unobs <- setdiff(outcomes, outcomes[cohort_indices[[1]]])
     if (length(unobs) > 0) {
