@@ -118,7 +118,7 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
   skip_on_cran()
   if (!isTRUE(getOption("apm_run_perf_tests", FALSE))) skip("Set options(apm_run_perf_tests = TRUE) to enable perf checks.")
 
-  Tval <- 10L
+  Tval <- 30L
   r <- 2L
   window <- 3L
 
@@ -157,6 +157,7 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
   # Align cohort order using exact index match from original to panel order
   ooi_panel <- panel_obj$get_observed_outcome_indices()
   panel_idx_for_orig <- match_cohorts_panel_order(cohort_indices, ooi_panel)
+  expect_true(!any(is.na(panel_idx_for_orig)))
 
   # Correctness: both single- and multi-threaded results match truth
   true_M <- matrix(NA_real_, nrow = C, ncol = length(outcomes))

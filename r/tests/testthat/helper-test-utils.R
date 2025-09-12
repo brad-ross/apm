@@ -6,13 +6,8 @@ utils::globalVariables(c(
 
 # Outcome helpers
 make_outcomes <- function(T) {
-    # Backward-compatible: use LETTERS for small T for legacy tests,
-    # and switch to extended stable IDs once T exceeds 26.
-    if (T <= length(LETTERS)) {
-        return(LETTERS[seq_len(T)])
-    }
-    extra <- T - length(LETTERS)
-    c(LETTERS, sprintf("Y%03d", seq_len(extra)))
+    width <- nchar(as.character(T))
+    sprintf("%0*d", width, seq_len(T))
 }
 
 make_staircase_observed_indices <- function(T, window) {

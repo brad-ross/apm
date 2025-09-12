@@ -165,7 +165,7 @@ test_that("UnbalancedPanel works without covariates provided", {
 
 test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)", {
 
-    outcomes <- c("A", "B", "C")
+    outcomes <- sprintf("%03d", 1:3)
 
     # Two large cohorts and one small cohort with a single unit
     cohort_indices <- list(
@@ -253,7 +253,7 @@ test_that("to_data_table converts base data.frame to data.table", {
     # Build a simple panel as data.table
     dt0 <- data.table(
         unit_id = c("u1", "u1", "u2", "u3"),
-        outcome_id = c("A", "B", "B", "C")
+        outcome_id = c("001", "002", "002", "003")
     )
 
     # Convert to base data.frame
@@ -271,7 +271,7 @@ test_that("to_data_table converts base data.frame to data.table", {
 
 test_that("validate_required_panel_cols enforces required columns", {
 
-    dt <- data.table(unit_id = c("u1", "u2"), outcome_id = c("A", "B"), y = 1:2)
+    dt <- data.table(unit_id = c("u1", "u2"), outcome_id = c("001", "002"), y = 1:2)
 
     # Passes with required cols present
     expect_silent(apm:::validate_required_panel_cols(dt, "unit_id", "outcome_id"))
@@ -306,7 +306,7 @@ test_that("construct_cohort_observed_outcomes_df builds long-form mapping", {
     expected_df <- data.frame(
         cohort_id = c(rep(1L, 3), rep(2L, 3), rep(3L, 3)),
         outcome_idx = c(1L, 2L, 3L, 2L, 3L, 4L, 3L, 4L, 5L),
-        outcome_name = c("A", "B", "C", "B", "C", "D", "C", "D", "E"),
+        outcome_name = outcomes[c(1L, 2L, 3L, 2L, 3L, 4L, 3L, 4L, 5L)],
         stringsAsFactors = FALSE
     )
 
