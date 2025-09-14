@@ -50,7 +50,7 @@ test_that("recovers true cohort mean outcomes on staircase data", {
 
   # Run end-to-end estimator
   res <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = 1L)
-  M_hat <- res$pc$mean_outcomes()  # C x T
+  M_hat <- res$outcome_means$pc$mean_outcomes()  # C x T
 
   # Align cohort order using exact index match from original to panel order
   ooi_panel <- panel_obj$get_observed_outcome_indices()
@@ -154,8 +154,8 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
   print(sprintf("Elapsed time (1 thread): %f", t1))
   print(sprintf("Elapsed time (%d threads): %f", get_cpp_default_concurrency(), t2))
 
-  M1 <- res1$pc$mean_outcomes()
-  M2 <- res2$pc$mean_outcomes()
+  M1 <- res1$outcome_means$pc$mean_outcomes()
+  M2 <- res2$outcome_means$pc$mean_outcomes()
   expect_equal(M1, M2, tolerance = comp_rel_tol(1e-6, M1, M2))
 
   # Align cohort order using exact index match from original to panel order

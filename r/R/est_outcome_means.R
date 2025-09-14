@@ -1,5 +1,3 @@
- 
-
 #' Estimate outcome means across cohorts (single spec; R6 estimates API)
 #'
 #' Computes cohort mean outcomes using a single `FactorModelEstimates` object and
@@ -34,13 +32,13 @@ estimate_outcome_means_across_cohorts <- function(factor_model_estimates, observ
 # -----------------------------------------------------------------------------
 #' End-to-end: estimate target parameter components across cohorts (by spec)
 #'
-#' This runs cohort-specific estimation and immediately aggregates/estimates
-#' cohort mean outcomes across cohorts, returning a named list (by spec) of
-#' `OutcomeMeansEstimates` objects, equivalent to running
-#' `estimate_outcome_means_across_cohorts()` after aggregating factor params.
+#' This runs cohort-specific estimation and immediately aggregates/estimates cohort
+#' mean outcomes across cohorts, returning a list with:
+#' - outcome_means: named list (by spec) of `OutcomeMeansEstimates` objects
+#' - auxiliary_means: list of `CohortAuxiliaryDataMeanEstimates` (one per cohort), or NULL if none
 #'
 #' @inheritParams est_cohort_specific_params
-#' @return Named list of `OutcomeMeansEstimates` (one per estimator spec).
+#' @return list with `outcome_means` and `auxiliary_means`.
 #' @export
 est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_threads = NULL,
                                        cohort_outcomes_to_mask = NULL) {
@@ -70,7 +68,14 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
     num_threads_in = nt,
     cohort_outcomes_to_mask_in = cohort_outcomes_to_mask
   )
-  .wrap_outcome_means_xptr_list(res)
+  out <- list(
+    outcome_means = .wrap_outcome_means_xptr_list(res$outcome_means),
+    auxiliary_means = NULL
+  )
+  if (!is.null(res$auxiliary_means)) {
+    out$auxiliary_means <- lapply(res$auxiliary_means, function(xp) CohortAuxiliaryDataMeanEstimates$new(xp))
+  }
+  out
 }
 
 # -----------------------------------------------------------------------------
