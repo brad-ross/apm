@@ -3,6 +3,8 @@
 
 #include <RcppArmadillo.h>
 #include "../../core/src/utils.h" // ObservedOutcomeIndices
+#include "../../core/src/cohort_specific_param_structs.h" // OutcomeMeanSufficientStatistics
+#include <unordered_map>
 #include <vector>
 #include <memory>
 #include <utility>
@@ -31,6 +33,10 @@ inline Rcpp::XPtr<T> make_xptr(T&& obj) {
     T* heap = new T(std::move(obj));
     return Rcpp::XPtr<T>(heap, true);
 }
+
+// Convert masked cohort outcome means map (0-based cohort ids) to an R named list
+// names = 1-based cohort ids; values = numeric vectors of masked observed outcome means per cohort.
+Rcpp::List masked_means_to_r_list(const std::unordered_map<int, apm::OutcomeMeanSufficientStatistics>& masked);
 
 } // namespace r_utils
 } // namespace apm

@@ -239,20 +239,8 @@ static Rcpp::List build_return_list(apm::CohortSpecificEstimates&& ests) {
                       "masked_observed_outcome_indices");
     }
     if (!ests.masked_cohort_outcome_means.empty()) {
-        Rcpp::List masked_means(ests.masked_cohort_outcome_means.size());
-        Rcpp::CharacterVector keys(ests.masked_cohort_outcome_means.size());
-        int i = 0;
-        for (const auto& kv : ests.masked_cohort_outcome_means) {
-            int cohort1 = kv.first + 1;
-            const auto& s = kv.second;
-            Rcpp::NumericVector mu(s.observed_outcome_means.n_elem);
-            for (arma::uword k = 0; k < s.observed_outcome_means.n_elem; ++k) mu[k] = s.observed_outcome_means[k];
-            masked_means[i] = mu;
-            keys[i] = std::to_string(cohort1);
-            ++i;
-        }
-        masked_means.attr("names") = keys;
-        res.push_back(masked_means, "masked_cohort_outcome_means");
+        res.push_back(apm::r_utils::masked_means_to_r_list(ests.masked_cohort_outcome_means),
+                      "masked_cohort_outcome_means");
     }
     return res;
 }

@@ -93,6 +93,12 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
   if (!is.null(res$auxiliary_means)) {
     out$auxiliary_means <- lapply(res$auxiliary_means, function(xp) CohortAuxiliaryDataMeanEstimates$new(xp))
   }
+  if (!is.null(res$masked_cohort_outcome_means)) {
+    out$masked_cohort_outcome_means <- res$masked_cohort_outcome_means
+  }
+  if (!is.null(res$masked_observed_outcome_indices)) {
+    out$masked_observed_outcome_indices <- res$masked_observed_outcome_indices
+  }
   out
 }
 

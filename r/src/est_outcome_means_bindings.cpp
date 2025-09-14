@@ -229,9 +229,21 @@ Rcpp::List est_target_param_components_from_panel_cpp(
         aux_out = aux_list;
     }
 
+    // Build final list with required fields
     Rcpp::List final(2);
     final["outcome_means"] = ome_out;
     final["auxiliary_means"] = aux_out;
+
+    // Attach masked outputs if present (mirror cohort-specific bindings)
+    if (ests.masked_observed_outcome_indices.has_value()) {
+        final.push_back(apm::r_utils::to_r_observed_outcome_indices(*ests.masked_observed_outcome_indices),
+                        "masked_observed_outcome_indices");
+    }
+    if (!ests.masked_cohort_outcome_means.empty()) {
+        final.push_back(apm::r_utils::masked_means_to_r_list(ests.masked_cohort_outcome_means),
+                        "masked_cohort_outcome_means");
+    }
+
     return final;
 }
 
