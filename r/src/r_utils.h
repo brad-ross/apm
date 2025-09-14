@@ -5,6 +5,7 @@
 #include "../../core/src/utils.h" // ObservedOutcomeIndices
 #include <vector>
 #include <memory>
+#include <utility>
 namespace apm { class WeightedBootstrap; }
 
 // [[Rcpp::depends(RcppArmadillo)]]
@@ -22,6 +23,14 @@ Rcpp::List to_r_observed_outcome_indices(const apm::ObservedOutcomeIndices& cpp_
 // into a shared_ptr<const WeightedBootstrap>. Returns nullptr if xp is NULL.
 std::shared_ptr<const apm::WeightedBootstrap> xp_to_const_wb_shared(SEXP xp);
 std::shared_ptr<apm::WeightedBootstrap> xp_to_wb_shared(SEXP xp);
+
+// Generic helper to heap-allocate and wrap a C++ object into an owning XPtr.
+// Placed in header for templates and inline use across bindings.
+template <typename T>
+inline Rcpp::XPtr<T> make_xptr(T&& obj) {
+    T* heap = new T(std::move(obj));
+    return Rcpp::XPtr<T>(heap, true);
+}
 
 } // namespace r_utils
 } // namespace apm

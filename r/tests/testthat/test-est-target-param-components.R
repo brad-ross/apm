@@ -132,6 +132,8 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
   panel <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE, ctx = ctx)
   panel <- panel[sample(nrow(panel))]
 
+  print(sprintf("Panel size: %d", nrow(panel)))
+
   set_apm_threads(1L)
   panel_construction_time <- system.time(panel_obj <- UnbalancedPanel$new(panel, "unit_id", "outcome_id", "y", model_rank = r))["elapsed"]
   # TODO: figure out data.table concurrency; right now multithreaded is slower than single-threaded

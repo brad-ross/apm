@@ -8,15 +8,7 @@
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
-namespace {
-
-template <typename T>
-Rcpp::XPtr<T> make_xptr(T&& obj) {
-    T* heap = new T(std::move(obj));
-    return Rcpp::XPtr<T>(heap, true);
-}
-
-} // anonymous namespace
+using apm::r_utils::make_xptr;
 
 //------------------------------------------------------------------------------
 // Aggregators
