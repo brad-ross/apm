@@ -46,11 +46,17 @@ test_that("target param equals masked observed mean for last cohort/outcome", {
   expect_equal(last_outcome, T)
   masked_outcome <- last_outcome
 
+  # Trivial bootstrap with B = 2 over panel rows
+  N <- nrow(panel_dt)
+  B <- 2L
+  wb <- get_weighted_bootstrap_draws(N, B, type = "multinomial", seed = 1L)
+
   res <- est_target_param_components(
     panel,
     est_specs = est_specs,
     num_threads = 1L,
-    cohort_outcomes_to_mask = setNames(list(as.integer(masked_outcome)), as.character(last_cohort))
+    cohort_outcomes_to_mask = setNames(list(as.integer(masked_outcome)), as.character(last_cohort)),
+    bootstrap = wb
   )
 
   # Sanity: masked info present
@@ -71,6 +77,13 @@ test_that("target param equals masked observed mean for last cohort/outcome", {
 
   # Check that the selected outcome mean equals the masked observed mean
   expect_equal(as.numeric(tp[1]), masked_mean, tolerance = 1e-12)
+
+  # Bootstrap checks: structure and values
+  expect_true(tpe$has_bootstrap())
+  expect_equal(tpe$num_bootstraps(), B)
+  # For our fn that ignores shares/eta, the bootstrap replicate equals the selected cell of Y_b
+  for (b in seq_len(B)) {
+    Y_b <- res$outcome_means$pc$mean_outcomes(b)
+    expect_equal(as.numeric(tpe$target_params(b)[1]), as.numeric(Y_b[last_cohort, masked_outcome]), tolerance = 1e-12)
+  }
 })
-
-
