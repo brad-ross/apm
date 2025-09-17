@@ -11,114 +11,23 @@
 #include "factor_model_estimators/pc_estimators.h"
 #include "OutcomeMeanSuffStatEstimator.h"
 #include "nuisance_param_estimators.h"
+#include "panels/InMemoryUnbalancedPanel.h"
 
 namespace apm {
 
 namespace {
 
-//==============================
-// Grouping data structures
-//==============================
-struct UnitRun {
-    std::size_t start;  // [start, end)
-    std::size_t end;
-    int unit;           // 0-based
-};
-
-struct CohortBlock {
-    std::size_t start;  // [start, end)
-    std::size_t end;
-    int cohort;         // 0-based
-    std::vector<UnitRun> unit_runs;
-};
+// Removed local UnitRun/CohortBlock/build_cohort_blocks_with_unit_runs (moved to InMemoryUnbalancedPanel)
 
 //==============================
-// Helpers: construction
+// Helpers: masked pos map
 //==============================
-static std::vector<CohortBlock> build_cohort_blocks_with_unit_runs(
-    const int* unit_idx,
-    const int* cohort_id,
-    std::size_t n_rows)
-{
-    std::vector<CohortBlock> blocks;
-    if (n_rows == 0) return blocks;
-
-    std::size_t cohort_start = 0;
-    int curr_c = cohort_id[0];
-
-    std::vector<UnitRun> unit_runs;
-    unit_runs.reserve(64);
-
-    std::size_t unit_start = 0;
-    int curr_u = unit_idx[0];
-
-    auto finalize_unit = [&](std::size_t end_exclusive) {
-        unit_runs.push_back(UnitRun{unit_start, end_exclusive, curr_u});
-    };
-    auto finalize_cohort = [&](std::size_t end_exclusive) {
-        blocks.push_back(CohortBlock{cohort_start, end_exclusive, curr_c, unit_runs});
-    };
-
-    for (std::size_t i = 1; i < n_rows; ++i) {
-        const int c = cohort_id[i];
-        const int u = unit_idx[i];
-
-        if (c != curr_c) {
-            finalize_unit(i);
-            finalize_cohort(i);
-            cohort_start = i;
-            curr_c = c;
-            unit_runs.clear();
-            curr_u = u;
-            unit_start = i;
-            continue;
-        }
-
-        if (u != curr_u) {
-            finalize_unit(i);
-            curr_u = u;
-            unit_start = i;
-        }
-    }
-
-    finalize_unit(n_rows);
-    finalize_cohort(n_rows);
-
-    return blocks;
-}
-
-//==============================
-// Helpers: cohort dictionaries
-//==============================
-struct CohortDictionaries {
-    arma::uvec T_idx_0b;                                 // observed outcomes for this cohort (0-based)
-    std::unordered_map<int, std::size_t> pos_T_idx;     // outcome -> position in Y/X_obs
-};
-
 static std::unordered_map<int, std::size_t> make_pos_map(const arma::uvec& idx0) {
     std::unordered_map<int, std::size_t> mp;
     mp.reserve(static_cast<std::size_t>(idx0.n_elem) * 2);
     for (arma::uword k = 0; k < idx0.n_elem; ++k)
         mp.emplace(static_cast<int>(idx0[k]), static_cast<std::size_t>(k));
     return mp;
-}
-
-static CohortDictionaries make_cohort_dicts(
-    int cohort_0b,
-    const ObservedOutcomeIndices& observed_outcome_indices)
-{
-    CohortDictionaries d;
-    d.T_idx_0b = observed_outcome_indices.at(static_cast<std::size_t>(cohort_0b));
-    d.pos_T_idx = make_pos_map(d.T_idx_0b);
-    return d;
-}
-
-static CohortDictionaries make_cohort_dicts_from_indices(const arma::uvec& idx0)
-{
-    CohortDictionaries d;
-    d.T_idx_0b = idx0;
-    d.pos_T_idx = make_pos_map(d.T_idx_0b);
-    return d;
 }
 
 //==============================
@@ -147,76 +56,12 @@ make_factor_estimators_for_cohort(
     return out;
 }
 
-//==============================
-// Helpers: per-unit assembly
-//==============================
-static void assemble_Y_X_for_unit_run(
-    const UnitRun& ur,
-    const int* outcome_idx,
-    const double* y_col,
-    const std::vector<const double*>& covar_cols, // size q, may be 0
-    const CohortDictionaries& dicts,
-    arma::vec& Y,          // expects size T_c
-    arma::mat& X_full,     // expects size T x q if q>0, will be filled with NaN then rows set
-    arma::mat& X_obs       // expects size T_c x q if q>0
-) {
-    const std::size_t T_c = static_cast<std::size_t>(dicts.T_idx_0b.n_elem);
-    const std::size_t q   = covar_cols.size();
-    const std::size_t T   = static_cast<std::size_t>(X_full.n_rows);
-
-    // Y over observed outcomes (T_c)
-    for (std::size_t k = 0; k < T_c; ++k) {
-        Y(static_cast<arma::uword>(k)) = std::numeric_limits<double>::quiet_NaN();
-    }
-    for (std::size_t r = ur.start; r < ur.end; ++r) {
-        const int o = outcome_idx[r];
-        auto it = dicts.pos_T_idx.find(o);
-        if (it != dicts.pos_T_idx.end()) {
-            Y(static_cast<arma::uword>(it->second)) = y_col[r];
-        }
-    }
-
-    if (q == 0) {
-        return;
-    }
-
-    // X_full: T x q (initialize to NaN)
-    X_full.fill(std::numeric_limits<double>::quiet_NaN());
-    for (std::size_t r = ur.start; r < ur.end; ++r) {
-        const int o = outcome_idx[r];
-        if (static_cast<std::size_t>(o) >= T) continue; // guard if data has stray larger outcome ids
-        const arma::uword row = static_cast<arma::uword>(o);
-        for (std::size_t j = 0; j < q; ++j) {
-            X_full(row, static_cast<arma::uword>(j)) = covar_cols[j][r];
-        }
-    }
-
-    // X_obs: T_c x q by selecting rows of X_full in the T_idx order
-    for (std::size_t k = 0; k < T_c; ++k) {
-        const arma::uword row_full = static_cast<arma::uword>(dicts.T_idx_0b[k]); // 0-based
-        X_obs.row(static_cast<arma::uword>(k)) = X_full.row(row_full);
-    }
-}
+// Removed assemble_Y_X_for_unit_run; replaced by InMemoryUnbalancedPanel methods
 
 //==============================
 // Helpers: finalize outputs
 //==============================
-static void assemble_aux_data_for_unit(
-    const UnitRun& ur,
-    const int* outcome_idx,
-    const std::vector<const double*>& auxiliary_cols,
-    arma::mat& A_out)
-{
-    A_out.fill(std::numeric_limits<double>::quiet_NaN());
-    for (std::size_t r = ur.start; r < ur.end; ++r) {
-        const int o = outcome_idx[r];
-        if (static_cast<arma::uword>(o) >= A_out.n_rows) continue;
-        const arma::uword row = static_cast<arma::uword>(o);
-        for (arma::uword j = 0; j < A_out.n_cols; ++j) {
-            A_out(row, j) = auxiliary_cols[static_cast<std::size_t>(j)][r];
-        }
-    }
-}
+// Removed assemble_aux_data_for_unit; replaced by InMemoryUnbalancedPanel methods
 
 static std::vector<CohortAuxiliaryDataMeanEstimates> finalize_auxiliary_outputs(
     const std::vector<std::optional<CohortAuxiliaryDataMeanEstimator>>& tmp_aux,
@@ -403,13 +248,11 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     const bool has_mask = !cohort_outcomes_to_mask.empty();
     ObservedOutcomeIndices ooi_effective = get_masked_observed_outcome_indices(observed_outcome_indices, cohort_outcomes_to_mask);
 
-    // Total number of outcomes across cohorts (used for covariates and aux means)
-    const std::size_t T = static_cast<std::size_t>(apm::num_outcomes(ooi_effective));
-
-    // Single pass: build cohort blocks and their unit runs
-    std::vector<CohortBlock> blocks = build_cohort_blocks_with_unit_runs(
-        unit_idx, cohort_id, n_rows);
-    const std::size_t C = blocks.size();
+    // Build panel abstraction (groups rows and precomputes maps)
+    InMemoryUnbalancedPanel panel(
+        unit_idx, cohort_id, outcome_idx, y, covar_cols, auxiliary_cols, n_rows, ooi_effective);
+    const std::size_t T = panel.T();
+    const std::size_t C = panel.cohort_blocks().size();
 
     // Prepare thread-safe output buffers
     std::unordered_map<std::string, std::vector<std::optional<FactorModelEstimates>>> tmp_factor;
@@ -420,15 +263,14 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     std::vector<std::optional<OutcomeMeanSuffStatEstimates>> tmp_outcome(C);
     std::vector<std::optional<CohortAuxiliaryDataMeanEstimator>> tmp_aux(C);
     std::vector<std::optional<OutcomeMeanSufficientStatistics>> tmp_masked_means(C);
-    std::vector<const double*> empty_covar_cols; // for masked stats assembly
 
     // Parallelize across cohorts
     auto process_cohort = [&](std::size_t cidx) {
-        const CohortBlock& blk = blocks[cidx];
+        const CohortBlock& blk = panel.cohort_blocks()[cidx];
 
-        // Dictionaries for this cohort (T_c order)
-        CohortDictionaries dicts = make_cohort_dicts(blk.cohort, ooi_effective);
-        const std::size_t T_c = static_cast<std::size_t>(dicts.T_idx_0b.n_elem);
+        // Cohort observed outcome indices
+        const arma::uvec& T_idxs_for_cohort = panel.T_idx_for_cohort(blk.cohort);
+        const std::size_t T_c = static_cast<std::size_t>(T_idxs_for_cohort.n_elem);
 
         // Estimators
         OutcomeMeanSuffStatEstimator omsse(
@@ -452,15 +294,14 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
 
         // Optional masked outcomes estimator for this cohort (computed in the same pass)
         bool compute_masked = false;
-        CohortDictionaries dicts_mask;
+        arma::uvec masked_T_idxs;
         std::optional<OutcomeMeanSuffStatEstimator> omsse_masked;
         arma::vec Y_mask;
-        arma::mat X_full_unused, X_obs_unused; // not used when q==0 in masked path
         if (has_mask) {
             auto itM = cohort_outcomes_to_mask.find(blk.cohort);
             if (itM != cohort_outcomes_to_mask.end() && itM->second.n_elem > 0) {
                 compute_masked = true;
-                dicts_mask = make_cohort_dicts_from_indices(itM->second);
+                masked_T_idxs = itM->second;
                 const std::size_t K_mask = static_cast<std::size_t>(itM->second.n_elem);
                 omsse_masked.emplace(K_mask, /*T=*/0, /*q=*/0, bootstrap);
                 Y_mask.set_size(static_cast<arma::uword>(K_mask));
@@ -469,7 +310,12 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
 
         // Stream units
         for (const auto& ur : blk.unit_runs) {
-            assemble_Y_X_for_unit_run(ur, outcome_idx, y, covar_cols, dicts, Y, X_full, X_obs);
+            panel.assemble_YX_for_unit(
+                ur,
+                T,
+                T_idxs_for_cohort,
+                panel.pos_T_idx_for_cohort(blk.cohort),
+                Y, X_full, X_obs);
 
             // Add datum to factor estimators
             for (auto& kv : ests) {
@@ -489,14 +335,15 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
 
             // Add datum to auxiliary data mean estimator
             if (d > 0) {
-                arma::mat A(static_cast<arma::uword>(T), static_cast<arma::uword>(d));
-                assemble_aux_data_for_unit(ur, outcome_idx, auxiliary_cols, A);
+                arma::mat A;
+                panel.assemble_aux_for_unit(ur, T, A);
                 aux_est->add_datum(static_cast<std::size_t>(ur.unit), A);
             }
 
             // Also accumulate masked outcome means if requested
             if (compute_masked) {
-                assemble_Y_X_for_unit_run(ur, outcome_idx, y, empty_covar_cols, dicts_mask, Y_mask, X_full_unused, X_obs_unused);
+                auto pos_mask = make_pos_map(masked_T_idxs);
+                panel.assemble_Y_for_unit(ur, masked_T_idxs, pos_mask, Y_mask);
                 omsse_masked->add_datum(static_cast<std::size_t>(ur.unit), Y_mask);
             }
 
@@ -540,14 +387,14 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
 #endif
 
     // Compute cohort weights first, then build outputs with weights attached
-    auto weights_by_spec = est_cohort_weights(est_specs, blocks, bootstrap);
+    auto weights_by_spec = est_cohort_weights(est_specs, panel.cohort_blocks(), bootstrap);
 
     // Finalize auxiliary outputs
     std::vector<CohortAuxiliaryDataMeanEstimates> aux_out;
     if (d > 0) {
         // Compute total number of unique units across all cohorts
         std::size_t total_units = 0;
-        for (const auto& blk : blocks) {
+        for (const auto& blk : panel.cohort_blocks()) {
             total_units += blk.unit_runs.size();
         }
         aux_out = finalize_auxiliary_outputs(tmp_aux, total_units);
@@ -557,7 +404,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     std::unordered_map<int, OutcomeMeanSufficientStatistics> masked_means_map;
     std::optional<ObservedOutcomeIndices> masked_indices_opt = std::nullopt;
     if (has_mask) {
-        masked_means_map = build_masked_means_map(blocks, tmp_masked_means);
+        masked_means_map = build_masked_means_map(panel.cohort_blocks(), tmp_masked_means);
         masked_indices_opt = ooi_effective;
     }
 
