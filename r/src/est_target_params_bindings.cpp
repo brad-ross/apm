@@ -57,12 +57,15 @@ apm::TargetFn make_target_fn(Rcpp::Function r_fn) {
 // Compute from single spec
 // [[Rcpp::export]]
 SEXP est_target_params_cpp(SEXP ome_xptr,
-                           Rcpp::Nullable<Rcpp::List> eta_xptrs_by_cohort,
-                           Rcpp::Function r_fn) {
+                          Rcpp::Nullable<Rcpp::List> eta_xptrs_by_cohort,
+                          Rcpp::Function r_fn) {
     Rcpp::XPtr<OutcomeMeansEstimates> ome(ome_xptr);
     auto eta_vec = list_to_eta_vec(eta_xptrs_by_cohort);
     apm::TargetFn cb = make_target_fn(r_fn);
-    TargetParameterEstimates out = apm::est_target_params(*ome, eta_vec, cb);
+    // NOTE: Calling R from multiple threads is unsafe. We therefore force single-threaded
+    // execution (num_threads = 1) for target param estimation invoked via R bindings.
+    std::optional<std::size_t> nt_opt = std::optional<std::size_t>(1);
+    TargetParameterEstimates out = apm::est_target_params(*ome, eta_vec, cb, nt_opt);
     return make_xptr(std::move(out));
 }
 
@@ -147,7 +150,10 @@ Rcpp::List est_target_params_by_spec_cpp(Rcpp::List ome_by_spec,
     }
 
     apm::TargetFn cb = make_target_fn(r_fn);
-    auto out_map = apm::est_target_params(ome_map, eta_map, cb);
+    // NOTE: Calling R from multiple threads is unsafe. We therefore force single-threaded
+    // execution (num_threads = 1) for target param estimation invoked via R bindings.
+    std::optional<std::size_t> nt_opt = std::optional<std::size_t>(1); // single-thread for R safety
+    auto out_map = apm::est_target_params(ome_map, eta_map, cb, nt_opt);
 
     Rcpp::List out(static_cast<int>(out_map.size()));
     Rcpp::CharacterVector names(static_cast<int>(out_map.size()));

@@ -41,12 +41,14 @@ using TargetFn = std::function<arma::vec(const arma::mat& Y,
 TargetParameterEstimates est_target_params(
     const OutcomeMeansEstimates& ome,
     const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
-    const TargetFn& fn);
+    const TargetFn& fn,
+    std::optional<std::size_t> num_threads = std::nullopt);
 
 std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
     const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
     const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
-    const TargetFn& fn);
+    const TargetFn& fn,
+    std::optional<std::size_t> num_threads = std::nullopt);
 
 } // namespace apm
 

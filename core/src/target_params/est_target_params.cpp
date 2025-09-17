@@ -1,6 +1,13 @@
 #include "est_target_params.h"
 
 #include <algorithm>
+#include <optional>
+#include <memory>
+#ifdef APM_HAS_TBB
+#include <oneapi/tbb/info.h>
+#include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/global_control.h>
+#endif
 
 namespace apm {
 
@@ -19,21 +26,37 @@ collect_eta_across_cohorts(const std::vector<CohortAuxiliaryDataMeanEstimates>& 
 TargetParameterEstimates est_target_params(
     const OutcomeMeansEstimates& ome,
     const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
-    const TargetFn& fn)
+    const TargetFn& fn,
+    std::optional<std::size_t> num_threads)
 {
-    const std::size_t B_ome = ome.n_bootstrap_replicates();
-    std::size_t B_eta = 0;
-    for (const auto& e : eta_by_cohort) B_eta = std::max(B_eta, e.n_bootstrap_replicates());
-    const std::size_t B = std::max(B_ome, B_eta);
+    const std::size_t B = ome.n_bootstrap_replicates();
+    // Enforce equal number of bootstrap replicates across all inputs
+    for (const auto& e : eta_by_cohort) {
+        if (e.n_bootstrap_replicates() != B) {
+            throw std::invalid_argument("All parameter estimates must have the same number of bootstrap replicates.");
+        }
+    }
 
     arma::vec point = fn(ome.mean_outcomes, collect_eta_across_cohorts(eta_by_cohort, std::nullopt));
 
     std::vector<arma::vec> boots;
     if (B > 0) {
-        boots.reserve(B);
-        for (std::size_t b = 0; b < B; ++b) {
-            const arma::mat& Y_b = (B_ome > 0 ? ome.bootstrap_replicates[b] : ome.mean_outcomes);
-            boots.emplace_back(fn(Y_b, collect_eta_across_cohorts(eta_by_cohort, b)));
+        boots.resize(B);
+        auto process_boot = [&](std::size_t b) {
+            boots[b] = fn(ome.bootstrap_replicates[b], collect_eta_across_cohorts(eta_by_cohort, b));
+        };
+
+#ifdef APM_HAS_TBB
+        std::size_t nt = num_threads.has_value() ? *num_threads : oneapi::tbb::info::default_concurrency();
+        std::unique_ptr<oneapi::tbb::global_control> tbb_gc;
+        if (nt > 1) {
+            tbb_gc = std::make_unique<oneapi::tbb::global_control>(
+                oneapi::tbb::global_control::max_allowed_parallelism, nt);
+            oneapi::tbb::parallel_for(std::size_t(0), B, [&](std::size_t b) { process_boot(b); });
+        } else
+#endif
+        {
+            for (std::size_t b = 0; b < B; ++b) process_boot(b);
         }
     }
 
@@ -43,7 +66,8 @@ TargetParameterEstimates est_target_params(
 std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
     const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
     const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
-    const TargetFn& fn)
+    const TargetFn& fn,
+    std::optional<std::size_t> num_threads)
 {
     std::unordered_map<std::string, TargetParameterEstimates> out;
     out.reserve(ome_map.size());
@@ -53,7 +77,7 @@ std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
         auto it = eta_map.find(key);
         const std::vector<CohortAuxiliaryDataMeanEstimates> empty_eta;
         const auto& eta_vec = (it == eta_map.end() ? empty_eta : it->second);
-        out.emplace(key, est_target_params(ome, eta_vec, fn));
+        out.emplace(key, est_target_params(ome, eta_vec, fn, num_threads));
     }
     return out;
 }
