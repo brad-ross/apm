@@ -51,6 +51,7 @@ struct OutcomeMeansEstimates {
         : mean_outcomes(std::move(point)), bootstrap_replicates(std::move(boot)) {}
 
     bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
+    std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_replicates.size(); }
 };
 
 /**

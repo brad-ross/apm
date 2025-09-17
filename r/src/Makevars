@@ -25,7 +25,7 @@ OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o \
            ../../core/src/apm_core.o ../../core/src/linear_algebra_utils.o ../../core/src/bootstrap.o \
            ../../core/src/factor_model_estimators/FactorModelEstimator.o ../../core/src/factor_model_estimators/pc_estimators.o \
            ../../core/src/OutcomeMeanSuffStatEstimator.o ../../core/src/nuisance_param_estimators.o ../../core/src/est_cohort_specific_params.o \
-           ../../core/src/utils.o ../../core/src/est_outcome_means.o \
+           ../../core/src/utils.o ../../core/src/est_outcome_means.o ../../core/src/target_params/est_target_params.o \
            factor_model_estimator_bindings.o pc_estimator_bindings.o outcome_mean_suff_stats_bindings.o \
            est_cohort_specific_params_bindings.o cohort_weight_estimates_bindings.o nuisance_params_bindings.o \
-           est_outcome_means_bindings.o outcome_means_estimates_bindings.o
+           est_outcome_means_bindings.o outcome_means_estimates_bindings.o est_target_params_bindings.o

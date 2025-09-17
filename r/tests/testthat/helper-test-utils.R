@@ -10,8 +10,10 @@ make_outcomes <- function(T) {
     sprintf("%0*d", width, seq_len(T))
 }
 
-make_staircase_observed_indices <- function(T, window) {
-    lapply(seq_len(T - window + 1L), function(start) as.integer(seq.int(start, start + window - 1L)))
+make_staircase_observed_indices <- function(T, window, add_no_missing_cohort = FALSE) {
+    idx <- lapply(seq_len(T - window + 1L), function(start) as.integer(seq.int(start, start + window - 1L)))
+    if (isTRUE(add_no_missing_cohort)) idx <- c(idx, list(as.integer(seq_len(T))))
+    idx
 }
 
 make_units_by_cohort <- function(n_cohorts, units_per_cohort, prefix = "u", start_index = 1L) {
@@ -155,11 +157,23 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                                             include_auxiliary = FALSE,
                                             r = 2L,
                                             rotate = TRUE,
-                                            ctx = NULL) {
+                                            ctx = NULL,
+                                            add_no_missing_cohort = FALSE) {
+    # If requested, extend cohorts and units with a fully observed cohort
+    if (isTRUE(add_no_missing_cohort)) {
+        T <- length(outcomes)
+        units_per <- length(units_by_cohort[[1]])
+        start_index <- length(unique(unlist(units_by_cohort))) + 1L
+        extra_units <- make_units_by_cohort(1L, units_per, prefix = "u", start_index = start_index)[[1]]
+        cohort_indices <- c(cohort_indices, list(as.integer(seq_len(T))))
+        units_by_cohort <- c(units_by_cohort, list(extra_units))
+        ctx <- NULL  # force rebuild to include the new cohort
+    }
+
     if (is.null(ctx)) {
         ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = rotate)
     }
-    
+
     data.table::rbindlist(lapply(seq_along(cohort_indices), function(k) {
         observed_idxs <- cohort_indices[[k]]
         observed_outcomes <- outcomes[observed_idxs]

@@ -6,7 +6,7 @@
 namespace apm {
 
 static arma::mat combine_aux_means(
-    const arma::cube& A,               // N x T x d
+    const arma::cube& eta,             // N x T x d
     const arma::vec& row_weights,      // N
     const arma::mat& current_means,    // T x d
     double current_total_weight)
@@ -15,11 +15,11 @@ static arma::mat combine_aux_means(
     if (batch_weight == 0.0) {
         return current_means;
     }
-    const arma::uword T = A.n_cols;
-    const arma::uword d = A.n_slices;
+    const arma::uword T = eta.n_cols;
+    const arma::uword d = eta.n_slices;
     arma::mat batch_means(T, d, arma::fill::zeros);
     for (arma::uword j = 0; j < d; ++j) {
-        arma::rowvec weighted_sum = row_weights.t() * A.slice(j); // 1 x T
+        arma::rowvec weighted_sum = row_weights.t() * eta.slice(j); // 1 x T
         batch_means.col(j) = (weighted_sum / batch_weight).t();   // T x 1
     }
     const double total_weight = current_total_weight + batch_weight;
@@ -41,25 +41,25 @@ CohortAuxiliaryDataMeanEstimator::CohortAuxiliaryDataMeanEstimator(std::size_t T
 }
 
 void CohortAuxiliaryDataMeanEstimator::validate_data_dimensions(const arma::uvec& unit_idxs,
-                                                                const arma::cube& A,
+                                                                const arma::cube& eta,
                                                                 std::size_t T,
                                                                 std::size_t d)
 {
     const std::size_t N = unit_idxs.n_elem;
-    if (A.n_rows != N || A.n_cols != static_cast<arma::uword>(T) || A.n_slices != static_cast<arma::uword>(d)) {
-        throw std::invalid_argument("CohortAuxiliaryDataMeanEstimator::add_data: A must be N x T x d.");
+    if (eta.n_rows != N || eta.n_cols != static_cast<arma::uword>(T) || eta.n_slices != static_cast<arma::uword>(d)) {
+        throw std::invalid_argument("CohortAuxiliaryDataMeanEstimator::add_data: eta must be N x T x d.");
     }
 }
 
-void CohortAuxiliaryDataMeanEstimator::add_data(const arma::uvec& unit_idxs, const arma::cube& A)
+void CohortAuxiliaryDataMeanEstimator::add_data(const arma::uvec& unit_idxs, const arma::cube& eta)
 {
-    validate_data_dimensions(unit_idxs, A, T_, d_);
+    validate_data_dimensions(unit_idxs, eta, T_, d_);
 
     const std::size_t N = unit_idxs.n_elem;
     const std::size_t B = num_bootstraps();
     // Point estimate: equal weights for the batch
     arma::vec ones_w(static_cast<arma::uword>(N), arma::fill::ones);
-    aux_means_ = combine_aux_means(A, ones_w, aux_means_, total_weight_);
+    aux_means_ = combine_aux_means(eta, ones_w, aux_means_, total_weight_);
     total_weight_ += arma::accu(ones_w);
 
     // Bootstrap estimates: weighted by replicate-specific unit weights
@@ -67,23 +67,23 @@ void CohortAuxiliaryDataMeanEstimator::add_data(const arma::uvec& unit_idxs, con
         arma::mat rows = bootstrap_->obs(unit_idxs); // N x B
         for (arma::uword b = 0; b < static_cast<arma::uword>(B); ++b) {
             arma::vec w_b = rows.col(b);
-            boot_aux_means_.slice(b) = combine_aux_means(A, w_b, boot_aux_means_.slice(b), total_boot_weights_(b));
+            boot_aux_means_.slice(b) = combine_aux_means(eta, w_b, boot_aux_means_.slice(b), total_boot_weights_(b));
             total_boot_weights_(b) += arma::accu(w_b);
         }
     }
 
 }
 
-void CohortAuxiliaryDataMeanEstimator::add_datum(std::size_t unit_idx, const arma::mat& A)
+void CohortAuxiliaryDataMeanEstimator::add_datum(std::size_t unit_idx, const arma::mat& eta)
 {
-    if (A.n_rows != static_cast<arma::uword>(T_) || A.n_cols != static_cast<arma::uword>(d_)) {
-        throw std::invalid_argument("CohortAuxiliaryDataMeanEstimator::add_datum: A must be T x d.");
+    if (eta.n_rows != static_cast<arma::uword>(T_) || eta.n_cols != static_cast<arma::uword>(d_)) {
+        throw std::invalid_argument("CohortAuxiliaryDataMeanEstimator::add_datum: eta must be T x d.");
     }
     arma::uvec one(1);
     one(0) = static_cast<arma::uword>(unit_idx);
     // wrap: N x T x d, with N=1
     arma::cube C(1, static_cast<arma::uword>(T_), static_cast<arma::uword>(d_));
-    for (arma::uword j = 0; j < static_cast<arma::uword>(d_); ++j) C.slice(j).row(0) = A.col(j).t();
+    for (arma::uword j = 0; j < static_cast<arma::uword>(d_); ++j) C.slice(j).row(0) = eta.col(j).t();
     add_data(one, C);
 }
 
