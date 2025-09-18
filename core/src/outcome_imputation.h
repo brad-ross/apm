@@ -33,6 +33,15 @@ arma::mat comp_unit_specific_params(
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt
 );
 
+// Compute outcome-specific fixed effects by averaging residuals given unit-specific lambda
+arma::vec comp_outcome_specific_params(
+    const arma::mat& lambda,
+    const InMemoryUnbalancedPanel& panel,
+    const VariableSpec& var,
+    const FactorModelParameters& factor_model_params,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt
+);
+
 } // namespace apm
 
 #endif // APM_OUTCOME_IMPUTATION_H
