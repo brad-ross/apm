@@ -31,6 +31,7 @@ static std::unordered_map<int, std::size_t> make_pos_map(const arma::uvec& idx0)
 //==============================
 // Helpers: estimator factories
 //==============================
+
 static std::unordered_map<std::string, std::unique_ptr<FactorModelEstimator>>
 make_factor_estimators_for_cohort(
     const std::unordered_map<std::string, EstimatorSpecification>& specs,

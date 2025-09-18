@@ -33,5 +33,9 @@ arma::mat multi_min_norm_solve(const arma::mat& A, const arma::mat& B) {
     return arma::pinv(A) * B;
 }
 
+arma::vec min_norm_solve(const arma::mat& A, const arma::vec& b) {
+    return arma::pinv(A) * b;
+}
+
 } // namespace internal
 } // namespace apm 
