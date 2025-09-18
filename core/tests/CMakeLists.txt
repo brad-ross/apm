@@ -15,6 +15,7 @@ add_executable(test_apm
     test_pc_estimators.cpp
     test_outcome_mean_suff_stat_estimators.cpp
     test_est_cohort_specific_params.cpp
+    test_outcome_imputation.cpp
 )
 
 # Link with the core library and Google Test
