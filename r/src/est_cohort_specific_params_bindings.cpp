@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cstddef>
+#include <optional>
 #include "../../core/src/est_cohort_specific_params.h"
 #include "r_utils.h"
 #include "cohort_specific_estimates_helpers.h"
@@ -103,7 +104,8 @@ struct PanelHolder {
                 Rcpp::NumericVector y_,
                 std::vector<Rcpp::NumericVector> covars_,
                 std::vector<Rcpp::NumericVector> aux_,
-                const apm::ObservedOutcomeIndices& ooi0b)
+                const apm::ObservedOutcomeIndices& ooi0b,
+                std::optional<std::size_t> num_units_opt = std::nullopt)
         : unit_idx(unit_idx_)
         , cohort_id(cohort_id_)
         , outcome_idx(outcome_idx_)
@@ -117,7 +119,8 @@ struct PanelHolder {
             covar_ptrs, aux_ptrs,
             static_cast<std::size_t>(unit_idx.size()),
             ooi0b,
-            /*one_indexed=*/true
+            /*one_indexed=*/true,
+            num_units_opt
         )
     {}
 };
@@ -146,7 +149,8 @@ SEXP build_R_panel_holder_cpp(Rcpp::DataFrame processed_panel,
                               Rcpp::List observed_outcome_indices,
                               const std::string& outcome_value_col,
                               Rcpp::CharacterVector covar_cols,
-                              Rcpp::CharacterVector auxiliary_cols) {
+                              Rcpp::CharacterVector auxiliary_cols,
+                              Rcpp::Nullable<Rcpp::IntegerVector> num_units_in = R_NilValue) {
     Rcpp::IntegerVector unit_idx_r = processed_panel["unit_idx"];
     Rcpp::IntegerVector cohort_id_r = processed_panel["cohort_id"];
     Rcpp::IntegerVector outcome_idx_r = processed_panel["outcome_idx"];
@@ -160,7 +164,15 @@ SEXP build_R_panel_holder_cpp(Rcpp::DataFrame processed_panel,
     auto covs = grab_numeric_cols(processed_panel, covar_cols, n_rows);
     auto aux = grab_numeric_cols(processed_panel, auxiliary_cols, n_rows);
 
-    auto* holder = new PanelHolder(unit_idx_r, cohort_id_r, outcome_idx_r, y_r, std::move(covs), std::move(aux), ooi0b);
+    std::optional<std::size_t> num_units_opt = std::nullopt;
+    if (num_units_in.isNotNull()) {
+        Rcpp::IntegerVector nu(num_units_in);
+        if (nu.size() > 0 && !Rcpp::IntegerVector::is_na(nu[0]) && nu[0] > 0) {
+            num_units_opt = static_cast<std::size_t>(nu[0]);
+        }
+    }
+
+    auto* holder = new PanelHolder(unit_idx_r, cohort_id_r, outcome_idx_r, y_r, std::move(covs), std::move(aux), ooi0b, num_units_opt);
     return Rcpp::XPtr<PanelHolder>(holder, true);
 }
 

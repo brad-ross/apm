@@ -368,7 +368,8 @@ UnbalancedPanel <- R6Class(
                 observed_outcome_indices = private$observed_outcome_indices,
                 outcome_value_col = private$outcome_value_col,
                 covar_cols = private$covar_cols,
-                auxiliary_cols = private$auxiliary_cols
+                auxiliary_cols = private$auxiliary_cols,
+                num_units_in = length(private$unit_ids)
             )
 
             invisible(self)
