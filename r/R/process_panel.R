@@ -270,6 +270,7 @@ UnbalancedPanel <- R6Class(
         get_processed_panel = function() private$processed_panel,
         get_covar_cols = function() private$covar_cols,
         get_auxiliary_cols = function() private$auxiliary_cols,
+        get_panel_holder_xptr = function() private$panel_holder_xptr,
 
         initialize = function(panel_df,
                               unit_id_col,
@@ -361,6 +362,15 @@ UnbalancedPanel <- R6Class(
 
             private$processed_panel <- processed
 
+            # Build and store a C++ panel holder (pins columns and builds internal panel)
+            private$panel_holder_xptr <- build_R_panel_holder_cpp(
+                processed_panel = private$processed_panel,
+                observed_outcome_indices = private$observed_outcome_indices,
+                outcome_value_col = private$outcome_value_col,
+                covar_cols = private$covar_cols,
+                auxiliary_cols = private$auxiliary_cols
+            )
+
             invisible(self)
         }
     ),
@@ -380,7 +390,8 @@ UnbalancedPanel <- R6Class(
         unit_cohorts = NULL,
         processed_panel = NULL,
         covar_cols = character(0),
-        auxiliary_cols = character(0)
+        auxiliary_cols = character(0),
+        panel_holder_xptr = NULL
     )
 )
 

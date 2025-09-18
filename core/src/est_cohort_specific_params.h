@@ -34,24 +34,11 @@ struct CohortSpecificEstimates {
     std::unordered_map<int, OutcomeMeanSufficientStatistics> masked_cohort_outcome_means;
 };
 
-/**
- * @brief Estimate cohort-specific factor parameters and outcome mean sufficient statistics
- *        directly from raw column pointers of a processed panel.
- *
- * All indices (unit, cohort, outcome) are assumed to be 0-based.
- * The observed outcome order per cohort is provided via ObservedOutcomeIndices (0-based).
- * T is computed globally as 1 + max observed outcome index across all cohorts.
- */
-CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
-    const int* unit_idx,         // length n_rows, 0-based
-    const int* cohort_id,        // length n_rows, 0-based
-    const int* outcome_idx,      // length n_rows, 0-based
-    const double* y,             // length n_rows
-    const std::vector<const double*>& covar_cols, // size q, each length n_rows
-    const std::vector<const double*>& auxiliary_cols,  // size d, each length n_rows
-    std::size_t n_rows,
+// New panel-based entry point. Indices inside panel may be 0- or 1-based; panel handles it.
+class InMemoryUnbalancedPanel; // fwd
+CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
+    const InMemoryUnbalancedPanel& panel,
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
-    const ObservedOutcomeIndices& observed_outcome_indices, // 0-based per cohort, index with cohort_id
     std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
     std::optional<std::size_t> num_threads = std::nullopt,
     const CohortOutcomeMask& cohort_outcomes_to_mask = CohortOutcomeMask()

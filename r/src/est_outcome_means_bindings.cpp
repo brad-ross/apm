@@ -166,23 +166,15 @@ Rcpp::List estimate_outcome_means_across_cohorts_by_spec_cpp(
 
 // [[Rcpp::export]]
 Rcpp::List est_target_param_components_from_panel_cpp(
-    Rcpp::DataFrame processed_panel,
-    Rcpp::List observed_outcome_indices, // 1-based
-    const std::string& outcome_value_col,
-    Rcpp::CharacterVector covar_cols,
-    Rcpp::CharacterVector auxiliary_cols,
+    SEXP panel_holder_xptr,
     Rcpp::List est_specs,
     SEXP bootstrap_xptr = R_NilValue,
     Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue,
     Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue)
 {
-    // 1) Cohort-specific estimates (raw C++)
+    // 1) Cohort-specific estimates (raw C++) via panel-holder core
     apm::CohortSpecificEstimates ests = cohort_specific_estimates_from_panel_cpp_core(
-        processed_panel,
-        observed_outcome_indices,
-        outcome_value_col,
-        covar_cols,
-        auxiliary_cols,
+        panel_holder_xptr,
         est_specs,
         bootstrap_xptr,
         num_threads_in,
@@ -190,10 +182,10 @@ Rcpp::List est_target_param_components_from_panel_cpp(
     );
 
     // 2) Observed outcome indices (prefer masked if present)
-    apm::ObservedOutcomeIndices obs_idx = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+    const apm::ObservedOutcomeIndices obs_idx_panel = observed_outcome_indices_from_panel_holder(panel_holder_xptr);
     const apm::ObservedOutcomeIndices& obs_idx_eff = ests.masked_observed_outcome_indices.has_value()
         ? *ests.masked_observed_outcome_indices
-        : obs_idx;
+        : obs_idx_panel;
 
     // 3) Aggregate factor model params by spec (use obs_idx_eff)
     std::unordered_map<std::string, apm::FactorModelEstimates> agg_by_spec =

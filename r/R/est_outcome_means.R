@@ -64,11 +64,7 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
   if (!is.null(bootstrap) && !inherits(bootstrap, "WeightedBootstrap")) stop("bootstrap must be a WeightedBootstrap or NULL")
   .validate_est_specs(est_specs)
 
-  pp <- panel$get_processed_panel()
-  obs_idx <- panel$get_observed_outcome_indices()
-  y_col <- panel$get_outcome_value_col()
-  covar_cols <- panel$get_covar_cols()
-  auxiliary_cols <- panel$get_auxiliary_cols()
+  holder_xp <- panel$get_panel_holder_xptr()
 
   validate_mask_arg(cohort_outcomes_to_mask)
 
@@ -76,11 +72,7 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
   nt <- if (is.null(num_threads)) NULL else as.integer(num_threads)
 
   res <- est_target_param_components_from_panel_cpp(
-    processed_panel = pp,
-    observed_outcome_indices = obs_idx,
-    outcome_value_col = y_col,
-    covar_cols = covar_cols,
-    auxiliary_cols = auxiliary_cols,
+    panel_holder_xptr = holder_xp,
     est_specs = est_specs,
     bootstrap_xptr = xp,
     num_threads_in = nt,
