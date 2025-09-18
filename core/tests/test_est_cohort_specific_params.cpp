@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "est_cohort_specific_params.h"
+#include "panels/InMemoryUnbalancedPanel.h"
 #include "apm_core.h"
 #include "linear_algebra_utils.h"
 #include "bootstrap.h"
@@ -30,10 +31,12 @@ TEST(CohortSpecificRawTest, InvalidEstimatorNameThrows) {
 
     std::vector<const double*> covar_cols; // q=0
     std::vector<const double*> auxiliary_cols; // d=0
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
     EXPECT_THROW(
-        (void)apm::estimate_cohort_specific_params_from_raw(
-            rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-            covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices),
+        (void)apm::estimate_cohort_specific_params_from_internal_panel_rep(
+            panel, specs, /*bootstrap=*/nullptr, /*num_threads=*/std::nullopt, /*mask=*/apm::CohortOutcomeMask()),
         std::invalid_argument);
 }
 
@@ -46,10 +49,12 @@ TEST(CohortSpecificRawTest, RGreaterThanTcThrows) {
 
     std::vector<const double*> covar_cols; // q=0
     std::vector<const double*> auxiliary_cols; // d=0
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
     EXPECT_THROW(
-        (void)apm::estimate_cohort_specific_params_from_raw(
-            rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-            covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices),
+        (void)apm::estimate_cohort_specific_params_from_internal_panel_rep(
+            panel, specs, /*bootstrap=*/nullptr, /*num_threads=*/std::nullopt, /*mask=*/apm::CohortOutcomeMask()),
         std::invalid_argument);
 }
 
@@ -63,9 +68,11 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
 
     std::vector<const double*> covar_cols; // q=0
     std::vector<const double*> auxiliary_cols; // d=0
-    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
+    apm::InMemoryUnbalancedPanel panel(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices);
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_internal_panel_rep(
+        panel, specs, /*bootstrap=*/nullptr, /*num_threads=*/std::nullopt, /*mask=*/apm::CohortOutcomeMask());
 
     ASSERT_EQ(out.cohort_specific_factor_ests.size(), 2u);
     ASSERT_EQ(out.cohort_outcome_mean_ests.size(), ctx.C);
@@ -143,9 +150,11 @@ TEST(CohortSpecificRawTest, YXAssembly_WithCovariates_DimensionsAndMeans) {
     covar_cols.push_back(rp.cov2.data());
 
     std::vector<const double*> auxiliary_cols; // d=0
-    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
+    apm::InMemoryUnbalancedPanel panel(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices);
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_internal_panel_rep(
+        panel, specs, /*bootstrap=*/nullptr, /*num_threads=*/std::nullopt, /*mask=*/apm::CohortOutcomeMask());
 
     const auto& oms0 = out.cohort_outcome_mean_ests[0].suff_stat_estimates;
     ASSERT_TRUE(oms0.has_covar_means());
@@ -186,9 +195,11 @@ TEST(CohortSpecificRawTest, Bootstrap_DeterministicReplicates_NoCovariates) {
 
     std::vector<const double*> covar_cols; // q=0
     std::vector<const double*> auxiliary_cols; // d=0
-    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
+    apm::InMemoryUnbalancedPanel panel(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices, boot);
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_internal_panel_rep(
+        panel, specs, boot, /*num_threads=*/std::nullopt, /*mask=*/apm::CohortOutcomeMask());
 
     // Check suff stat bootstrap replicates exist and have expected lengths for cohort 0
     const auto& oms0 = out.cohort_outcome_mean_ests[0];
@@ -244,9 +255,12 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_NoCovariates) {
     auxiliary_cols.push_back(aux1.data());
     auxiliary_cols.push_back(aux2.data());
 
-    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
+    apm::InMemoryUnbalancedPanel panel(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices);
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_internal_panel_rep(
+        panel, specs, /*bootstrap=*/nullptr, /*num_threads=*/std::nullopt, /*mask=*/apm::CohortOutcomeMask());
 
     ASSERT_EQ(out.cohort_auxiliary_means.size(), ctx.C);
 
@@ -311,9 +325,12 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_WithBootstrapReplicatesExist) {
     std::vector<const double*> covar_cols; // q=0
     std::vector<const double*> auxiliary_cols{aux1.data()};
 
-    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
+    apm::InMemoryUnbalancedPanel panel(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices, boot);
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_internal_panel_rep(
+        panel, specs, boot, /*num_threads=*/std::nullopt, /*mask=*/apm::CohortOutcomeMask());
 
     ASSERT_EQ(out.cohort_auxiliary_means.size(), ctx.C);
     for (std::size_t c = 0; c < ctx.C; ++c) {
@@ -356,10 +373,11 @@ TEST(CohortSpecificRawTest, Masking_LastCohort_Outcome5) {
     // Estimate with mask provided (bootstrap omitted, num_threads set to 1 explicitly)
     std::vector<const double*> covar_cols; // q=0
     std::vector<const double*> auxiliary_cols; // d=0
-    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_raw(
+    apm::InMemoryUnbalancedPanel panel(
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
-        covar_cols, auxiliary_cols, rp.y.size(), specs, ctx.observed_outcome_indices,
-        /*bootstrap=*/nullptr, /*num_threads=*/1, /*mask=*/mask);
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_internal_panel_rep(
+        panel, specs, /*bootstrap=*/nullptr, /*num_threads=*/static_cast<std::optional<std::size_t>>(1), /*mask=*/mask);
 
     // 1) Remaining cohort-specific factor estimates are correct (up to rotation):
     const auto& pca_vec = out.cohort_specific_factor_ests.at("pca");

@@ -14,19 +14,22 @@ static std::unordered_map<int, std::size_t> make_pos_map(const arma::uvec& idx0)
 std::vector<CohortBlock> InMemoryUnbalancedPanel::build_cohort_blocks_with_unit_runs(
     const int* unit_idx,
     const int* cohort_id,
-    std::size_t n_rows)
+    std::size_t n_rows,
+    bool one_indexed)
 {
     std::vector<CohortBlock> blocks;
     if (n_rows == 0) return blocks;
 
+    const int base = one_indexed ? 1 : 0;
+
     std::size_t cohort_start = 0;
-    std::size_t curr_c = static_cast<std::size_t>(cohort_id[0]);
+    std::size_t curr_c = static_cast<std::size_t>(cohort_id[0] - base);
 
     std::vector<UnitRun> unit_runs;
     unit_runs.reserve(64);
 
     std::size_t unit_start = 0;
-    std::size_t curr_u = static_cast<std::size_t>(unit_idx[0]);
+    std::size_t curr_u = static_cast<std::size_t>(unit_idx[0] - base);
 
     auto finalize_unit = [&](std::size_t end_exclusive) {
         unit_runs.push_back(UnitRun{unit_start, end_exclusive, curr_u});
@@ -36,8 +39,8 @@ std::vector<CohortBlock> InMemoryUnbalancedPanel::build_cohort_blocks_with_unit_
     };
 
     for (std::size_t i = 1; i < n_rows; ++i) {
-        const std::size_t c = static_cast<std::size_t>(cohort_id[i]);
-        const std::size_t u = static_cast<std::size_t>(unit_idx[i]);
+        const std::size_t c = static_cast<std::size_t>(cohort_id[i] - base);
+        const std::size_t u = static_cast<std::size_t>(unit_idx[i] - base);
 
         if (c != curr_c) {
             finalize_unit(i);
@@ -71,7 +74,8 @@ InMemoryUnbalancedPanel::InMemoryUnbalancedPanel(
     const std::vector<const double*>& covar_cols,
     const std::vector<const double*>& auxiliary_cols,
     std::size_t n_rows,
-    ObservedOutcomeIndices observed_outcome_indices)
+    ObservedOutcomeIndices observed_outcome_indices,
+    bool one_indexed)
     : unit_idx_(unit_idx)
     , cohort_id_(cohort_id)
     , outcome_idx_(outcome_idx)
@@ -80,7 +84,8 @@ InMemoryUnbalancedPanel::InMemoryUnbalancedPanel(
     , auxiliary_cols_(auxiliary_cols)
     , n_rows_(n_rows)
     , observed_outcome_indices_(std::move(observed_outcome_indices))
-    , cohort_blocks_(build_cohort_blocks_with_unit_runs(unit_idx, cohort_id, n_rows))
+    , one_indexed_(one_indexed)
+    , cohort_blocks_(build_cohort_blocks_with_unit_runs(unit_idx, cohort_id, n_rows, one_indexed_))
 {
     pos_T_idx_by_cohort_.resize(observed_outcome_indices_.size());
     for (std::size_t c = 0; c < observed_outcome_indices_.size(); ++c) {
@@ -99,7 +104,8 @@ void InMemoryUnbalancedPanel::assemble_Y_for_unit(
     Y.fill(std::numeric_limits<double>::quiet_NaN());
 
     for (std::size_t r = ur.start; r < ur.end; ++r) {
-        const int o = outcome_idx_[r];
+        const int base = one_indexed_ ? 1 : 0;
+        const int o = outcome_idx_[r] - base;
         auto it = pos_T_idx_for_cohort.find(o);
         if (it != pos_T_idx_for_cohort.end()) {
             Y(static_cast<arma::uword>(it->second)) = y_[r];
@@ -120,8 +126,9 @@ void InMemoryUnbalancedPanel::assemble_X_for_unit(
     X_full.set_size(static_cast<arma::uword>(T), static_cast<arma::uword>(q));
     X_full.fill(std::numeric_limits<double>::quiet_NaN());
     for (std::size_t r = ur.start; r < ur.end; ++r) {
-        const int o = outcome_idx_[r];
-        if (static_cast<std::size_t>(o) >= T) continue;
+        const int base = one_indexed_ ? 1 : 0;
+        const int o = outcome_idx_[r] - base;
+        if (o < 0 || static_cast<std::size_t>(o) >= T) continue;
         const arma::uword row = static_cast<arma::uword>(o);
         for (std::size_t j = 0; j < q; ++j) {
             X_full(row, static_cast<arma::uword>(j)) = covar_cols_[j][r];
@@ -164,8 +171,9 @@ void InMemoryUnbalancedPanel::assemble_aux_for_unit(
     A_out.set_size(static_cast<arma::uword>(T), static_cast<arma::uword>(d));
     A_out.fill(std::numeric_limits<double>::quiet_NaN());
     for (std::size_t r = ur.start; r < ur.end; ++r) {
-        const int o = outcome_idx_[r];
-        if (static_cast<std::size_t>(o) >= T) continue;
+        const int base = one_indexed_ ? 1 : 0;
+        const int o = outcome_idx_[r] - base;
+        if (o < 0 || static_cast<std::size_t>(o) >= T) continue;
         const arma::uword row = static_cast<arma::uword>(o);
         for (arma::uword j = 0; j < A_out.n_cols; ++j) {
             A_out(row, j) = auxiliary_cols_[static_cast<std::size_t>(j)][r];

@@ -38,7 +38,8 @@ public:
         const std::vector<const double*>& covar_cols,
         const std::vector<const double*>& auxiliary_cols,
         std::size_t n_rows,
-        ObservedOutcomeIndices observed_outcome_indices);
+        ObservedOutcomeIndices observed_outcome_indices,
+        bool one_indexed);
 
     // Accessors to original inputs
     const int* outcome_idx() const { return outcome_idx_; }
@@ -101,6 +102,7 @@ private:
     const std::vector<const double*>& auxiliary_cols_;
     std::size_t n_rows_;
     ObservedOutcomeIndices observed_outcome_indices_;
+    bool one_indexed_;
 
     // precomputed grouping
     std::vector<CohortBlock> cohort_blocks_;
@@ -112,7 +114,8 @@ private:
     static std::vector<CohortBlock> build_cohort_blocks_with_unit_runs(
         const int* unit_idx,
         const int* cohort_id,
-        std::size_t n_rows);
+        std::size_t n_rows,
+        bool one_indexed);
 };
 
 } // namespace apm

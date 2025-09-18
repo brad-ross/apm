@@ -14,14 +14,12 @@
 #include "panels/InMemoryUnbalancedPanel.h"
 
 namespace apm {
-
 namespace {
-
-// Removed local UnitRun/CohortBlock/build_cohort_blocks_with_unit_runs (moved to InMemoryUnbalancedPanel)
 
 //==============================
 // Helpers: masked pos map
 //==============================
+
 static std::unordered_map<int, std::size_t> make_pos_map(const arma::uvec& idx0) {
     std::unordered_map<int, std::size_t> mp;
     mp.reserve(static_cast<std::size_t>(idx0.n_elem) * 2);
@@ -56,12 +54,9 @@ make_factor_estimators_for_cohort(
     return out;
 }
 
-// Removed assemble_Y_X_for_unit_run; replaced by InMemoryUnbalancedPanel methods
-
 //==============================
 // Helpers: finalize outputs
 //==============================
-// Removed assemble_aux_data_for_unit; replaced by InMemoryUnbalancedPanel methods
 
 static std::vector<CohortAuxiliaryDataMeanEstimates> finalize_auxiliary_outputs(
     const std::vector<std::optional<CohortAuxiliaryDataMeanEstimator>>& tmp_aux,
@@ -77,6 +72,7 @@ static std::vector<CohortAuxiliaryDataMeanEstimates> finalize_auxiliary_outputs(
     }
     return aux_out;
 }
+
 static CohortSpecificEstimates build_cohort_specific_estimates(
     std::unordered_map<std::string, std::vector<std::optional<FactorModelEstimates>>>& tmp_factor,
     std::vector<std::optional<OutcomeMeanSuffStatEstimates>>& tmp_outcome,
@@ -133,6 +129,7 @@ static std::unordered_map<int, OutcomeMeanSufficientStatistics> build_masked_mea
 //==============================
 // Helpers: cohort weights
 //==============================
+
 static std::unordered_map<std::string, CohortWeightEstimates> est_cohort_weights(
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
     const std::vector<CohortBlock>& blocks,
@@ -212,24 +209,18 @@ static std::unordered_map<std::string, CohortWeightEstimates> est_cohort_weights
 } // anonymous namespace
 
 //==============================
-// Main entry
+// Main entry (panel-based)
 //==============================
-CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
-    const int* unit_idx,
-    const int* cohort_id,
-    const int* outcome_idx,
-    const double* y,
-    const std::vector<const double*>& covar_cols,
-    const std::vector<const double*>& auxiliary_cols,
-    std::size_t n_rows,
+
+CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
+    const InMemoryUnbalancedPanel& panel,
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
-    const ObservedOutcomeIndices& observed_outcome_indices,
     std::shared_ptr<const WeightedBootstrap> bootstrap,
     std::optional<std::size_t> num_threads,
     const CohortOutcomeMask& cohort_outcomes_to_mask)
 {
-    const std::size_t q = covar_cols.size();
-    const std::size_t d = auxiliary_cols.size();
+    const std::size_t q = panel.q();
+    const std::size_t d = panel.d();
 
 #ifdef APM_HAS_TBB
     std::size_t nt = num_threads.has_value() ? *num_threads : oneapi::tbb::info::default_concurrency();
@@ -246,11 +237,8 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
 
     // Determine effective observed outcome indices after optional masking
     const bool has_mask = !cohort_outcomes_to_mask.empty();
-    ObservedOutcomeIndices ooi_effective = get_masked_observed_outcome_indices(observed_outcome_indices, cohort_outcomes_to_mask);
+    ObservedOutcomeIndices ooi_effective = get_masked_observed_outcome_indices(panel.observed_outcome_indices(), cohort_outcomes_to_mask);
 
-    // Build panel abstraction (groups rows and precomputes maps)
-    InMemoryUnbalancedPanel panel(
-        unit_idx, cohort_id, outcome_idx, y, covar_cols, auxiliary_cols, n_rows, ooi_effective);
     const std::size_t T = panel.T();
     const std::size_t C = panel.cohort_blocks().size();
 
@@ -268,8 +256,8 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
     auto process_cohort = [&](std::size_t cidx) {
         const CohortBlock& blk = panel.cohort_blocks()[cidx];
 
-        // Cohort observed outcome indices
-        const arma::uvec& T_idxs_for_cohort = panel.T_idx_for_cohort(blk.cohort);
+        // Cohort observed outcome indices (respect masking via ooi_effective)
+        const arma::uvec& T_idxs_for_cohort = ooi_effective.at(blk.cohort);
         const std::size_t T_c = static_cast<std::size_t>(T_idxs_for_cohort.n_elem);
 
         // Estimators
@@ -314,7 +302,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_raw(
                 ur,
                 T,
                 T_idxs_for_cohort,
-                panel.pos_T_idx_for_cohort(blk.cohort),
+                make_pos_map(T_idxs_for_cohort),
                 Y, X_full, X_obs);
 
             // Add datum to factor estimators
