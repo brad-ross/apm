@@ -8,6 +8,7 @@ find_package(GTest REQUIRED)
 add_executable(test_apm
     test_helpers.cpp
     test_est_outcome_means.cpp
+    test_agg_cohort_specific_factor_model_params.cpp
     test_apm_core.cpp
     test_linear_algebra_utils.cpp
     test_bootstrap.cpp
