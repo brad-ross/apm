@@ -25,6 +25,7 @@ add_library(apm
     src/apm_core.cpp
     src/est_outcome_means.cpp
     src/agg_cohort_specific_factor_model_params.cpp
+    src/outcome_imputation.cpp
     src/linear_algebra_utils.cpp
     src/bootstrap.cpp
     # factor_model_parameter_structs is header-only now
@@ -101,6 +102,6 @@ install(TARGETS apm
     RUNTIME DESTINATION bin
 )
 
-install(FILES src/apm_core.h src/est_outcome_means.h src/agg_cohort_specific_factor_model_params.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/cohort_specific_param_structs.h src/OutcomeMeanSuffStatEstimator.h src/nuisance_param_estimators.h src/est_cohort_specific_params.h src/utils.h src/target_params/est_target_params.h src/panels/InMemoryUnbalancedPanel.h
+install(FILES src/apm_core.h src/est_outcome_means.h src/agg_cohort_specific_factor_model_params.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/cohort_specific_param_structs.h src/OutcomeMeanSuffStatEstimator.h src/nuisance_param_estimators.h src/est_cohort_specific_params.h src/utils.h src/target_params/est_target_params.h src/panels/InMemoryUnbalancedPanel.h src/outcome_imputation.h
     DESTINATION include/apm
 ) 

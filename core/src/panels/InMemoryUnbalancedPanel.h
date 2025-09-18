@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <vector>
 #include <unordered_map>
+#include <optional>
 #ifdef USING_R
 #include <RcppArmadillo.h>
 #else
@@ -39,7 +40,8 @@ public:
         const std::vector<const double*>& auxiliary_cols,
         std::size_t n_rows,
         ObservedOutcomeIndices observed_outcome_indices,
-        bool one_indexed);
+        bool one_indexed,
+        std::optional<std::size_t> num_units = std::nullopt);
 
     // Accessors to original inputs
     const int* outcome_idx() const { return outcome_idx_; }
@@ -47,6 +49,7 @@ public:
     const std::vector<const double*>& covar_cols() const { return covar_cols_; }
     const std::vector<const double*>& auxiliary_cols() const { return auxiliary_cols_; }
     const ObservedOutcomeIndices& observed_outcome_indices() const { return observed_outcome_indices_; }
+    std::size_t num_units() const { return num_units_; }
 
     // Dimensions
     std::size_t T() const { return static_cast<std::size_t>(num_outcomes(observed_outcome_indices_)); }
@@ -75,8 +78,9 @@ public:
         const UnitRun& ur,
         std::size_t T,
         const arma::uvec& T_idxs_for_cohort,
-        arma::mat& X_full,
-        arma::mat& X_obs) const;
+        arma::mat* X_full,
+        arma::mat* X_obs,
+        std::optional<std::size_t> covariate_index = std::nullopt) const;
 
     void assemble_YX_for_unit(
         const UnitRun& ur,
@@ -103,6 +107,7 @@ private:
     std::size_t n_rows_;
     ObservedOutcomeIndices observed_outcome_indices_;
     bool one_indexed_;
+    std::size_t num_units_;
 
     // precomputed grouping
     std::vector<CohortBlock> cohort_blocks_;
