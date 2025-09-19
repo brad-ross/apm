@@ -1,4 +1,5 @@
 #include "outcome_imputation.h"
+#include "outcome_imputation_helpers.h"
 #include "linear_algebra_utils.h"
 #include <stdexcept>
 #include <limits>
@@ -30,7 +31,7 @@ static arma::vec assemble_w_i(
 
 } // anonymous namespace
 
-arma::vec comp_outcome_specific_params(
+arma::vec apm::internal::comp_outcome_specific_params(
     const arma::vec& g_0_prev,
     const InMemoryUnbalancedPanel& panel,
     const VariableSpec& var,
@@ -91,7 +92,7 @@ arma::vec comp_outcome_specific_params(
     return g_0_in_progress - G * apm::internal::min_norm_solve(G, g_0_in_progress);
 }
 
-arma::vec comp_unit_and_outcome_specific_params_vanilla_fixed_point(
+arma::vec apm::internal::comp_unit_and_outcome_specific_params_vanilla_fixed_point(
     const InMemoryUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
@@ -109,7 +110,7 @@ arma::vec comp_unit_and_outcome_specific_params_vanilla_fixed_point(
 
     std::size_t iter = 0;
     for (; iter < max_iters; ++iter) {
-        arma::vec g0_new = comp_outcome_specific_params(g_0, panel, var, factor_model_params, effective_ooi_opt);
+        arma::vec g0_new = apm::internal::comp_outcome_specific_params(g_0, panel, var, factor_model_params, effective_ooi_opt);
 
         double dg = arma::norm(g0_new - g_0, "inf");
 

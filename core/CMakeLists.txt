@@ -26,6 +26,7 @@ add_library(apm
     src/est_outcome_means.cpp
     src/agg_cohort_specific_factor_model_params.cpp
     src/outcome_imputation.cpp
+    src/outcome_imputation_helpers.h
     src/linear_algebra_utils.cpp
     src/bootstrap.cpp
     # factor_model_parameter_structs is header-only now

@@ -2,7 +2,7 @@
 #include <armadillo>
 
 #include "linear_algebra_utils.h"
-#include "outcome_imputation.h"
+#include "outcome_imputation_helpers.h"
 #include "panels/InMemoryUnbalancedPanel.h"
 #include "cohort_specific_param_structs.h"
 #include "test_helpers.h"
@@ -26,7 +26,7 @@ TEST(OutcomeImputationTest, OutcomeSpecificParams_NestedLambda_NoCovariates) {
 	auto var = apm::VariableSpec::outcome();
 
 	// Using nested lambda computation with true g0
-	arma::vec g0_est = apm::comp_outcome_specific_params(ctx.g0_true, panel, var, fmp);
+    arma::vec g0_est = apm::internal::comp_outcome_specific_params(ctx.g0_true, panel, var, fmp);
     
 	// Expect orthogonal projection of g0_true onto complement of span(G_true)
     arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
@@ -53,7 +53,7 @@ TEST(OutcomeImputationTest, FixedPoint_RecoversLambdaAndG0_NoCovariates) {
 	auto var = apm::VariableSpec::outcome();
 
     // Run fixed-point (returns g0). Expect orthogonal projection of g0_true
-	arma::vec g0_est = apm::comp_unit_and_outcome_specific_params_vanilla_fixed_point(panel, var, fmp);
+    arma::vec g0_est = apm::internal::comp_unit_and_outcome_specific_params_vanilla_fixed_point(panel, var, fmp);
     
     arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
     
