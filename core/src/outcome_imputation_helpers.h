@@ -9,6 +9,7 @@
 #endif
 
 #include <optional>
+#include <string>
 
 #include "panels/InMemoryUnbalancedPanel.h"
 #include "cohort_specific_param_structs.h"
@@ -24,13 +25,14 @@ arma::vec comp_outcome_specific_params(
     const FactorModelParameters& factor_model_params,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt);
 
-arma::vec comp_unit_and_outcome_specific_params_vanilla_fixed_point(
+arma::vec comp_outcome_specific_params_fixed_point(
     const InMemoryUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
     double tol = 1e-10,
-    std::size_t max_iters = 1000);
+    std::size_t max_iters = 1000,
+    const std::string& fixed_point_method = "");
 
 } // namespace internal
 } // namespace apm
