@@ -9,6 +9,7 @@
 #endif
 
 #include <optional>
+#include <utility>
 #include <string>
 
 #include "panels/InMemoryUnbalancedPanel.h"
@@ -17,6 +18,14 @@
 
 namespace apm {
 namespace internal {
+
+std::pair<arma::vec, std::optional<arma::mat>> comp_unit_and_outcome_specific_params(
+    const arma::vec& g_0_prev,
+    const InMemoryUnbalancedPanel& panel,
+    const VariableSpec& var,
+    const FactorModelParameters& factor_model_params,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
+    bool store_unit_params = false);
 
 arma::vec comp_outcome_specific_params(
     const arma::vec& g_0_prev,

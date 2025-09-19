@@ -25,16 +25,6 @@ struct VariableSpec {
     static VariableSpec covariate(std::size_t j) { return VariableSpec{Kind::Covariate, j}; }
 };
 
-arma::mat comp_unit_specific_params(
-    const arma::vec& g_0,
-    const InMemoryUnbalancedPanel& panel,
-    const VariableSpec& var,
-    const FactorModelParameters& factor_model_params,
-    std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt
-);
-
-// Note: more outcome-imputation routines are available in outcome_imputation_helpers.h for tests/internal use only.
-
 } // namespace apm
 
 #endif // APM_OUTCOME_IMPUTATION_H

@@ -31,12 +31,13 @@ static arma::vec assemble_w_i(
 
 } // anonymous namespace
 
-arma::vec apm::internal::comp_outcome_specific_params(
+std::pair<arma::vec, std::optional<arma::mat>> apm::internal::comp_unit_and_outcome_specific_params(
     const arma::vec& g_0_prev,
     const InMemoryUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
-    std::optional<ObservedOutcomeIndices> effective_ooi_opt)
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt,
+    bool store_unit_params)
 {
     const ObservedOutcomeIndices& ooi = effective_ooi_opt ? *effective_ooi_opt
                                                          : panel.observed_outcome_indices();
@@ -53,6 +54,12 @@ arma::vec apm::internal::comp_outcome_specific_params(
 
     arma::vec g_0_in_progress(static_cast<arma::uword>(T), arma::fill::zeros);
     arma::uvec num_units_per_outcome(static_cast<arma::uword>(T), arma::fill::zeros);
+
+    std::optional<arma::mat> lambda_opt;
+    if (store_unit_params) {
+        const std::size_t n_units = panel.num_units();
+        lambda_opt.emplace(static_cast<arma::uword>(n_units), static_cast<arma::uword>(r), arma::fill::zeros);
+    }
 
     arma::vec Y;
     arma::mat X_obs;
@@ -74,6 +81,11 @@ arma::vec apm::internal::comp_outcome_specific_params(
             arma::vec r_for_lambda = w_i - g_0c_prev;
             arma::vec lambda_i = internal::min_norm_solve(G_c, r_for_lambda); // r x 1
 
+            if (store_unit_params) {
+                // ur.unit is 0-based index of the unit
+                (*lambda_opt).row(static_cast<arma::uword>(ur.unit)) = lambda_i.t();
+            }
+
             // Residual used to update g_0
             arma::vec r_i = w_i - (G_c * lambda_i); // T_c x 1
 
@@ -89,38 +101,51 @@ arma::vec apm::internal::comp_outcome_specific_params(
     }
 
     // normalize g_0_in_progress to be orthogonal to the rows of G:
-    return g_0_in_progress - G * apm::internal::min_norm_solve(G, g_0_in_progress);
+    arma::vec g_0_result = g_0_in_progress - G * apm::internal::min_norm_solve(G, g_0_in_progress);
+    return std::make_pair(std::move(g_0_result), std::move(lambda_opt));
+}
+
+arma::vec apm::internal::comp_outcome_specific_params(
+    const arma::vec& g_0_prev,
+    const InMemoryUnbalancedPanel& panel,
+    const VariableSpec& var,
+    const FactorModelParameters& factor_model_params,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt)
+{
+    auto res = apm::internal::comp_unit_and_outcome_specific_params(
+        g_0_prev, panel, var, factor_model_params, effective_ooi_opt, /*store_unit_params=*/false);
+    return std::move(res.first);
 }
 
 namespace {
 
 static arma::vec comp_vanilla_fixed_point_update(
     const arma::vec& g_0,
-    const arma::vec& g1,
+    const arma::vec& g_1,
     const arma::vec& /*r_prev*/, bool /*have_prev*/)
 {
     (void)g_0;
-    return g1;
+    return g_1;
 }
 
 static arma::vec comp_irons_tuck_fixed_point_update(
     const arma::vec& g_0,
-    const arma::vec& g1,
+    const arma::vec& g_1,
     const arma::vec& r_prev,
     bool have_prev)
 {
-    arma::vec r_k = g1 - g_0;
+    arma::vec r_k = g_1 - g_0;
     if (!have_prev) {
-        return g1;
+        return g_1;
     }
     arma::vec dr = r_k - r_prev;
     double denom = arma::dot(dr, dr);
     if (denom <= 0.0) {
-        return g1;
+        return g_1;
     }
     double omega = - arma::dot(r_k, dr) / denom;
     if (!std::isfinite(omega)) {
-        return g1;
+        return g_1;
     }
     if (omega < 0.0) omega = 0.0;
     if (omega > 2.0) omega = 2.0;
@@ -151,27 +176,27 @@ arma::vec apm::internal::comp_outcome_specific_params_fixed_point(
 
     std::size_t iter = 0;
     for (; iter < max_iters; ++iter) {
-        arma::vec g1 = apm::internal::comp_outcome_specific_params(g_0, panel, var, factor_model_params, effective_ooi_opt);
+        arma::vec g_1 = apm::internal::comp_outcome_specific_params(g_0, panel, var, factor_model_params, effective_ooi_opt);
 
-        arma::vec r_k = g1 - g_0;
+        arma::vec r_k = g_1 - g_0;
         if (arma::norm(r_k, "inf") <= tol) {
-            g_0 = std::move(g1);
+            g_0 = std::move(g_1);
             converged = true;
             break;
         }
 
         arma::vec g_next;
         if (fixed_point_method == "irons-tuck") {
-            g_next = comp_irons_tuck_fixed_point_update(g_0, g1, r_prev, have_prev);
+            g_next = comp_irons_tuck_fixed_point_update(g_0, g_1, r_prev, have_prev);
         } else {
-            g_next = comp_vanilla_fixed_point_update(g_0, g1, r_prev, have_prev);
+            g_next = comp_vanilla_fixed_point_update(g_0, g_1, r_prev, have_prev);
         }
 
         r_prev = std::move(r_k);
         have_prev = true;
         g_0 = std::move(g_next);
     }
-    std::cout << "iter: " << iter << std::endl;
+    
     if (iter == max_iters) {
         std::cerr << "Warning: comp_unit_and_outcome_specific_params_vanilla_fixed_point did not converge within max_iters="
                   << max_iters << ", tol=" << tol << std::endl;
