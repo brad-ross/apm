@@ -28,6 +28,7 @@ struct FactorModelParameters {
     arma::mat G;                           // T_c x r
     std::optional<arma::vec> g_0;          // length T_c (if present)
     std::optional<arma::vec> a;            // length q (if present)
+    std::optional<arma::mat> L;            // optional N x r matrix of unit factor scores
 
     // Constructors
     FactorModelParameters() = default;
@@ -35,7 +36,7 @@ struct FactorModelParameters {
     FactorModelParameters(arma::mat G_in,
                           std::optional<arma::vec> g0_in = std::nullopt,
                           std::optional<arma::vec> a_in = std::nullopt)
-        : G(std::move(G_in)), g_0(std::move(g0_in)), a(std::move(a_in)) {
+        : G(std::move(G_in)), g_0(std::move(g0_in)), a(std::move(a_in)), L(std::nullopt) {
         if (g_0 && g_0->n_elem != G.n_rows) {
             throw std::invalid_argument("FactorModelParameters: g_0 length must equal number of ows in G (T_c).");
         }

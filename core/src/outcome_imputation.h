@@ -9,6 +9,7 @@
 #endif
 
 #include <optional>
+#include <vector>
 
 #include "panels/InMemoryUnbalancedPanel.h"
 #include "cohort_specific_param_structs.h"
@@ -24,6 +25,16 @@ struct VariableSpec {
     static VariableSpec outcome() { return VariableSpec{Kind::Outcome, 0}; }
     static VariableSpec covariate(std::size_t j) { return VariableSpec{Kind::Covariate, j}; }
 };
+
+// High-level orchestration that returns G, optional a, g_0, and L
+FactorModelParameters comp_imputation_components(
+    const InMemoryUnbalancedPanel& panel,
+    const FactorModelParameters& factor_model_params,
+    const std::vector<OutcomeMeanSufficientStatistics>& cohort_outcome_mean_suff_stats,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
+    double tol = 1e-10,
+    std::size_t max_iters = 1000,
+    const std::string& fixed_point_method = "vanilla");
 
 } // namespace apm
 
