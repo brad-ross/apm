@@ -87,7 +87,7 @@ TEST(OutcomeImputationTest, FixedPoint_Vanilla_RecoversLambdaAndG0_NoCovariates)
 TEST(OutcomeImputationTest, FixedPoint_IronsTuck_RecoversLambdaAndG0_NoCovariates) {
     // Context and raw panel
     auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/0);
-    auto rp = make_raw_panel(ctx, /*with_covariates=*/false);
+    auto rp = make_raw_panel(ctx);
     for (std::size_t i = 0; i < rp.y.size(); ++i) {
         int t = rp.outcome_idx[i];
         rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
@@ -99,7 +99,8 @@ TEST(OutcomeImputationTest, FixedPoint_IronsTuck_RecoversLambdaAndG0_NoCovariate
         rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
         covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
 
-    apm::FactorModelParameters fmp(ctx.G_true);
+    arma::vec a_dim(static_cast<arma::uword>(ctx.q), arma::fill::zeros);
+    apm::FactorModelParameters fmp(ctx.G_true, std::nullopt, a_dim);
     auto var = apm::VariableSpec::outcome();
 
     // Run Irons-Tuck fixed-point (returns g0). Expect orthogonal projection of g0_true
@@ -110,4 +111,77 @@ TEST(OutcomeImputationTest, FixedPoint_IronsTuck_RecoversLambdaAndG0_NoCovariate
     EXPECT_TRUE(arma::approx_equal(g0_est, g0_exp, "absdiff", 1e-8));
 }
 
+
+TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_NoFixedEffects) {
+    // Context with covariates (alpha present); raw panel includes X * alpha in Y
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true);
+    auto rp = make_raw_panel(ctx);
+
+    // Build panel with covariate columns
+    std::vector<const double*> covar_cols;
+    covar_cols.push_back(rp.cov1.data());
+    covar_cols.push_back(rp.cov2.data());
+    std::vector<const double*> auxiliary_cols; // none
+
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+    arma::vec a_dim(static_cast<arma::uword>(ctx.q), arma::fill::zeros);
+    apm::FactorModelParameters fmp(ctx.G_true, std::nullopt, a_dim);
+
+    // Estimate alpha without fixed effects
+    arma::vec alpha = apm::internal::comp_covar_coefs(panel, fmp, std::nullopt, {}, std::nullopt);
+
+    ASSERT_EQ(static_cast<std::size_t>(alpha.n_elem), static_cast<std::size_t>(ctx.q));
+    EXPECT_TRUE(alpha.is_finite());
+    ASSERT_EQ(static_cast<std::size_t>(ctx.a_true.n_elem), static_cast<std::size_t>(ctx.q));
+    EXPECT_TRUE(arma::approx_equal(alpha, ctx.a_true, "absdiff", 1e-5));
+}
+
+TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_WithFixedEffects) {
+    // Context with covariates (alpha present)
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true);
+    auto rp = make_raw_panel(ctx);
+
+    // Inject outcome fixed effects g0 into Y on observed rows
+    for (std::size_t i = 0; i < rp.y.size(); ++i) {
+        if (std::isfinite(rp.y[i])) {
+            int t = rp.outcome_idx[i];
+            rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
+        }
+    }
+
+    // Build panel with covariate columns
+    std::vector<const double*> covar_cols;
+    covar_cols.push_back(rp.cov1.data());
+    covar_cols.push_back(rp.cov2.data());
+    std::vector<const double*> auxiliary_cols; // none
+
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+	arma::vec a_dim(static_cast<arma::uword>(ctx.q), arma::fill::zeros);
+    apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, a_dim);
+
+    // Compute FE vectors via fixed-point
+    auto var_y = apm::VariableSpec::outcome();
+    arma::vec g0_init = apm::internal::comp_outcome_specific_params_fixed_point(panel, var_y, fmp);
+
+    std::vector<arma::vec> g0_init_covars(static_cast<std::size_t>(ctx.q));
+    for (std::size_t j = 0; j < static_cast<std::size_t>(ctx.q); ++j) {
+        auto var_xj = apm::VariableSpec::covariate(j);
+        g0_init_covars[j] = apm::internal::comp_outcome_specific_params_fixed_point(panel, var_xj, fmp);
+    }
+
+    // Estimate alpha with FE residualization
+    arma::vec alpha = apm::internal::comp_covar_coefs(panel, fmp, g0_init, g0_init_covars, std::nullopt);
+
+    ASSERT_EQ(static_cast<std::size_t>(alpha.n_elem), static_cast<std::size_t>(ctx.q));
+    EXPECT_TRUE(alpha.is_finite());
+    ASSERT_EQ(static_cast<std::size_t>(ctx.a_true.n_elem), static_cast<std::size_t>(ctx.q));
+	std::cout << "alpha: " << alpha << "; a_true: " << ctx.a_true << std::endl;
+    EXPECT_TRUE(arma::approx_equal(alpha, ctx.a_true, "absdiff", 1e-5));
+}
 

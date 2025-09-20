@@ -24,7 +24,7 @@ public:
 TEST(CohortSpecificRawTest, InvalidEstimatorNameThrows) {
     // Generic staircase setup
     auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3);
-    auto rp = make_raw_panel(ctx, /*with_covariates=*/false);
+    auto rp = make_raw_panel(ctx);
 
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;
     specs.emplace("bad", apm::EstimatorSpecification{"not_supported", false, 1});
@@ -42,7 +42,7 @@ TEST(CohortSpecificRawTest, InvalidEstimatorNameThrows) {
 
 TEST(CohortSpecificRawTest, RGreaterThanTcThrows) {
     auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3);
-    auto rp = make_raw_panel(ctx, /*with_covariates=*/false);
+    auto rp = make_raw_panel(ctx);
 
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;
     specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, /*r=*/static_cast<std::size_t>(ctx.T_c + 1)});
@@ -60,7 +60,7 @@ TEST(CohortSpecificRawTest, RGreaterThanTcThrows) {
 
 TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
     auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3);
-    auto rp = make_raw_panel(ctx, /*with_covariates=*/false);
+    auto rp = make_raw_panel(ctx);
 
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;
     specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, ctx.r});
@@ -138,8 +138,8 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
 }
 
 TEST(CohortSpecificRawTest, YXAssembly_WithCovariates_DimensionsAndMeans) {
-    auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3);
-    auto rp = make_raw_panel(ctx, /*with_covariates=*/true);
+    auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3, /*units_per=*/0, /*q=*/2, /*with_covariates=*/true);
+    auto rp = make_raw_panel(ctx);
 
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;
     specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, ctx.r});
@@ -163,9 +163,17 @@ TEST(CohortSpecificRawTest, YXAssembly_WithCovariates_DimensionsAndMeans) {
     ASSERT_EQ(cm.n_rows, ctx.T);
     ASSERT_EQ(cm.n_cols, ctx.q);
 
-    double exp_cov1 = 0.5 * (1.0 + static_cast<double>(ctx.units_per)); // mean of 1..units_per
-    double exp_cov2 = 1.0; // cohort 0 has c+1 = 1
+    // Expected covariate means reflect generation in make_raw_panel:
+    // cov1 = (u+1)*(t+1) ⇒ E[cov1 | t] = (t+1) * mean_{u}(u+1)
+    // cov2 = (u+1)*(t+1) * ( (t+1) + 0.5*(u+1) + 1 ) + 0.7*(c+1)
+    //      ⇒ E[cov2 | t, c=0] = (t+1) * [ (t+1+1)*E[U] + 0.5*E[U^2] ] + 0.7*1, with U = u+1 ~ {1..units_per}
+    const double n_units = static_cast<double>(ctx.units_per);
+    const double mean_u = (n_units + 1.0) / 2.0; // mean of 1..n
+    const double mean_u2 = ((n_units + 1.0) * (2.0 * n_units + 1.0)) / 6.0; // mean of squares of 1..n
     for (arma::uword t = 0; t < ctx.T; ++t) {
+        const double tt = static_cast<double>(t) + 1.0;
+        const double exp_cov1 = tt * mean_u;
+        const double exp_cov2 = tt * ((tt + 1.0) * mean_u + 0.5 * mean_u2) + 0.7 * 1.0;
         EXPECT_NEAR(cm(t, 0), exp_cov1, 1e-12);
         EXPECT_NEAR(cm(t, 1), exp_cov2, 1e-12);
     }
@@ -241,7 +249,7 @@ TEST(CohortSpecificRawTest, Bootstrap_DeterministicReplicates_NoCovariates) {
 
 TEST(CohortSpecificRawTest, AuxiliaryMeans_NoCovariates) {
     auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3);
-    auto rp = make_raw_panel(ctx, /*with_covariates=*/false, /*with_auxiliary=*/true);
+    auto rp = make_raw_panel(ctx, /*with_auxiliary=*/true);
 
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;
     specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, ctx.r});
@@ -310,7 +318,7 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_NoCovariates) {
 
 TEST(CohortSpecificRawTest, AuxiliaryMeans_WithBootstrapReplicatesExist) {
     auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3);
-    auto rp = make_raw_panel(ctx, /*with_covariates=*/false, /*with_auxiliary=*/true);
+    auto rp = make_raw_panel(ctx, /*with_auxiliary=*/true);
 
     // Two bootstrap draws with nontrivial partitions over units
     arma::mat W(static_cast<arma::uword>(ctx.C * ctx.units_per), 2, arma::fill::zeros);
@@ -358,7 +366,7 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_WithBootstrapReplicatesExist) {
 TEST(CohortSpecificRawTest, Masking_LastCohort_Outcome5) {
     auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3);
     // Raw panel with observed outcomes only (q=0)
-    auto rp = make_raw_panel(ctx, /*with_covariates=*/false);
+    auto rp = make_raw_panel(ctx);
 
     // Estimator spec: principal components without fixed effects
     std::unordered_map<std::string, apm::EstimatorSpecification> specs;

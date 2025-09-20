@@ -99,7 +99,8 @@ StaircasePanelContext make_staircase_panel_context(
     arma::uword r,
     arma::uword T_c,
     arma::uword units_per = 0,
-    arma::uword q = 2);
+    arma::uword q = 2,
+    bool with_covariates = false);
 
 struct RawPanelData {
     std::vector<int> unit_idx, cohort_id, outcome_idx;
@@ -111,7 +112,6 @@ struct RawPanelData {
 // If with_covariates or with_auxiliary are true, expand to full T per unit with NaN y for unobserved.
 RawPanelData make_raw_panel(
     const StaircasePanelContext& ctx,
-    bool with_covariates,
     bool with_auxiliary = false);
 
 #endif // APM_TEST_HELPERS_H

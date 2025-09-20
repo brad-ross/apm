@@ -189,7 +189,8 @@ StaircasePanelContext make_staircase_panel_context(
     arma::uword r,
     arma::uword T_c,
     arma::uword units_per,
-    arma::uword q) {
+    arma::uword q,
+    bool with_covariates) {
     StaircasePanelContext ctx;
     ctx.T = T;
     ctx.r = r;
@@ -216,8 +217,12 @@ StaircasePanelContext make_staircase_panel_context(
     ctx.observed_outcome_indices = make_staircase_observed_indices(ctx.T, ctx.T_c);
     ctx.C = static_cast<arma::uword>(ctx.observed_outcome_indices.size());
     ctx.g0_true = arma::linspace(0.1, 0.5, ctx.T);
-    ctx.a_true.set_size(ctx.q);
-    for (arma::uword j = 0; j < ctx.q; ++j) ctx.a_true(j) = 0.5 + 0.5 * static_cast<double>(j)/static_cast<double>(ctx.q);
+    if (with_covariates && ctx.q > 0) {
+        ctx.a_true.set_size(ctx.q);
+        for (arma::uword j = 0; j < ctx.q; ++j) ctx.a_true(j) = 0.5 + 0.5 * static_cast<double>(j)/static_cast<double>(ctx.q);
+    } else {
+        ctx.a_true.reset();
+    }
 
     ctx.l_unit.clear();
     std::size_t total_units = static_cast<std::size_t>(ctx.C * ctx.units_per);
@@ -232,7 +237,6 @@ StaircasePanelContext make_staircase_panel_context(
 
 RawPanelData make_raw_panel(
     const StaircasePanelContext& ctx,
-    bool with_covariates,
     bool with_auxiliary) {
     RawPanelData rp;
     int global_unit = 0;
@@ -246,22 +250,35 @@ RawPanelData make_raw_panel(
         }
 
         for (int u = 0; u < static_cast<int>(ctx.units_per); ++u, ++global_unit) {
-            if (with_covariates || with_auxiliary) {
+            if ((ctx.q > 0) || with_auxiliary) {
                 for (int t = 0; t < static_cast<int>(ctx.T); ++t) {
                     rp.unit_idx.push_back(global_unit);
                     rp.cohort_id.push_back(c);
                     rp.outcome_idx.push_back(t);
+                    // Precompute non-collinear covariates that vary across unit and t
+                    double uu = static_cast<double>(global_unit + 1);
+                    double tt = static_cast<double>(t + 1);
+                    double cc = static_cast<double>(c + 1);
+                    double cov1_val = uu * tt;                 // varies in both u and t
+                    double cov2_val = (uu * tt) * (tt + 0.5 * uu + 1.0) + 0.7 * cc; // nonlinear interaction of u and t
+
                     if (observed[static_cast<std::size_t>(t)]) {
                         double y_val = arma::as_scalar(
                             ctx.G_true.row(static_cast<arma::uword>(t)) * ctx.l_unit[static_cast<std::size_t>(global_unit)]
                         );
+                        if (ctx.a_true.n_elem > 0) {
+                            double cov_term = 0.0;
+                            if (ctx.q >= 1) cov_term += ctx.a_true(0) * cov1_val;
+                            if (ctx.q >= 2) cov_term += ctx.a_true(1) * cov2_val;
+                            y_val += cov_term;
+                        }
                         rp.y.push_back(y_val);
                     } else {
                         rp.y.push_back(std::numeric_limits<double>::quiet_NaN());
                     }
-                    if (with_covariates) {
-                        rp.cov1.push_back(static_cast<double>(global_unit + 1));
-                        rp.cov2.push_back(static_cast<double>(c + 1));
+                    if (ctx.q > 0) {
+                        rp.cov1.push_back(cov1_val);
+                        rp.cov2.push_back(cov2_val);
                     }
                     if (with_auxiliary) {
                         rp.aux1.push_back(static_cast<double>(global_unit + 1));
