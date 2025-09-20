@@ -45,7 +45,8 @@ arma::vec comp_outcome_specific_params(
     const InMemoryUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
-    std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt);
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
+    std::optional<arma::vec> covar_coefs_for_residualization = std::nullopt);
 
 arma::vec comp_outcome_specific_params_fixed_point(
     const InMemoryUnbalancedPanel& panel,

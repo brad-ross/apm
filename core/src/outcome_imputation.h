@@ -34,7 +34,7 @@ FactorModelParameters comp_imputation_components(
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
     double tol = 1e-10,
     std::size_t max_iters = 1000,
-    const std::string& fixed_point_method = "vanilla");
+    const std::string& fixed_point_method = "irons-tuck");
 
 } // namespace apm
 

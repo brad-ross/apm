@@ -164,10 +164,11 @@ arma::vec apm::internal::comp_outcome_specific_params(
     const InMemoryUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
-    std::optional<ObservedOutcomeIndices> effective_ooi_opt)
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt,
+    std::optional<arma::vec> covar_coefs_for_residualization)
 {
     auto res = apm::internal::comp_unit_and_outcome_specific_params(
-        std::optional<arma::vec>(g_0_prev), panel, var, factor_model_params, effective_ooi_opt, std::nullopt, /*store_unit_params=*/false);
+        std::optional<arma::vec>(g_0_prev), panel, var, factor_model_params, effective_ooi_opt, covar_coefs_for_residualization, /*store_unit_params=*/false);
     if (!res.first.has_value()) {
         throw std::runtime_error("Expected g_0 in comp_outcome_specific_params result");
     }
@@ -235,7 +236,8 @@ std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::com
 
     std::size_t iter = 0;
     for (; iter < max_iters; ++iter) {
-        arma::vec g_1 = apm::internal::comp_outcome_specific_params(g_0, panel, var, factor_model_params, effective_ooi_opt);
+        arma::vec g_1 = apm::internal::comp_outcome_specific_params(
+            g_0, panel, var, factor_model_params, effective_ooi_opt, covar_coefs_for_residualization);
 
         arma::vec r_k = g_1 - g_0;
         if (arma::norm(r_k, "inf") <= tol) {

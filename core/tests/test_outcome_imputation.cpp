@@ -3,6 +3,7 @@
 
 #include "linear_algebra_utils.h"
 #include "outcome_imputation_helpers.h"
+#include "outcome_imputation.h"
 #include "panels/InMemoryUnbalancedPanel.h"
 #include "cohort_specific_param_structs.h"
 #include "test_helpers.h"
@@ -82,7 +83,6 @@ TEST(OutcomeImputationTest, FixedPoint_Vanilla_RecoversLambdaAndG0_NoCovariates)
     
 	EXPECT_TRUE(arma::approx_equal(g0_est, g0_exp, "absdiff", 1e-8));
 }
-
 
 TEST(OutcomeImputationTest, FixedPoint_IronsTuck_RecoversLambdaAndG0_NoCovariates) {
     // Context and raw panel
@@ -185,3 +185,159 @@ TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_WithFixedEffects) {
     EXPECT_TRUE(arma::approx_equal(alpha, ctx.a_true, "absdiff", 1e-5));
 }
 
+TEST(OutcomeImputationTest, ImputationComponents_CovarsAndFixedEffects) {
+    // Context with covariates; add g0 to Y afterward
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true);
+    auto rp = make_raw_panel(ctx);
+    for (std::size_t i = 0; i < rp.y.size(); ++i) {
+        if (std::isfinite(rp.y[i])) {
+            int t = rp.outcome_idx[i];
+            rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
+        }
+    }
+
+    std::vector<const double*> covar_cols{rp.cov1.data(), rp.cov2.data()};
+    std::vector<const double*> auxiliary_cols;
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+    // Signal presence of FE and covariates via FactorModelParameters
+    arma::vec a_dim(static_cast<arma::uword>(ctx.q), arma::fill::zeros);
+    apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, a_dim);
+
+    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{});
+
+    // Check G span unchanged
+    expect_same_subspace(out.G, ctx.G_true);
+    // Check alpha recovered
+    ASSERT_TRUE(out.a.has_value());
+    EXPECT_TRUE(arma::approx_equal(*out.a, ctx.a_true, "absdiff", 1e-4));
+    // Check g0 recovered up to orthogonal projection to rows of G
+    arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+    ASSERT_TRUE(out.g_0.has_value());
+    EXPECT_TRUE(arma::approx_equal(*out.g_0, g0_exp, "absdiff", 1e-6));
+    // Check lambda close to true unit loadings adjusted for g0 projection
+    ASSERT_TRUE(out.L.has_value());
+    const arma::mat& L = *out.L;
+    ASSERT_EQ(static_cast<std::size_t>(L.n_rows), ctx.l_unit.size());
+    arma::vec gamma = apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+    for (arma::uword u = 0; u < L.n_rows; ++u) {
+        arma::rowvec L_exp = ctx.l_unit[static_cast<std::size_t>(u)].t() + gamma.t();
+        EXPECT_TRUE(arma::approx_equal(L.row(u), L_exp, "absdiff", 1e-5));
+    }
+}
+
+TEST(OutcomeImputationTest, ImputationComponents_CovarsOnly) {
+    // Context with covariates only; no g0 term
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true);
+    auto rp = make_raw_panel(ctx);
+
+    std::vector<const double*> covar_cols{rp.cov1.data(), rp.cov2.data()};
+    std::vector<const double*> auxiliary_cols;
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+    // Signal covariates present but no FE
+    arma::vec a_dim(static_cast<arma::uword>(ctx.q), arma::fill::zeros);
+    apm::FactorModelParameters fmp(ctx.G_true, std::nullopt, a_dim);
+
+    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{});
+
+    // Check G span unchanged
+    expect_same_subspace(out.G, ctx.G_true);
+    // Check alpha recovered
+    ASSERT_TRUE(out.a.has_value());
+    EXPECT_TRUE(arma::approx_equal(*out.a, ctx.a_true, "absdiff", 1e-4));
+    // No g0
+    EXPECT_FALSE(out.g_0.has_value());
+    // Lambda close to true
+    ASSERT_TRUE(out.L.has_value());
+    const arma::mat& L = *out.L;
+    for (arma::uword u = 0; u < L.n_rows; ++u) {
+        EXPECT_TRUE(arma::approx_equal(L.row(u), ctx.l_unit[static_cast<std::size_t>(u)].t(), "absdiff", 1e-5));
+    }
+}
+
+TEST(OutcomeImputationTest, ImputationComponents_FixedEffectsOnly) {
+    // No covariates; add g0 into Y
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/0, /*with_covariates=*/false);
+    auto rp = make_raw_panel(ctx);
+    for (std::size_t i = 0; i < rp.y.size(); ++i) {
+        if (std::isfinite(rp.y[i])) {
+            int t = rp.outcome_idx[i];
+            rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
+        }
+    }
+
+    std::vector<const double*> covar_cols; // q=0
+    std::vector<const double*> auxiliary_cols;
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+    // FE present, no covariates
+    apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, std::nullopt);
+
+    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{});
+
+    expect_same_subspace(out.G, ctx.G_true);
+    EXPECT_FALSE(out.a.has_value());
+    arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+    ASSERT_TRUE(out.g_0.has_value());
+    EXPECT_TRUE(arma::approx_equal(*out.g_0, g0_exp, "absdiff", 1e-6));
+    ASSERT_TRUE(out.L.has_value());
+}
+
+TEST(OutcomeImputationTest, ImputationComponents_AllOnesFactors_CovarsAndFixedEffects) {
+    // r=1, G all ones to trigger comp_lambda_i shortcut
+    arma::uword T = 6, r = 1, T_c = 3, units_per = 4, q = 2;
+    auto ctx = make_staircase_panel_context(T, r, T_c, units_per, q, /*with_covariates=*/true);
+    ctx.G_true = arma::ones<arma::mat>(T, r);
+    auto rp = make_raw_panel(ctx);
+    // add g0
+    for (std::size_t i = 0; i < rp.y.size(); ++i) {
+        if (std::isfinite(rp.y[i])) {
+            int t = rp.outcome_idx[i];
+            rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
+        }
+    }
+
+    std::vector<const double*> covar_cols{rp.cov1.data(), rp.cov2.data()};
+    std::vector<const double*> auxiliary_cols;
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+    arma::vec a_dim(static_cast<arma::uword>(q), arma::fill::zeros);
+    apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, a_dim);
+
+    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{});
+
+    // Check G
+    ASSERT_EQ(out.G.n_rows, T);
+    ASSERT_EQ(out.G.n_cols, r);
+    // Validate L via per-unit mean residual on each unit run
+    ASSERT_TRUE(out.L.has_value());
+    const arma::mat& L = *out.L; // N x 1
+    for (arma::uword u = 0; u < L.n_rows; ++u) {
+        // Compute expected lambda as mean_t (Y_it - g0_t - X_it * a)
+        std::vector<double> vals;
+        for (std::size_t i = 0; i < rp.y.size(); ++i) {
+            if (static_cast<std::size_t>(rp.unit_idx[i]) == static_cast<std::size_t>(u) && std::isfinite(rp.y[i])) {
+                int t = rp.outcome_idx[i];
+                double x1 = rp.cov1[i];
+                double x2 = rp.cov2[i];
+                double resid = rp.y[i];
+                if (out.g_0.has_value()) resid -= (*out.g_0)[static_cast<arma::uword>(t)];
+                if (out.a.has_value()) resid -= (*out.a)(0) * x1 + (*out.a)(1) * x2;
+                vals.push_back(resid);
+            }
+        }
+        double mean_resid = 0.0;
+        for (double v : vals) mean_resid += v;
+        mean_resid = vals.empty() ? 0.0 : (mean_resid / static_cast<double>(vals.size()));
+        EXPECT_NEAR(L(static_cast<arma::uword>(u), 0), mean_resid, 1e-6);
+    }
+}
