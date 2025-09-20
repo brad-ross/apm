@@ -25,13 +25,36 @@ TEST(OutcomeImputationTest, OutcomeSpecificParams_NestedLambda_NoCovariates) {
 	apm::FactorModelParameters fmp(ctx.G_true /*T x r*/);
 	auto var = apm::VariableSpec::outcome();
 
-	// Using nested lambda computation with true g0
-    arma::vec g0_est = apm::internal::comp_outcome_specific_params(ctx.g0_true, panel, var, fmp);
-    
-	// Expect orthogonal projection of g0_true onto complement of span(G_true)
-    arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+	// Using generalized API with both g_0_prev provided and storing unit params (lambda)
+	    auto res = apm::internal::comp_unit_and_outcome_specific_params(
+	        std::optional<arma::vec>(ctx.g0_true),
+	        panel,
+	        var,
+	        fmp,
+	        std::nullopt,
+	        std::nullopt,
+	        /*store_unit_params=*/true);
 
-	EXPECT_TRUE(arma::approx_equal(g0_est, g0_exp, "absdiff", 1e-8));
+	    ASSERT_TRUE(res.first.has_value());
+	    arma::vec g0_est = *res.first;
+
+	    // Expect orthogonal projection of g0_true onto complement of span(G_true)
+	    arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+	    EXPECT_TRUE(arma::approx_equal(g0_est, g0_exp, "absdiff", 1e-8));
+
+	    // Validate lambda was returned with expected dimensions and finite values
+	    ASSERT_TRUE(res.second.has_value());
+	    const arma::mat& L = *res.second;
+	    EXPECT_EQ(static_cast<std::size_t>(L.n_rows), panel.num_units());
+	    EXPECT_EQ(static_cast<std::size_t>(L.n_cols), static_cast<std::size_t>(ctx.G_true.n_cols));
+	    EXPECT_TRUE(L.is_finite());
+
+	    // Compare lambda to expected loadings from context
+	    arma::mat L_exp(L.n_rows, L.n_cols, arma::fill::zeros);
+	    for (arma::uword u = 0; u < L_exp.n_rows; ++u) {
+	        L_exp.row(u) = ctx.l_unit[static_cast<std::size_t>(u)].t();
+	    }
+	    EXPECT_TRUE(arma::approx_equal(L, L_exp, "absdiff", 1e-8));
 }
 
 TEST(OutcomeImputationTest, FixedPoint_Vanilla_RecoversLambdaAndG0_NoCovariates) {
@@ -52,7 +75,7 @@ TEST(OutcomeImputationTest, FixedPoint_Vanilla_RecoversLambdaAndG0_NoCovariates)
 	apm::FactorModelParameters fmp(ctx.G_true);
 	auto var = apm::VariableSpec::outcome();
 
-    // Run fixed-point (returns g0). Expect orthogonal projection of g0_true
+    // Run fixed-point via generalized API; only need g0, no lambda
     arma::vec g0_est = apm::internal::comp_outcome_specific_params_fixed_point(panel, var, fmp);
     
     arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
