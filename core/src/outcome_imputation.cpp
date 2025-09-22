@@ -7,6 +7,7 @@
 #include <utility>
 #include <iostream>
 #include <vector>
+#include "panels/CohortLevelUnbalancedPanel.h"
 
 namespace apm {
 
@@ -396,17 +397,39 @@ arma::vec comp_covar_coefs(
         }
     }
 
-    arma::vec alpha = ::apm::internal::min_norm_solve(XTX_avg, XTy_avg);
+arma::vec alpha = ::apm::internal::min_norm_solve(XTX_avg, XTy_avg);
     return alpha;
 }
 
 } // namespace internal
 
-// High-level orchestration
+namespace {
+
+static void validate_unit_weights_opt(const std::optional<arma::vec>& unit_weights_opt,
+                                      std::size_t expected_len)
+{
+    if (!unit_weights_opt) return;
+    if (unit_weights_opt->n_elem != static_cast<arma::uword>(expected_len)) {
+        throw std::invalid_argument("unit_weights_opt has incompatible length with expected number of units");
+    }
+    double sum_w = 0.0;
+    for (arma::uword i = 0; i < unit_weights_opt->n_elem; ++i) {
+        double w = (*unit_weights_opt)[i];
+        if (w < 0.0) {
+            throw std::invalid_argument("unit_weights_opt contains negative weight(s)");
+        }
+        sum_w += w;
+    }
+    if (sum_w == 0.0) {
+        throw std::invalid_argument("unit_weights_opt sum is zero but weights are non-negative");
+    }
+}
+} // anonymous namespace
+
 FactorModelParameters comp_imputation_components(
     const AbstractUnbalancedPanel& panel,
     const FactorModelParameters& factor_model_params,
-    const std::vector<OutcomeMeanSufficientStatistics>& /*cohort_outcome_mean_suff_stats*/,
+    const std::vector<OutcomeMeanSufficientStatistics>& cohort_outcome_mean_suff_stats,
     std::optional<arma::vec> unit_weights_opt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
     double tol,
@@ -415,24 +438,30 @@ FactorModelParameters comp_imputation_components(
 {
     std::optional<arma::vec> alpha_opt;
 
-    // Validate weights if provided
-    if (unit_weights_opt) {
-        if (unit_weights_opt->n_elem != static_cast<arma::uword>(panel.num_units())) {
-            throw std::invalid_argument("unit_weights_opt has incompatible length with panel.num_units()");
+    // Validate unit-level weights once (used for pre-computations on the original panel)
+    validate_unit_weights_opt(unit_weights_opt, panel.num_units());
+
+    // Prepare cohort-level panel and weights once, if provided and sized correctly
+    const bool have_cohort_stats = !cohort_outcome_mean_suff_stats.empty();
+    const std::size_t n_cohorts = panel.observed_outcome_indices().size();
+
+    std::optional<CohortLevelUnbalancedPanel> cohort_panel_opt;
+    std::optional<arma::vec> cohort_weights_opt;
+
+    if (have_cohort_stats) {
+        if (cohort_outcome_mean_suff_stats.size() != n_cohorts) {
+            throw std::invalid_argument("cohort_outcome_mean_suff_stats length must equal number of cohorts");
         }
-        double sum_w = 0.0;
-        for (arma::uword i = 0; i < unit_weights_opt->n_elem; ++i) {
-            double w = (*unit_weights_opt)[i];
-            if (w < 0.0) {
-                throw std::invalid_argument("unit_weights_opt contains negative weight(s)");
-            }
-            sum_w += w;
+        cohort_panel_opt.emplace(cohort_outcome_mean_suff_stats, panel.observed_outcome_indices());
+
+        arma::vec cw(static_cast<arma::uword>(cohort_outcome_mean_suff_stats.size()));
+        for (std::size_t i = 0; i < cohort_outcome_mean_suff_stats.size(); ++i) {
+            cw[static_cast<arma::uword>(i)] = cohort_outcome_mean_suff_stats[i].cohort_pop_share;
         }
-        if (sum_w == 0.0) {
-            throw std::invalid_argument("unit_weights_opt sum is zero but weights are non-negative");
-        }
+        cohort_weights_opt = std::move(cw);
     }
 
+    // Pre-computations always use the original panel and unit-level weights
     if (factor_model_params.has_fixed_effects()) {
         if (factor_model_params.has_covariate_coefs() && factor_model_params.q() > 0) {
             arma::vec g_0_init = apm::internal::comp_outcome_specific_params_fixed_point(
@@ -450,8 +479,13 @@ FactorModelParameters comp_imputation_components(
             alpha_opt = std::move(alpha);
         }
 
+        // Final pass: use cohort-level panel and weights if present; else original
+        const AbstractUnbalancedPanel& final_panel = cohort_panel_opt ? static_cast<const AbstractUnbalancedPanel&>(*cohort_panel_opt)
+                                                                      : panel;
+        std::optional<arma::vec> final_weights = cohort_panel_opt ? cohort_weights_opt : unit_weights_opt;
+
         auto final_pair = apm::internal::comp_unit_and_outcome_specific_params_fixed_point(
-            panel, VariableSpec::outcome(), factor_model_params, unit_weights_opt, effective_ooi_opt, tol, max_iters, fixed_point_method, alpha_opt, /*store_unit_params=*/true);
+            final_panel, VariableSpec::outcome(), factor_model_params, final_weights, effective_ooi_opt, tol, max_iters, fixed_point_method, alpha_opt, /*store_unit_params=*/true);
 
         FactorModelParameters out;
         out.G = factor_model_params.G;
@@ -465,8 +499,12 @@ FactorModelParameters comp_imputation_components(
             alpha_opt = std::move(alpha);
         }
 
+        const AbstractUnbalancedPanel& final_panel = cohort_panel_opt ? static_cast<const AbstractUnbalancedPanel&>(*cohort_panel_opt)
+                                                                      : panel;
+        std::optional<arma::vec> final_weights = cohort_panel_opt ? cohort_weights_opt : unit_weights_opt;
+
         auto L_opt = apm::internal::comp_unit_specific_params(
-            panel, VariableSpec::outcome(), factor_model_params, unit_weights_opt, effective_ooi_opt, alpha_opt);
+            final_panel, VariableSpec::outcome(), factor_model_params, final_weights, effective_ooi_opt, alpha_opt);
 
         FactorModelParameters out;
         out.G = factor_model_params.G;

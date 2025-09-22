@@ -30,7 +30,7 @@ struct VariableSpec {
 FactorModelParameters comp_imputation_components(
     const AbstractUnbalancedPanel& panel,
     const FactorModelParameters& factor_model_params,
-    const std::vector<OutcomeMeanSufficientStatistics>& cohort_outcome_mean_suff_stats,
+    const std::vector<OutcomeMeanSufficientStatistics>& cohort_outcome_mean_suff_stats = std::vector<OutcomeMeanSufficientStatistics>(),
     std::optional<arma::vec> unit_weights_opt = std::nullopt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
     double tol = 1e-10,
