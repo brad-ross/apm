@@ -190,7 +190,8 @@ StaircasePanelContext make_staircase_panel_context(
     arma::uword T_c,
     arma::uword units_per,
     arma::uword q,
-    bool with_covariates) {
+    bool with_covariates,
+    bool with_fixed_effects) {
     StaircasePanelContext ctx;
     ctx.T = T;
     ctx.r = r;
@@ -223,6 +224,7 @@ StaircasePanelContext make_staircase_panel_context(
     } else {
         ctx.a_true.reset();
     }
+    ctx.include_g0 = with_fixed_effects;
 
     ctx.l_unit.clear();
     std::size_t total_units = static_cast<std::size_t>(ctx.C * ctx.units_per);
@@ -266,6 +268,9 @@ RawPanelData make_raw_panel(
                         double y_val = arma::as_scalar(
                             ctx.G_true.row(static_cast<arma::uword>(t)) * ctx.l_unit[static_cast<std::size_t>(global_unit)]
                         );
+                        if (ctx.include_g0) {
+                            y_val += ctx.g0_true[static_cast<arma::uword>(t)];
+                        }
                         if (ctx.a_true.n_elem > 0) {
                             double cov_term = 0.0;
                             if (ctx.q >= 1) cov_term += ctx.a_true(0) * cov1_val;
@@ -291,6 +296,9 @@ RawPanelData make_raw_panel(
                     double y_val = arma::as_scalar(
                         ctx.G_true.row(static_cast<arma::uword>(t)) * ctx.l_unit[static_cast<std::size_t>(global_unit)]
                     );
+                    if (ctx.include_g0) {
+                        y_val += ctx.g0_true[static_cast<arma::uword>(t)];
+                    }
                     rp.unit_idx.push_back(global_unit);
                     rp.cohort_id.push_back(c);
                     rp.outcome_idx.push_back(t);

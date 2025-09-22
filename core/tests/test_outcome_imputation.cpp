@@ -9,13 +9,9 @@
 #include "test_helpers.h"
 
 TEST(OutcomeImputationTest, OutcomeSpecificParams_NestedLambda_NoCovariates) {
-	// Context and raw panel without covariates
-	auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/3, /*q=*/0);
-	auto rp = make_raw_panel(ctx, /*with_covariates=*/false);
-	for (std::size_t i = 0; i < rp.y.size(); ++i) {
-		int t = rp.outcome_idx[i];
-		rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
-	}
+    // Context and raw panel without covariates; include fixed effects in data generation
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/3, /*q=*/0, /*with_covariates=*/false, /*with_fixed_effects=*/true);
+    auto rp = make_raw_panel(ctx);
 
 	std::vector<const double*> covar_cols;      // q = 0
 	std::vector<const double*> auxiliary_cols;  // d = 0
@@ -27,45 +23,41 @@ TEST(OutcomeImputationTest, OutcomeSpecificParams_NestedLambda_NoCovariates) {
 	auto var = apm::VariableSpec::outcome();
 
 	// Using generalized API with both g_0_prev provided and storing unit params (lambda)
-	    auto res = apm::internal::comp_unit_and_outcome_specific_params(
-	        std::optional<arma::vec>(ctx.g0_true),
-	        panel,
-	        var,
-	        fmp,
-	        std::nullopt,
-	        std::nullopt,
-	        /*store_unit_params=*/true);
+	auto res = apm::internal::comp_unit_and_outcome_specific_params(
+		std::optional<arma::vec>(ctx.g0_true),
+		panel,
+		var,
+		fmp,
+		std::nullopt,
+		std::nullopt,
+		/*store_unit_params=*/true);
 
-	    ASSERT_TRUE(res.first.has_value());
-	    arma::vec g0_est = *res.first;
+	ASSERT_TRUE(res.first.has_value());
+	arma::vec g0_est = *res.first;
 
-	    // Expect orthogonal projection of g0_true onto complement of span(G_true)
-	    arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
-	    EXPECT_TRUE(arma::approx_equal(g0_est, g0_exp, "absdiff", 1e-8));
+	// Expect orthogonal projection of g0_true onto complement of span(G_true)
+	arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+	EXPECT_TRUE(arma::approx_equal(g0_est, g0_exp, "absdiff", 1e-8));
 
-	    // Validate lambda was returned with expected dimensions and finite values
-	    ASSERT_TRUE(res.second.has_value());
-	    const arma::mat& L = *res.second;
-	    EXPECT_EQ(static_cast<std::size_t>(L.n_rows), panel.num_units());
-	    EXPECT_EQ(static_cast<std::size_t>(L.n_cols), static_cast<std::size_t>(ctx.G_true.n_cols));
-	    EXPECT_TRUE(L.is_finite());
+	// Validate lambda was returned with expected dimensions and finite values
+	ASSERT_TRUE(res.second.has_value());
+	const arma::mat& L = *res.second;
+	EXPECT_EQ(static_cast<std::size_t>(L.n_rows), panel.num_units());
+	EXPECT_EQ(static_cast<std::size_t>(L.n_cols), static_cast<std::size_t>(ctx.G_true.n_cols));
+	EXPECT_TRUE(L.is_finite());
 
-	    // Compare lambda to expected loadings from context
-	    arma::mat L_exp(L.n_rows, L.n_cols, arma::fill::zeros);
-	    for (arma::uword u = 0; u < L_exp.n_rows; ++u) {
-	        L_exp.row(u) = ctx.l_unit[static_cast<std::size_t>(u)].t();
-	    }
-	    EXPECT_TRUE(arma::approx_equal(L, L_exp, "absdiff", 1e-8));
+	// Compare lambda to expected loadings from context
+	arma::mat L_exp(L.n_rows, L.n_cols, arma::fill::zeros);
+	for (arma::uword u = 0; u < L_exp.n_rows; ++u) {
+		L_exp.row(u) = ctx.l_unit[static_cast<std::size_t>(u)].t(); // + gamma.t();
+	}
+	EXPECT_TRUE(arma::approx_equal(L, L_exp, "absdiff", 1e-8));
 }
 
 TEST(OutcomeImputationTest, FixedPoint_Vanilla_RecoversLambdaAndG0_NoCovariates) {
-	// Context and raw panel
-	auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/0);
-	auto rp = make_raw_panel(ctx, /*with_covariates=*/false);
-	for (std::size_t i = 0; i < rp.y.size(); ++i) {
-		int t = rp.outcome_idx[i];
-		rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
-	}
+    // Context and raw panel; include fixed effects in data generation
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/0, /*with_covariates=*/false, /*with_fixed_effects=*/true);
+    auto rp = make_raw_panel(ctx);
 
 	std::vector<const double*> covar_cols;      // q = 0
 	std::vector<const double*> auxiliary_cols;  // d = 0
@@ -85,13 +77,9 @@ TEST(OutcomeImputationTest, FixedPoint_Vanilla_RecoversLambdaAndG0_NoCovariates)
 }
 
 TEST(OutcomeImputationTest, FixedPoint_IronsTuck_RecoversLambdaAndG0_NoCovariates) {
-    // Context and raw panel
-    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/0);
+    // Context and raw panel; include fixed effects in data generation
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/0, /*with_covariates=*/false, /*with_fixed_effects=*/true);
     auto rp = make_raw_panel(ctx);
-    for (std::size_t i = 0; i < rp.y.size(); ++i) {
-        int t = rp.outcome_idx[i];
-        rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
-    }
 
     std::vector<const double*> covar_cols;      // q = 0
     std::vector<const double*> auxiliary_cols;  // d = 0
@@ -140,17 +128,9 @@ TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_NoFixedEffects) {
 }
 
 TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_WithFixedEffects) {
-    // Context with covariates (alpha present)
-    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true);
+    // Context with covariates and fixed effects included in data generation
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true, /*with_fixed_effects=*/true);
     auto rp = make_raw_panel(ctx);
-
-    // Inject outcome fixed effects g0 into Y on observed rows
-    for (std::size_t i = 0; i < rp.y.size(); ++i) {
-        if (std::isfinite(rp.y[i])) {
-            int t = rp.outcome_idx[i];
-            rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
-        }
-    }
 
     // Build panel with covariate columns
     std::vector<const double*> covar_cols;
@@ -181,20 +161,13 @@ TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_WithFixedEffects) {
     ASSERT_EQ(static_cast<std::size_t>(alpha.n_elem), static_cast<std::size_t>(ctx.q));
     EXPECT_TRUE(alpha.is_finite());
     ASSERT_EQ(static_cast<std::size_t>(ctx.a_true.n_elem), static_cast<std::size_t>(ctx.q));
-	std::cout << "alpha: " << alpha << "; a_true: " << ctx.a_true << std::endl;
     EXPECT_TRUE(arma::approx_equal(alpha, ctx.a_true, "absdiff", 1e-5));
 }
 
 TEST(OutcomeImputationTest, ImputationComponents_CovarsAndFixedEffects) {
-    // Context with covariates; add g0 to Y afterward
-    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true);
+    // Context with covariates and fixed effects included in data generation
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true, /*with_fixed_effects=*/true);
     auto rp = make_raw_panel(ctx);
-    for (std::size_t i = 0; i < rp.y.size(); ++i) {
-        if (std::isfinite(rp.y[i])) {
-            int t = rp.outcome_idx[i];
-            rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
-        }
-    }
 
     std::vector<const double*> covar_cols{rp.cov1.data(), rp.cov2.data()};
     std::vector<const double*> auxiliary_cols;
@@ -261,15 +234,9 @@ TEST(OutcomeImputationTest, ImputationComponents_CovarsOnly) {
 }
 
 TEST(OutcomeImputationTest, ImputationComponents_FixedEffectsOnly) {
-    // No covariates; add g0 into Y
-    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/0, /*with_covariates=*/false);
+    // No covariates; fixed effects included in data generation
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/0, /*with_covariates=*/false, /*with_fixed_effects=*/true);
     auto rp = make_raw_panel(ctx);
-    for (std::size_t i = 0; i < rp.y.size(); ++i) {
-        if (std::isfinite(rp.y[i])) {
-            int t = rp.outcome_idx[i];
-            rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
-        }
-    }
 
     std::vector<const double*> covar_cols; // q=0
     std::vector<const double*> auxiliary_cols;
@@ -293,16 +260,9 @@ TEST(OutcomeImputationTest, ImputationComponents_FixedEffectsOnly) {
 TEST(OutcomeImputationTest, ImputationComponents_AllOnesFactors_CovarsAndFixedEffects) {
     // r=1, G all ones to trigger comp_lambda_i shortcut
     arma::uword T = 6, r = 1, T_c = 3, units_per = 4, q = 2;
-    auto ctx = make_staircase_panel_context(T, r, T_c, units_per, q, /*with_covariates=*/true);
+    auto ctx = make_staircase_panel_context(T, r, T_c, units_per, q, /*with_covariates=*/true, /*with_fixed_effects=*/true);
     ctx.G_true = arma::ones<arma::mat>(T, r);
     auto rp = make_raw_panel(ctx);
-    // add g0
-    for (std::size_t i = 0; i < rp.y.size(); ++i) {
-        if (std::isfinite(rp.y[i])) {
-            int t = rp.outcome_idx[i];
-            rp.y[i] += ctx.g0_true[static_cast<arma::uword>(t)];
-        }
-    }
 
     std::vector<const double*> covar_cols{rp.cov1.data(), rp.cov2.data()};
     std::vector<const double*> auxiliary_cols;
