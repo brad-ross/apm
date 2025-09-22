@@ -36,7 +36,7 @@ public:
     const double* y() const { return y_; }
     const std::vector<const double*>& covar_cols() const { return covar_cols_; }
     const std::vector<const double*>& auxiliary_cols() const { return auxiliary_cols_; }
-    const ObservedOutcomeIndices& observed_outcome_indices() const { return observed_outcome_indices_; }
+    const ObservedOutcomeIndices& observed_outcome_indices() const override { return observed_outcome_indices_; }
     std::size_t num_units() const override { return num_units_; }
 
     // Dimensions

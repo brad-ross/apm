@@ -33,6 +33,9 @@ public:
     // Grouping
     const std::vector<CohortBlock>& cohort_blocks() const override { return cohort_blocks_; }
 
+    // Observed outcome indices
+    const ObservedOutcomeIndices& observed_outcome_indices() const override { return observed_outcome_indices_; }
+
     // Per-cohort indices
     const arma::uvec& T_idx_for_cohort(std::size_t cohort_0b) const override {
         return observed_outcome_indices_.at(cohort_0b);

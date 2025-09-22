@@ -16,7 +16,7 @@ static arma::vec assemble_w_i(
 	const UnitRun& ur,
 	const arma::uvec& T_idxs,
 	const std::unordered_map<int, std::size_t>& pos_map,
-	const InMemoryUnbalancedPanel& panel,
+    const AbstractUnbalancedPanel& panel,
 	const VariableSpec& var,
 	arma::vec& Y_buf,
 	arma::mat& X_obs_buf)
@@ -55,7 +55,7 @@ arma::vec comp_lambda_i(const arma::mat& G_c, const arma::vec& w_i)
 
 std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::comp_unit_and_outcome_specific_params(
     std::optional<arma::vec> g_0_prev_opt,
-    const InMemoryUnbalancedPanel& panel,
+    const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
@@ -63,7 +63,7 @@ std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::com
     bool store_unit_params)
 {
     const ObservedOutcomeIndices& ooi = effective_ooi_opt ? *effective_ooi_opt
-                                                         : panel.observed_outcome_indices();
+                                                          : panel.observed_outcome_indices();
     const arma::mat& G = factor_model_params.G;
     const std::size_t T = panel.T();
     const std::size_t r = static_cast<std::size_t>(G.n_cols);
@@ -161,7 +161,7 @@ std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::com
 
 arma::vec apm::internal::comp_outcome_specific_params(
     const arma::vec& g_0_prev,
-    const InMemoryUnbalancedPanel& panel,
+    const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
@@ -213,7 +213,7 @@ static arma::vec comp_irons_tuck_fixed_point_update(
 } // anonymous namespace
 
 std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::comp_unit_and_outcome_specific_params_fixed_point(
-    const InMemoryUnbalancedPanel& panel,
+    const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
@@ -268,7 +268,7 @@ std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::com
 }
 
 arma::vec apm::internal::comp_outcome_specific_params_fixed_point(
-    const InMemoryUnbalancedPanel& panel,
+    const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
@@ -287,7 +287,7 @@ arma::vec apm::internal::comp_outcome_specific_params_fixed_point(
 namespace internal {
 
 std::optional<arma::mat> comp_unit_specific_params(
-    const InMemoryUnbalancedPanel& panel,
+    const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
@@ -299,7 +299,7 @@ std::optional<arma::mat> comp_unit_specific_params(
 }
 
 arma::vec comp_covar_coefs(
-    const InMemoryUnbalancedPanel& panel,
+    const AbstractUnbalancedPanel& panel,
     const FactorModelParameters& factor_model_params,
     std::optional<arma::vec> g_0_init,
     std::vector<arma::vec> g_0_init_covars,
@@ -312,7 +312,7 @@ arma::vec comp_covar_coefs(
     }
 
     const ObservedOutcomeIndices& ooi = effective_ooi_opt ? *effective_ooi_opt
-                                                         : panel.observed_outcome_indices();
+                                                          : panel.observed_outcome_indices();
     const arma::mat& G = factor_model_params.G;
 
     arma::mat XTX(static_cast<arma::uword>(q), static_cast<arma::uword>(q), arma::fill::zeros);
@@ -377,7 +377,7 @@ arma::vec comp_covar_coefs(
 
 // High-level orchestration
 FactorModelParameters comp_imputation_components(
-    const InMemoryUnbalancedPanel& panel,
+    const AbstractUnbalancedPanel& panel,
     const FactorModelParameters& factor_model_params,
     const std::vector<OutcomeMeanSufficientStatistics>& /*cohort_outcome_mean_suff_stats*/,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,

@@ -43,6 +43,9 @@ public:
     // Grouping
     virtual const std::vector<CohortBlock>& cohort_blocks() const = 0;
 
+    // Observed outcome indices per cohort
+    virtual const ObservedOutcomeIndices& observed_outcome_indices() const = 0;
+
     // Per-cohort observed outcome indices and position map
     virtual const arma::uvec& T_idx_for_cohort(std::size_t cohort_0b) const = 0;
     virtual const std::unordered_map<int, std::size_t>& pos_T_idx_for_cohort(std::size_t cohort_0b) const = 0;

@@ -11,7 +11,7 @@
 #include <optional>
 #include <vector>
 
-#include "panels/InMemoryUnbalancedPanel.h"
+#include "panels/AbstractUnbalancedPanel.h"
 #include "cohort_specific_param_structs.h"
 #include "utils.h"
 
@@ -28,7 +28,7 @@ struct VariableSpec {
 
 // High-level orchestration that returns G, optional a, g_0, and L
 FactorModelParameters comp_imputation_components(
-    const InMemoryUnbalancedPanel& panel,
+    const AbstractUnbalancedPanel& panel,
     const FactorModelParameters& factor_model_params,
     const std::vector<OutcomeMeanSufficientStatistics>& cohort_outcome_mean_suff_stats,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
