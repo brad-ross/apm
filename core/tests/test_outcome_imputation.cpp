@@ -30,6 +30,7 @@ TEST(OutcomeImputationTest, OutcomeSpecificParams_NestedLambda_NoCovariates) {
 		fmp,
 		std::nullopt,
 		std::nullopt,
+		std::nullopt,
 		/*store_unit_params=*/true);
 
 	ASSERT_TRUE(res.first.has_value());
@@ -69,7 +70,7 @@ TEST(OutcomeImputationTest, FixedPoint_Vanilla_RecoversLambdaAndG0_NoCovariates)
 	auto var = apm::VariableSpec::outcome();
 
     // Run fixed-point via generalized API; only need g0, no lambda
-    arma::vec g0_est = apm::internal::comp_outcome_specific_params_fixed_point(panel, var, fmp);
+    arma::vec g0_est = apm::internal::comp_outcome_specific_params_fixed_point(panel, var, fmp, std::nullopt, std::nullopt, 1e-10, 1000, "vanilla");
     
     arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
     
@@ -92,7 +93,7 @@ TEST(OutcomeImputationTest, FixedPoint_IronsTuck_RecoversLambdaAndG0_NoCovariate
     auto var = apm::VariableSpec::outcome();
 
     // Run Irons-Tuck fixed-point (returns g0). Expect orthogonal projection of g0_true
-    arma::vec g0_est = apm::internal::comp_outcome_specific_params_fixed_point(panel, var, fmp, std::nullopt, 1e-10, 1000, "irons-tuck");
+    arma::vec g0_est = apm::internal::comp_outcome_specific_params_fixed_point(panel, var, fmp, std::nullopt, std::nullopt, 1e-10, 1000, "irons-tuck");
 
     arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
 
@@ -119,7 +120,7 @@ TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_NoFixedEffects) {
     apm::FactorModelParameters fmp(ctx.G_true, std::nullopt, a_dim);
 
     // Estimate alpha without fixed effects
-    arma::vec alpha = apm::internal::comp_covar_coefs(panel, fmp, std::nullopt, {}, std::nullopt);
+    arma::vec alpha = apm::internal::comp_covar_coefs(panel, fmp, std::nullopt, {}, std::nullopt, std::nullopt);
 
     ASSERT_EQ(static_cast<std::size_t>(alpha.n_elem), static_cast<std::size_t>(ctx.q));
     EXPECT_TRUE(alpha.is_finite());
@@ -147,16 +148,16 @@ TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_WithFixedEffects) {
 
     // Compute FE vectors via fixed-point
     auto var_y = apm::VariableSpec::outcome();
-    arma::vec g0_init = apm::internal::comp_outcome_specific_params_fixed_point(panel, var_y, fmp);
+    arma::vec g0_init = apm::internal::comp_outcome_specific_params_fixed_point(panel, var_y, fmp, std::nullopt);
 
     std::vector<arma::vec> g0_init_covars(static_cast<std::size_t>(ctx.q));
     for (std::size_t j = 0; j < static_cast<std::size_t>(ctx.q); ++j) {
         auto var_xj = apm::VariableSpec::covariate(j);
-        g0_init_covars[j] = apm::internal::comp_outcome_specific_params_fixed_point(panel, var_xj, fmp);
+        g0_init_covars[j] = apm::internal::comp_outcome_specific_params_fixed_point(panel, var_xj, fmp, std::nullopt);
     }
 
     // Estimate alpha with FE residualization
-    arma::vec alpha = apm::internal::comp_covar_coefs(panel, fmp, g0_init, g0_init_covars, std::nullopt);
+    arma::vec alpha = apm::internal::comp_covar_coefs(panel, fmp, g0_init, g0_init_covars, std::nullopt, std::nullopt);
 
     ASSERT_EQ(static_cast<std::size_t>(alpha.n_elem), static_cast<std::size_t>(ctx.q));
     EXPECT_TRUE(alpha.is_finite());
@@ -179,7 +180,7 @@ TEST(OutcomeImputationTest, ImputationComponents_CovarsAndFixedEffects) {
     arma::vec a_dim(static_cast<arma::uword>(ctx.q), arma::fill::zeros);
     apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, a_dim);
 
-    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{});
+    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{}, std::nullopt);
 
     // Check G span unchanged
     expect_same_subspace(out.G, ctx.G_true);
@@ -216,7 +217,7 @@ TEST(OutcomeImputationTest, ImputationComponents_CovarsOnly) {
     arma::vec a_dim(static_cast<arma::uword>(ctx.q), arma::fill::zeros);
     apm::FactorModelParameters fmp(ctx.G_true, std::nullopt, a_dim);
 
-    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{});
+    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{}, std::nullopt);
 
     // Check G span unchanged
     expect_same_subspace(out.G, ctx.G_true);
@@ -247,7 +248,7 @@ TEST(OutcomeImputationTest, ImputationComponents_FixedEffectsOnly) {
     // FE present, no covariates
     apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, std::nullopt);
 
-    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{});
+    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{}, std::nullopt);
 
     expect_same_subspace(out.G, ctx.G_true);
     EXPECT_FALSE(out.a.has_value());
@@ -273,7 +274,7 @@ TEST(OutcomeImputationTest, ImputationComponents_AllOnesFactors_CovarsAndFixedEf
     arma::vec a_dim(static_cast<arma::uword>(q), arma::fill::zeros);
     apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, a_dim);
 
-    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{});
+    apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{}, std::nullopt);
 
     // Check G
     ASSERT_EQ(out.G.n_rows, T);

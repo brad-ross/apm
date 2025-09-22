@@ -28,6 +28,7 @@ std::pair<std::optional<arma::vec>, std::optional<arma::mat>> comp_unit_and_outc
     const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
+    std::optional<arma::vec> unit_weights_opt = std::nullopt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
     std::optional<arma::vec> covar_coefs_for_residualization = std::nullopt,
     bool store_unit_params = false);
@@ -37,6 +38,7 @@ std::optional<arma::mat> comp_unit_specific_params(
     const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
+    std::optional<arma::vec> unit_weights_opt = std::nullopt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
     std::optional<arma::vec> covar_coefs_for_residualization = std::nullopt);
 
@@ -45,6 +47,7 @@ arma::vec comp_outcome_specific_params(
     const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
+    std::optional<arma::vec> unit_weights_opt = std::nullopt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
     std::optional<arma::vec> covar_coefs_for_residualization = std::nullopt);
 
@@ -52,6 +55,7 @@ arma::vec comp_outcome_specific_params_fixed_point(
     const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
+    std::optional<arma::vec> unit_weights_opt = std::nullopt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
     double tol = 1e-10,
     std::size_t max_iters = 1000,
@@ -61,6 +65,7 @@ std::pair<std::optional<arma::vec>, std::optional<arma::mat>> comp_unit_and_outc
     const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
+    std::optional<arma::vec> unit_weights_opt = std::nullopt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
     double tol = 1e-10,
     std::size_t max_iters = 1000,
@@ -74,6 +79,7 @@ arma::vec comp_covar_coefs(
     const FactorModelParameters& factor_model_params,
     std::optional<arma::vec> g_0_init = std::nullopt,
     std::vector<arma::vec> g_0_init_covars = {},
+    std::optional<arma::vec> unit_weights_opt = std::nullopt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt);
 
 } // namespace internal
