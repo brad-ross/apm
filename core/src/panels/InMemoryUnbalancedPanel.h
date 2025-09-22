@@ -13,23 +13,11 @@
 #endif
 
 #include "../utils.h" // ObservedOutcomeIndices, num_outcomes
+#include "AbstractUnbalancedPanel.h"
 
 namespace apm {
 
-struct UnitRun {
-    std::size_t start;  // [start, end)
-    std::size_t end;
-    std::size_t unit;   // 0-based
-};
-
-struct CohortBlock {
-    std::size_t start;  // [start, end)
-    std::size_t end;
-    std::size_t cohort; // 0-based
-    std::vector<UnitRun> unit_runs;
-};
-
-class InMemoryUnbalancedPanel {
+class InMemoryUnbalancedPanel : public AbstractUnbalancedPanel {
 public:
     InMemoryUnbalancedPanel(
         const int* unit_idx,
@@ -49,21 +37,21 @@ public:
     const std::vector<const double*>& covar_cols() const { return covar_cols_; }
     const std::vector<const double*>& auxiliary_cols() const { return auxiliary_cols_; }
     const ObservedOutcomeIndices& observed_outcome_indices() const { return observed_outcome_indices_; }
-    std::size_t num_units() const { return num_units_; }
+    std::size_t num_units() const override { return num_units_; }
 
     // Dimensions
-    std::size_t T() const { return static_cast<std::size_t>(num_outcomes(observed_outcome_indices_)); }
-    std::size_t q() const { return covar_cols_.size(); }
-    std::size_t d() const { return auxiliary_cols_.size(); }
+    std::size_t T() const override { return static_cast<std::size_t>(num_outcomes(observed_outcome_indices_)); }
+    std::size_t q() const override { return covar_cols_.size(); }
+    std::size_t d() const override { return auxiliary_cols_.size(); }
 
     // Grouping
-    const std::vector<CohortBlock>& cohort_blocks() const { return cohort_blocks_; }
+    const std::vector<CohortBlock>& cohort_blocks() const override { return cohort_blocks_; }
 
     // Access precomputed per-cohort indices and position maps
-    const arma::uvec& T_idx_for_cohort(std::size_t cohort_0b) const {
+    const arma::uvec& T_idx_for_cohort(std::size_t cohort_0b) const override {
         return observed_outcome_indices_.at(cohort_0b);
     }
-    const std::unordered_map<int, std::size_t>& pos_T_idx_for_cohort(std::size_t cohort_0b) const {
+    const std::unordered_map<int, std::size_t>& pos_T_idx_for_cohort(std::size_t cohort_0b) const override {
         return pos_T_idx_by_cohort_.at(cohort_0b);
     }
 
@@ -72,7 +60,7 @@ public:
         const UnitRun& ur,
         const arma::uvec& T_idxs_for_cohort,
         const std::unordered_map<int, std::size_t>& pos_T_idx_for_cohort,
-        arma::vec& Y) const;
+        arma::vec& Y) const override;
 
     void assemble_X_for_unit(
         const UnitRun& ur,
@@ -80,7 +68,7 @@ public:
         const arma::uvec& T_idxs_for_cohort,
         arma::mat* X_full,
         arma::mat* X_obs,
-        std::optional<std::size_t> covariate_index = std::nullopt) const;
+        std::optional<std::size_t> covariate_index = std::nullopt) const override;
 
     void assemble_YX_for_unit(
         const UnitRun& ur,
@@ -89,12 +77,12 @@ public:
         const std::unordered_map<int, std::size_t>& pos_T_idx_for_cohort,
         arma::vec& Y,
         arma::mat& X_full,
-        arma::mat& X_obs) const;
+        arma::mat& X_obs) const override;
 
     void assemble_aux_for_unit(
         const UnitRun& ur,
         std::size_t T,
-        arma::mat& A_out) const;
+        arma::mat& A_out) const override;
 
 private:
     // inputs
