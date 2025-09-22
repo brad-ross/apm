@@ -67,12 +67,14 @@ test_that("target param equals masked observed mean for last cohort/outcome", {
   masked_mean <- as.numeric(res$masked_cohort_outcome_means[[as.character(last_cohort)]][1])
 
   # Define target parameter function selecting Y[last_cohort, last_outcome]
-  fn <- function(Y, shares = NULL, eta = NULL) {
+  fn <- function(Y, shares, observed_means_list, covar_means_list, eta) {
     as.numeric(Y[last_cohort, masked_outcome])
   }
 
   # Estimate target param from the outcome means (single spec)
-  tpe <- est_target_params(res$outcome_means$pc, fn)
+  # Provide suff stats and keep eta NULL (not used)
+  tpe <- est_target_params(res$outcome_means$pc, fn, aux_means = NULL,
+                           suff_stats = res$cohort_outcome_means)
   tp <- tpe$target_params()
 
   # Check that the selected outcome mean equals the masked observed mean

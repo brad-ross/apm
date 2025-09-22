@@ -30,7 +30,7 @@ TEST(OutcomeSuffStatEstimatorTest, SingleBatch_NoBootstrap_OutcomeMeans) {
     arma::uvec unit_idxs = {0, 1};
 
     est.add_data(unit_idxs, Y);
-    apm::OutcomeMeanSuffStatEstimates out = est.estimate();
+    apm::OutcomeMeanSuffStatEstimates out = est.estimate(/*total_units=*/2);
 
     arma::vec expected_mu = {2.0, 3.0, 4.0};
     ASSERT_TRUE(arma::approx_equal(out.suff_stat_estimates.observed_outcome_means, expected_mu, "absdiff", 1e-12));
@@ -57,7 +57,7 @@ TEST(OutcomeSuffStatEstimatorTest, SplitBatch_Invariance) {
     est.add_data(idx1, Y1);
     est.add_data(idx2, Y2);
 
-    apm::OutcomeMeanSuffStatEstimates out = est.estimate();
+    apm::OutcomeMeanSuffStatEstimates out = est.estimate(/*total_units=*/4);
     arma::vec expected_mu = {0.5, 1.0};
     ASSERT_TRUE(arma::approx_equal(out.suff_stat_estimates.observed_outcome_means, expected_mu, "absdiff", 1e-12));
 }
@@ -77,7 +77,7 @@ TEST(OutcomeSuffStatEstimatorTest, AddDatum_Equivalence) {
         est.add_datum(i, Y.row(static_cast<arma::uword>(i)).t());
     }
 
-    apm::OutcomeMeanSuffStatEstimates out = est.estimate();
+    apm::OutcomeMeanSuffStatEstimates out = est.estimate(/*total_units=*/4);
     arma::vec expected_mu = {0.5, 1.0};
     ASSERT_TRUE(arma::approx_equal(out.suff_stat_estimates.observed_outcome_means, expected_mu, "absdiff", 1e-12));
 }
@@ -101,7 +101,7 @@ TEST(OutcomeSuffStatEstimatorTest, Bootstrap_DeterministicReplicates) {
 
     apm::OutcomeMeanSuffStatEstimator est(T_c, /*T=*/0, /*q=*/0, boot);
     est.add_data(unit_idxs, Y);
-    apm::OutcomeMeanSuffStatEstimates out = est.estimate();
+    apm::OutcomeMeanSuffStatEstimates out = est.estimate(/*total_units=*/4);
 
     ASSERT_EQ(out.bootstrap_replicates.size(), B);
 
@@ -138,7 +138,7 @@ TEST(OutcomeSuffStatEstimatorTest, CovariateMeans_ComputedAndDimensions) {
     X.slice(1).row(1) = arma::rowvec({30.0, 40.0, 50.0});
 
     est.add_data(unit_idxs, Y, X);
-    apm::OutcomeMeanSuffStatEstimates out = est.estimate();
+    apm::OutcomeMeanSuffStatEstimates out = est.estimate(/*total_units=*/2);
 
     ASSERT_TRUE(out.suff_stat_estimates.has_covar_means());
     const arma::mat& cm = *(out.suff_stat_estimates.covar_means);

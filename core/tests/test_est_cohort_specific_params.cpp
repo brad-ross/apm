@@ -289,11 +289,12 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_NoCovariates) {
         }
         double share_exp = (total_units > 0u) ? (static_cast<double>(units_c) / static_cast<double>(total_units)) : 0.0;
 
-        const auto& est = out.cohort_auxiliary_means[c].estimates;
-        EXPECT_NEAR(est.cohort_pop_share, share_exp, 1e-12);
+        const auto& oss = out.cohort_outcome_mean_ests[c].suff_stat_estimates;
+        EXPECT_NEAR(oss.cohort_pop_share, share_exp, 1e-12);
 
         // Dimensions
         arma::uword Tc = static_cast<arma::uword>(ctx.T);
+        const auto& est = out.cohort_auxiliary_means[c].estimates;
         ASSERT_EQ(est.auxiliary_means.n_rows, ctx.T);
         ASSERT_EQ(est.auxiliary_means.n_cols, 2u);
 
@@ -350,15 +351,40 @@ TEST(CohortSpecificRawTest, AuxiliaryMeans_WithBootstrapReplicatesExist) {
         ASSERT_EQ(aux.bootstrap_replicates[0].auxiliary_means.n_rows, ctx.T);
         ASSERT_EQ(aux.bootstrap_replicates[0].auxiliary_means.n_cols, 1u);
     }
+}
+
+TEST(CohortSpecificRawTest, OutcomeMeanSuffStats_BootstrapSharesValid) {
+    auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3);
+    auto rp = make_raw_panel(ctx, /*with_auxiliary=*/true);
+
+    // Two bootstrap draws with nontrivial partitions over units
+    arma::mat W(static_cast<arma::uword>(ctx.C * ctx.units_per), 2, arma::fill::zeros);
+    for (int i = 0; i < static_cast<int>(ctx.units_per); ++i) W(i, 0) = 1.0 / 3.0;
+    for (int i = static_cast<int>(ctx.units_per); i < static_cast<int>(ctx.C * ctx.units_per); ++i) W(i, 1) = 1.0 / 3.0;
+    auto boot = std::make_shared<TestBootstrap>(W);
+
+    std::unordered_map<std::string, apm::EstimatorSpecification> specs;
+    specs.emplace("pca", apm::EstimatorSpecification{"principal_components", false, ctx.r});
+
+    std::vector<double> aux1(rp.y.size(), 1.0);
+    std::vector<const double*> covar_cols; // q=0
+    std::vector<const double*> auxiliary_cols{aux1.data()};
+
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_internal_panel_rep(
+        panel, specs, boot, /*num_threads=*/std::nullopt, /*mask=*/apm::CohortOutcomeMask());
 
     std::vector<double> exp_draw1(ctx.C, 0.0);
     exp_draw1[0] = 1.0;
     std::vector<double> exp_draw2(ctx.C, ctx.C > 1 ? 1.0 / (ctx.C - 1.0) : 0.0);
     if (!exp_draw2.empty()) exp_draw2[0] = 0.0;
     for (std::size_t c = 0; c < ctx.C; ++c) {
-        const auto& aux = out.cohort_auxiliary_means[c];
-        EXPECT_NEAR(aux.bootstrap_replicates[0].cohort_pop_share, exp_draw1[c], 1e-12);
-        EXPECT_NEAR(aux.bootstrap_replicates[1].cohort_pop_share, exp_draw2[c], 1e-12);
+        const auto& oss = out.cohort_outcome_mean_ests[c];
+        EXPECT_NEAR(oss.bootstrap_replicates[0].cohort_pop_share, exp_draw1[c], 1e-12);
+        EXPECT_NEAR(oss.bootstrap_replicates[1].cohort_pop_share, exp_draw2[c], 1e-12);
     }
 }
 

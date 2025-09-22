@@ -87,11 +87,9 @@ void CohortAuxiliaryDataMeanEstimator::add_datum(std::size_t unit_idx, const arm
     add_data(one, C);
 }
 
-CohortAuxiliaryDataMeanEstimates CohortAuxiliaryDataMeanEstimator::estimate(std::size_t total_units) const
+CohortAuxiliaryDataMeanEstimates CohortAuxiliaryDataMeanEstimator::estimate() const
 {
-    const double denom = static_cast<double>(total_units);
-    const double share = (denom > 0.0) ? (total_weight_ / denom) : std::numeric_limits<double>::quiet_NaN();
-    CohortAuxiliaryDataMeans point(share, aux_means_);
+    CohortAuxiliaryDataMeans point(aux_means_);
 
     std::vector<CohortAuxiliaryDataMeans> boots;
     const std::size_t B = num_bootstraps();
@@ -100,8 +98,7 @@ CohortAuxiliaryDataMeanEstimates CohortAuxiliaryDataMeanEstimator::estimate(std:
         for (std::size_t b = 0; b < B; ++b) {
             const arma::uword bu = static_cast<arma::uword>(b);
             arma::mat means_b = boot_aux_means_.slice(bu);
-            const double share_b = total_boot_weights_(bu);
-            boots.emplace_back(share_b, std::move(means_b));
+            boots.emplace_back(std::move(means_b));
         }
     }
 

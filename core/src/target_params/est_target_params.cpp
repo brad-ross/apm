@@ -23,8 +23,21 @@ collect_eta_across_cohorts(const std::vector<CohortAuxiliaryDataMeanEstimates>& 
     return out;
 }
 
+static std::vector<OutcomeMeanSufficientStatistics>
+collect_stats_across_cohorts(const std::vector<OutcomeMeanSuffStatEstimates>& v,
+                             std::optional<std::size_t> b_opt) {
+    std::vector<OutcomeMeanSufficientStatistics> out;
+    out.reserve(v.size());
+    for (const auto& e : v) {
+        if (b_opt.has_value() && e.n_bootstrap_replicates() > *b_opt) out.push_back(e.bootstrap_replicates[*b_opt]);
+        else out.push_back(e.suff_stat_estimates);
+    }
+    return out;
+}
+
 TargetParameterEstimates est_target_params(
     const OutcomeMeansEstimates& ome,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
     const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
     const TargetFn& fn,
     std::optional<std::size_t> num_threads)
@@ -36,14 +49,23 @@ TargetParameterEstimates est_target_params(
             throw std::invalid_argument("All parameter estimates must have the same number of bootstrap replicates.");
         }
     }
+    for (const auto& s : stats_by_cohort) {
+        if (s.n_bootstrap_replicates() != B) {
+            throw std::invalid_argument("All parameter estimates must have the same number of bootstrap replicates.");
+        }
+    }
 
-    arma::vec point = fn(ome.mean_outcomes, collect_eta_across_cohorts(eta_by_cohort, std::nullopt));
+    arma::vec point = fn(ome.mean_outcomes,
+                         collect_stats_across_cohorts(stats_by_cohort, std::nullopt),
+                         collect_eta_across_cohorts(eta_by_cohort, std::nullopt));
 
     std::vector<arma::vec> boots;
     if (B > 0) {
         boots.resize(B);
         auto process_boot = [&](std::size_t b) {
-            boots[b] = fn(ome.bootstrap_replicates[b], collect_eta_across_cohorts(eta_by_cohort, b));
+            boots[b] = fn(ome.bootstrap_replicates[b],
+                          collect_stats_across_cohorts(stats_by_cohort, b),
+                          collect_eta_across_cohorts(eta_by_cohort, b));
         };
 
 #ifdef APM_HAS_TBB
@@ -65,6 +87,7 @@ TargetParameterEstimates est_target_params(
 
 std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
     const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
+    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
     const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
     const TargetFn& fn,
     std::optional<std::size_t> num_threads)
@@ -74,10 +97,13 @@ std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
     for (const auto& kv : ome_map) {
         const std::string& key = kv.first;
         const OutcomeMeansEstimates& ome = kv.second;
-        auto it = eta_map.find(key);
+        auto it_eta = eta_map.find(key);
+        auto it_stats = stats_map.find(key);
         const std::vector<CohortAuxiliaryDataMeanEstimates> empty_eta;
-        const auto& eta_vec = (it == eta_map.end() ? empty_eta : it->second);
-        out.emplace(key, est_target_params(ome, eta_vec, fn, num_threads));
+        const std::vector<OutcomeMeanSuffStatEstimates> empty_stats;
+        const auto& eta_vec = (it_eta == eta_map.end() ? empty_eta : it_eta->second);
+        const auto& stats_vec = (it_stats == stats_map.end() ? empty_stats : it_stats->second);
+        out.emplace(key, est_target_params(ome, stats_vec, eta_vec, fn, num_threads));
     }
     return out;
 }

@@ -35,17 +35,21 @@ struct TargetParameterEstimates {
     std::size_t p() const noexcept { return static_cast<std::size_t>(point.n_elem); }
 };
 
-using TargetFn = std::function<arma::vec(const arma::mat& Y,
-                                         const std::vector<CohortAuxiliaryDataMeans>& eta_all)>;
+using TargetFn = std::function<arma::vec(
+    const arma::mat& Y,
+    const std::vector<OutcomeMeanSufficientStatistics>& stats_all,
+    const std::vector<CohortAuxiliaryDataMeans>& eta_all)>;
 
 TargetParameterEstimates est_target_params(
     const OutcomeMeansEstimates& ome,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
     const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
     const TargetFn& fn,
     std::optional<std::size_t> num_threads = std::nullopt);
 
 std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
     const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
+    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
     const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
     const TargetFn& fn,
     std::optional<std::size_t> num_threads = std::nullopt);

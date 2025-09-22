@@ -32,12 +32,12 @@ TargetParameterEstimates <- R6::R6Class(
 #'   a named list whose values are lists (by spec, then per cohort). NULL is allowed.
 #' @return `TargetParameterEstimates` R6 object or named list of them (by spec).
 #' @export
-est_target_params <- function(outcome_means, fn, aux_means = NULL) {
+est_target_params <- function(outcome_means, fn, aux_means = NULL, suff_stats = NULL) {
   if (inherits(outcome_means, "OutcomeMeansEstimates")) {
-    return(.tpe_single(outcome_means, fn, aux_means))
+    return(.tpe_single(outcome_means, fn, aux_means, suff_stats))
   }
   if (is.list(outcome_means)) {
-    return(.tpe_by_spec(outcome_means, fn, aux_means))
+    return(.tpe_by_spec(outcome_means, fn, aux_means, suff_stats))
   }
   stop("Invalid 'outcome_means': expected an OutcomeMeansEstimates object or a named list of them.")
 }
@@ -46,8 +46,9 @@ est_target_params <- function(outcome_means, fn, aux_means = NULL) {
 # Internal helpers (not exported)
 # -----------------------------------------------------------------------------
 
-.tpe_single <- function(outcome_means, fn, aux_means) {
+.tpe_single <- function(outcome_means, fn, aux_means, suff_stats) {
   if (!is.null(aux_means)) stopifnot(is.list(aux_means))
+  if (!is.null(suff_stats)) stopifnot(is.list(suff_stats))
   if (!is.null(aux_means)) {
     aux_means <- lapply(aux_means, function(e) {
       if (is.null(e)) return(NULL)
@@ -55,17 +56,26 @@ est_target_params <- function(outcome_means, fn, aux_means = NULL) {
       e$.__enclos_env__$private$xp
     })
   }
+  if (!is.null(suff_stats)) {
+    suff_stats <- lapply(suff_stats, function(e) {
+      if (is.null(e)) return(NULL)
+      stopifnot(inherits(e, "OutcomeMeanSuffStatEstimates"))
+      e$.__enclos_env__$private$xp
+    })
+  }
   xp <- est_target_params_cpp(
     outcome_means$.__enclos_env__$private$xp,
+    suff_stats,
     aux_means,
     fn
   )
   TargetParameterEstimates$new(xp)
 }
 
-.tpe_by_spec <- function(outcome_means_by_spec, fn, aux_means_by_spec) {
+.tpe_by_spec <- function(outcome_means_by_spec, fn, aux_means_by_spec, suff_stats_by_spec) {
   .validate_ome_by_spec(outcome_means_by_spec)
   if (!is.null(aux_means_by_spec)) .validate_eta_by_spec(aux_means_by_spec)
+  if (!is.null(suff_stats_by_spec)) .validate_stats_by_spec(suff_stats_by_spec)
 
   ome_xp_by_spec <- lapply(outcome_means_by_spec, function(ome) ome$.__enclos_env__$private$xp)
   if (!is.null(aux_means_by_spec)) {
@@ -81,8 +91,21 @@ est_target_params <- function(outcome_means, fn, aux_means = NULL) {
   } else {
     eta_xp_by_spec <- NULL
   }
+  if (!is.null(suff_stats_by_spec)) {
+    stats_xp_by_spec <- lapply(suff_stats_by_spec, function(lst) {
+      if (is.null(lst)) return(NULL)
+      stopifnot(is.list(lst))
+      lapply(lst, function(e) {
+        if (is.null(e)) return(NULL)
+        stopifnot(inherits(e, "OutcomeMeanSuffStatEstimates"))
+        e$.__enclos_env__$private$xp
+      })
+    })
+  } else {
+    stats_xp_by_spec <- NULL
+  }
 
-  res <- est_target_params_by_spec_cpp(ome_xp_by_spec, eta_xp_by_spec, fn)
+  res <- est_target_params_by_spec_cpp(ome_xp_by_spec, stats_xp_by_spec, eta_xp_by_spec, fn)
   .wrap_target_params_xptr_list(res)
 }
 
@@ -112,6 +135,23 @@ est_target_params <- function(outcome_means, fn, aux_means = NULL) {
     if (!is.list(lst)) stop(sprintf("aux_means[['%s']] must be a list (one per cohort) or NULL.", spec))
     ok <- vapply(lst, function(e) is.null(e) || inherits(e, "CohortAuxiliaryDataMeanEstimates"), logical(1))
     if (!all(ok)) stop(sprintf("All elements under spec '%s' must be CohortAuxiliaryDataMeanEstimates or NULL.", spec))
+  }
+  invisible(TRUE)
+}
+
+.validate_stats_by_spec <- function(x) {
+  if (is.null(x)) return(invisible(TRUE))
+  if (!is.list(x)) stop("'suff_stats' must be a named list when using by-spec inputs.")
+  if (length(x) == 0L) return(invisible(TRUE))
+  if (is.null(names(x)) || any(!nzchar(names(x)))) {
+    stop("When providing by-spec inputs, 'suff_stats' must be a named list matching the spec keys.")
+  }
+  for (spec in names(x)) {
+    lst <- x[[spec]]
+    if (is.null(lst)) next
+    if (!is.list(lst)) stop(sprintf("suff_stats[['%s']] must be a list (one per cohort) or NULL.", spec))
+    ok <- vapply(lst, function(e) is.null(e) || inherits(e, "OutcomeMeanSuffStatEstimates"), logical(1))
+    if (!all(ok)) stop(sprintf("All elements under spec '%s' must be OutcomeMeanSuffStatEstimates or NULL.", spec))
   }
   invisible(TRUE)
 }

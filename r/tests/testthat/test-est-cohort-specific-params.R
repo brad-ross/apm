@@ -417,13 +417,9 @@ test_that("auxiliary means: dimensions and values without covariates", {
         units_c <- nrow(uc[cohort_id == c])
         share_exp <- if (nrow(uc) > 0) units_c / nrow(uc) else 0
 
-        est <- aux[[c]]
-        expect_true(inherits(est, "CohortAuxiliaryDataMeanEstimates"))
-        expect_false(est$has_bootstrap())
-        expect_equal(est$cohort_pop_share(), share_exp, tolerance = 1e-12)
-
-        # Determine Tc from observed_outcome_indices fixture
-        M <- est$auxiliary_means()
+        # Determine Tc from observed_outcome_indices fixture: use auxiliary means holder
+        aux_est <- aux[[c]]
+        M <- aux_est$auxiliary_means()
         expect_equal(dim(M), c(T, 2L))
 
         # Compare by actual outcome index present in cohort c
@@ -437,7 +433,7 @@ test_that("auxiliary means: dimensions and values without covariates", {
     }
 })
 
-test_that("auxiliary means: bootstrap replicates present and shares valid", {
+test_that("auxiliary means: bootstrap replicates present", {
     T <- 5L
     T_c <- 3L
     outcomes <- make_outcomes(T)
@@ -477,6 +473,42 @@ test_that("auxiliary means: bootstrap replicates present and shares valid", {
 
     aux <- res$cohort_auxiliary_means
     expect_equal(length(aux), length(cohort_indices))
+    for (c in seq_along(cohort_indices)) {
+        est_aux <- aux[[c]]
+        expect_true(est_aux$has_bootstrap())
+        expect_equal(est_aux$num_bootstraps(), 2L)
+    }
+})
+
+test_that("cohort outcome shares: bootstrap replicates present and valid", {
+    T <- 5L
+    T_c <- 3L
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
+
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 1L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, include_auxiliary = TRUE, ctx = ctx)
+    panel_dt[, aux1 := 1.0]
+
+    panel <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 1,
+        min_cohort_size = 1,
+        auxiliary_cols = c("aux1"),
+        sort_cohorts_lexicographically = TRUE
+    )
+
+    N <- nrow(unique(panel$get_processed_panel()[, .(unit_idx)]))
+    B <- 2L
+    wb <- get_weighted_bootstrap_draws(N = N, B = B, type = "bayesian", seed = 123L)
+
+    est_specs <- list(pc = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 1L))
+    res <- est_cohort_specific_params(panel, est_specs, bootstrap = wb)
+
     # Build unit->cohort map and expected shares per draw from bootstrap weights
     pp <- unique(panel$get_processed_panel()[, .(unit_idx, cohort_id)])
     W <- wb$weights()
@@ -490,7 +522,7 @@ test_that("auxiliary means: bootstrap replicates present and shares valid", {
     exp2 <- exp_draw(2L)
 
     for (c in seq_along(cohort_indices)) {
-        est <- aux[[c]]
+        est <- res$cohort_outcome_means[[c]]
         expect_true(est$has_bootstrap())
         expect_equal(est$num_bootstraps(), 2L)
         expect_true(est$cohort_pop_share(b = 1L) >= 0 && est$cohort_pop_share(b = 1L) <= 1)

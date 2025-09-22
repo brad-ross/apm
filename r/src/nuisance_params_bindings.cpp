@@ -19,13 +19,6 @@ Rcpp::IntegerVector caux_point_dims_cpp(SEXP xp_) {
     return Rcpp::IntegerVector::create(static_cast<int>(M.n_rows), static_cast<int>(M.n_cols));
 }
 
-// Point pop share
-// [[Rcpp::export]]
-double caux_point_pop_share_cpp(SEXP xp_) {
-    Rcpp::XPtr<CohortAuxiliaryDataMeanEstimates> xp(xp_);
-    return ref(xp).estimates.cohort_pop_share;
-}
-
 // Point matrix
 // [[Rcpp::export]]
 Rcpp::NumericMatrix caux_point_aux_means_cpp(SEXP xp_) {
@@ -49,14 +42,6 @@ int caux_num_bootstrap_cpp(SEXP xp_) {
     return static_cast<int>(ref(xp).n_bootstrap_replicates());
 }
 
-// Bootstrap replicate pop share
-// [[Rcpp::export]]
-double caux_boot_pop_share_cpp(SEXP xp_, int b) {
-    Rcpp::XPtr<CohortAuxiliaryDataMeanEstimates> xp(xp_);
-    const auto& v = ref(xp).bootstrap_replicates;
-    if (b < 1 || b > static_cast<int>(v.size())) Rcpp::stop("bootstrap index out of range");
-    return v[static_cast<std::size_t>(b - 1)].cohort_pop_share;
-}
 
 // Bootstrap replicate matrix
 // [[Rcpp::export]]

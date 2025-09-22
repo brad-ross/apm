@@ -60,8 +60,7 @@ make_factor_estimators_for_cohort(
 //==============================
 
 static std::vector<CohortAuxiliaryDataMeanEstimates> finalize_auxiliary_outputs(
-    const std::vector<std::optional<CohortAuxiliaryDataMeanEstimator>>& tmp_aux,
-    std::size_t total_units)
+    const std::vector<std::optional<CohortAuxiliaryDataMeanEstimator>>& tmp_aux)
 {
     std::vector<CohortAuxiliaryDataMeanEstimates> aux_out;
     const std::size_t C = tmp_aux.size();
@@ -69,25 +68,25 @@ static std::vector<CohortAuxiliaryDataMeanEstimates> finalize_auxiliary_outputs(
 
     aux_out.reserve(C);
     for (std::size_t c = 0; c < C; ++c) {
-        aux_out.emplace_back(tmp_aux[c]->estimate(total_units));
+        aux_out.emplace_back(tmp_aux[c]->estimate());
     }
     return aux_out;
 }
 
 static CohortSpecificEstimates build_cohort_specific_estimates(
     std::unordered_map<std::string, std::vector<std::optional<FactorModelEstimates>>>& tmp_factor,
-    std::vector<std::optional<OutcomeMeanSuffStatEstimates>>& tmp_outcome,
+    const std::vector<OutcomeMeanSuffStatEstimates>& outcome_out,
     std::unordered_map<std::string, CohortWeightEstimates> cohort_weights,
     std::vector<CohortAuxiliaryDataMeanEstimates>&& aux_out,
     const std::optional<ObservedOutcomeIndices>& masked_indices_opt,
     std::unordered_map<int, OutcomeMeanSufficientStatistics>&& masked_means)
 {
-    const std::size_t C = tmp_outcome.size();
+    const std::size_t C = outcome_out.size();
 
     CohortSpecificEstimates out;
     out.cohort_outcome_mean_ests.reserve(C);
     for (std::size_t i = 0; i < C; ++i) {
-        out.cohort_outcome_mean_ests.push_back(std::move(*tmp_outcome[i]));
+        out.cohort_outcome_mean_ests.push_back(outcome_out[i]);
     }
 
     for (auto& kv : tmp_factor) {
@@ -249,9 +248,9 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
     for (const auto& kv : est_specs) {
         tmp_factor.emplace(kv.first, std::vector<std::optional<FactorModelEstimates>>(C));
     }
-    std::vector<std::optional<OutcomeMeanSuffStatEstimates>> tmp_outcome(C);
+    std::vector<std::optional<OutcomeMeanSuffStatEstimator>> tmp_outcome(C);
     std::vector<std::optional<CohortAuxiliaryDataMeanEstimator>> tmp_aux(C);
-    std::vector<std::optional<OutcomeMeanSufficientStatistics>> tmp_masked_means(C);
+    std::vector<std::optional<OutcomeMeanSuffStatEstimator>> tmp_masked_means(C);
 
     // Parallelize across cohorts
     auto process_cohort = [&](std::size_t cidx) {
@@ -345,11 +344,11 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
         }
 
         if (compute_masked) {
-            tmp_masked_means[cidx].emplace(omsse_masked->estimate().suff_stat_estimates);
+            tmp_masked_means[cidx].emplace(std::move(*omsse_masked));
         }
 
-        // Estimate and store
-        tmp_outcome[cidx].emplace(omsse.estimate());
+        // Store estimator for later finalization (needs total_units)
+        tmp_outcome[cidx].emplace(std::move(omsse));
         for (auto& kv : ests) {
             tmp_factor[kv.first][cidx].emplace(kv.second->estimate());
         }
@@ -381,25 +380,38 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
     // Finalize auxiliary outputs
     std::vector<CohortAuxiliaryDataMeanEstimates> aux_out;
     if (d > 0) {
-        // Compute total number of unique units across all cohorts
-        std::size_t total_units = 0;
-        for (const auto& blk : panel.cohort_blocks()) {
-            total_units += blk.unit_runs.size();
-        }
-        aux_out = finalize_auxiliary_outputs(tmp_aux, total_units);
+        aux_out = finalize_auxiliary_outputs(tmp_aux);
+    }
+
+    // Finalize outcome sufficient statistics with cohort shares
+    std::size_t total_units = 0;
+    for (const auto& blk : panel.cohort_blocks()) {
+        total_units += blk.unit_runs.size();
+    }
+    std::vector<OutcomeMeanSuffStatEstimates> outcome_out;
+    outcome_out.reserve(C);
+    for (std::size_t cidx = 0; cidx < C; ++cidx) {
+        outcome_out.emplace_back(tmp_outcome[cidx]->estimate(total_units));
     }
 
     // Build masked means map if any
     std::unordered_map<int, OutcomeMeanSufficientStatistics> masked_means_map;
     std::optional<ObservedOutcomeIndices> masked_indices_opt = std::nullopt;
     if (has_mask) {
-        masked_means_map = build_masked_means_map(panel.cohort_blocks(), tmp_masked_means);
+        // Build masked map using finalized estimates
+        std::vector<std::optional<OutcomeMeanSufficientStatistics>> finalized_masked(C);
+        for (std::size_t cidx = 0; cidx < C; ++cidx) {
+            if (tmp_masked_means[cidx].has_value()) {
+                finalized_masked[cidx].emplace(tmp_masked_means[cidx]->estimate(total_units).suff_stat_estimates);
+            }
+        }
+        masked_means_map = build_masked_means_map(panel.cohort_blocks(), finalized_masked);
         masked_indices_opt = ooi_effective;
     }
 
     return build_cohort_specific_estimates(
         tmp_factor,
-        tmp_outcome,
+        outcome_out,
         std::move(weights_by_spec),
         std::move(aux_out),
         masked_indices_opt,
