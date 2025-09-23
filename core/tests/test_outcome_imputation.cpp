@@ -5,6 +5,7 @@
 #include "outcome_imputation_helpers.h"
 #include "outcome_imputation.h"
 #include "panels/InMemoryUnbalancedPanel.h"
+#include "est_cohort_specific_params.h"
 #include "cohort_specific_param_structs.h"
 #include "test_helpers.h"
 
@@ -301,4 +302,69 @@ TEST(OutcomeImputationTest, ImputationComponents_AllOnesFactors_CovarsAndFixedEf
         mean_resid = vals.empty() ? 0.0 : (mean_resid / static_cast<double>(vals.size()));
         EXPECT_NEAR(L(static_cast<arma::uword>(u), 0), mean_resid, 1e-6);
     }
+}
+
+TEST(OutcomeImputationTest, ImputationComponents_WithCohortSuff_CovarsAndFixedEffects) {
+	// Context with covariates and fixed effects; multiple units per cohort
+	auto ctx = make_staircase_panel_context(/*T=*/8, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true, /*with_fixed_effects=*/true);
+	auto rp = make_raw_panel(ctx);
+
+	std::vector<const double*> covar_cols{rp.cov1.data(), rp.cov2.data()};
+	std::vector<const double*> auxiliary_cols;  // d = 0
+	apm::InMemoryUnbalancedPanel panel(
+		rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+		covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+	// Signal presence of FE and covariates via FactorModelParameters
+	apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, ctx.a_true);
+
+	// Precompute cohort mean loadings matrix (C x r)
+	arma::mat mean_L(static_cast<arma::uword>(ctx.C), ctx.r, arma::fill::zeros);
+	for (std::size_t c = 0; c < static_cast<std::size_t>(ctx.C); ++c) {
+		std::size_t start_u = c * static_cast<std::size_t>(ctx.units_per);
+		arma::vec mean_l(ctx.r, arma::fill::zeros);
+		for (std::size_t u = 0; u < static_cast<std::size_t>(ctx.units_per); ++u) {
+			mean_l += ctx.l_unit[start_u + u];
+		}
+		mean_l /= static_cast<double>(ctx.units_per);
+		mean_L.row(static_cast<arma::uword>(c)) = mean_l.t();
+	}
+
+	// Compute cohort-level sufficient statistics using the core cohort-specific estimator
+	std::unordered_map<std::string, apm::EstimatorSpecification> specs;
+	specs.emplace("pca_fe", apm::EstimatorSpecification{"principal_components", true, static_cast<std::size_t>(ctx.r)});
+	apm::CohortSpecificEstimates cse = apm::estimate_cohort_specific_params_from_internal_panel_rep(
+		panel, specs, /*bootstrap=*/nullptr, /*num_threads=*/std::nullopt, /*mask=*/apm::CohortOutcomeMask());
+
+	std::vector<apm::OutcomeMeanSufficientStatistics> suff_stats;
+	suff_stats.reserve(static_cast<std::size_t>(ctx.C));
+	for (std::size_t c = 0; c < static_cast<std::size_t>(ctx.C); ++c) {
+		suff_stats.push_back(cse.cohort_outcome_mean_ests[c].suff_stat_estimates);
+	}
+
+	// Compute imputation components using cohort-level sufficient stats
+	apm::FactorModelParameters out = apm::comp_imputation_components(
+		panel,
+		fmp,
+		suff_stats);
+
+	// G passed through
+	expect_same_subspace(out.G, ctx.G_true);
+	// Alpha recovered
+	ASSERT_TRUE(out.a.has_value());
+	EXPECT_TRUE(arma::approx_equal(*out.a, ctx.a_true, "absdiff", 1e-4));
+	// g0 recovered up to orthogonal projection to rows of G
+	ASSERT_TRUE(out.g_0.has_value());
+	arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+	EXPECT_TRUE(arma::approx_equal(*out.g_0, g0_exp, "absdiff", 1e-6));
+	// L should be C x r and close to cohort mean loadings adjusted by gamma from FE
+	ASSERT_TRUE(out.L.has_value());
+	const arma::mat& L = *out.L;
+	ASSERT_EQ(static_cast<std::size_t>(L.n_rows), static_cast<std::size_t>(ctx.C));
+	ASSERT_EQ(static_cast<std::size_t>(L.n_cols), static_cast<std::size_t>(ctx.r));
+	arma::vec gamma = apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+	for (std::size_t c = 0; c < static_cast<std::size_t>(ctx.C); ++c) {
+		arma::rowvec L_exp = mean_L.row(static_cast<arma::uword>(c)) + gamma.t();
+		EXPECT_TRUE(arma::approx_equal(L.row(static_cast<arma::uword>(c)), L_exp, "absdiff", 1e-5));
+	}
 }
