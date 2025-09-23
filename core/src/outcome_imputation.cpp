@@ -8,6 +8,11 @@
 #include <iostream>
 #include <vector>
 #include "panels/CohortLevelUnbalancedPanel.h"
+#ifdef APM_HAS_TBB
+#include <oneapi/tbb/info.h>
+#include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/global_control.h>
+#endif
 
 namespace apm {
 
@@ -513,6 +518,110 @@ FactorModelParameters comp_imputation_components(
         out.L = std::move(L_opt);
         return out;
     }
+}
+
+} // namespace apm
+
+namespace apm {
+
+FactorModelEstimates comp_imputation_components(
+    const AbstractUnbalancedPanel& panel,
+    const FactorModelEstimates& factor_model_ests,
+    const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests,
+    std::optional<arma::vec> unit_weights_opt,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt,
+    double tol,
+    std::size_t max_iters,
+    const std::string& fixed_point_method,
+    std::optional<std::size_t> num_threads)
+{
+#ifdef APM_HAS_TBB
+    std::size_t nt = num_threads.has_value() ? *num_threads : oneapi::tbb::info::default_concurrency();
+    std::unique_ptr<oneapi::tbb::global_control> tbb_gc;
+    if (nt > 1) {
+        tbb_gc = std::make_unique<oneapi::tbb::global_control>(
+            oneapi::tbb::global_control::max_allowed_parallelism,
+            static_cast<std::size_t>(nt)
+        );
+    }
+#else
+    std::size_t nt = num_threads.has_value() ? *num_threads : 1;
+#endif
+
+    // If cohort stats are provided, construct point slice. If empty, pass through empty vector.
+    std::vector<OutcomeMeanSufficientStatistics> suff_stats_point;
+    if (!cohort_outcome_mean_suff_stat_ests.empty()) {
+        const std::size_t C = static_cast<std::size_t>(cohort_outcome_mean_suff_stat_ests.size());
+        suff_stats_point.reserve(C);
+        for (std::size_t c = 0; c < C; ++c) {
+            suff_stats_point.push_back(cohort_outcome_mean_suff_stat_ests[c].suff_stat_estimates);
+        }
+    }
+
+    // Point estimate via parameter-based overload
+    FactorModelParameters point_params = comp_imputation_components(
+        panel,
+        factor_model_ests.parameter_estimates,
+        suff_stats_point,
+        unit_weights_opt,
+        effective_ooi_opt,
+        tol,
+        max_iters,
+        fixed_point_method);
+
+    // Bootstrap replicates
+    const bool has_param_boot = factor_model_ests.has_bootstrap_replicates();
+    std::size_t B = has_param_boot ? factor_model_ests.n_bootstrap_replicates() : 0;
+
+    if (has_param_boot && !cohort_outcome_mean_suff_stat_ests.empty()) {
+        // Validate each cohort has B suff-stat replicates (mirror est_outcome_means.cpp)
+        const std::size_t C = static_cast<std::size_t>(cohort_outcome_mean_suff_stat_ests.size());
+        for (std::size_t c = 0; c < C; ++c) {
+            if (cohort_outcome_mean_suff_stat_ests[c].n_bootstrap_replicates() != B) {
+                throw std::invalid_argument(
+                    "All cohorts must have the same number of bootstrap replicates as the factor model estimates.");
+            }
+        }
+    }
+
+    std::vector<FactorModelParameters> boot_out;
+    if (B > 0) {
+        boot_out.resize(B);
+
+        auto worker = [&](std::size_t b) {
+            std::vector<OutcomeMeanSufficientStatistics> suff_stats_b;
+            if (!cohort_outcome_mean_suff_stat_ests.empty()) {
+                const std::size_t C = static_cast<std::size_t>(cohort_outcome_mean_suff_stat_ests.size());
+                suff_stats_b.reserve(C);
+                for (std::size_t c = 0; c < C; ++c) {
+                    suff_stats_b.push_back(cohort_outcome_mean_suff_stat_ests[c].bootstrap_replicates[b]);
+                }
+            }
+
+            const FactorModelParameters& params_b = factor_model_ests.bootstrap_replicates[b];
+            boot_out[b] = comp_imputation_components(
+                panel,
+                params_b,
+                suff_stats_b,
+                unit_weights_opt,
+                effective_ooi_opt,
+                tol,
+                max_iters,
+                fixed_point_method);
+        };
+
+#ifdef APM_HAS_TBB
+        if (nt <= 1) {
+            for (std::size_t b = 0; b < B; ++b) worker(b);
+        } else {
+            oneapi::tbb::parallel_for(std::size_t(0), B, [&](std::size_t b){ worker(b); });
+        }
+#else
+        for (std::size_t b = 0; b < B; ++b) worker(b);
+#endif
+    }
+
+    return FactorModelEstimates(std::move(point_params), std::move(boot_out));
 }
 
 } // namespace apm

@@ -37,6 +37,18 @@ FactorModelParameters comp_imputation_components(
     std::size_t max_iters = 1000,
     const std::string& fixed_point_method = "irons-tuck");
 
+// Overload that accepts FactorModelEstimates and OutcomeMeanSuffStatEstimates, with optional parallelization
+FactorModelEstimates comp_imputation_components(
+    const AbstractUnbalancedPanel& panel,
+    const FactorModelEstimates& factor_model_ests,
+    const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests = std::vector<OutcomeMeanSuffStatEstimates>(),
+    std::optional<arma::vec> unit_weights_opt = std::nullopt,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
+    double tol = 1e-10,
+    std::size_t max_iters = 1000,
+    const std::string& fixed_point_method = "irons-tuck",
+    std::optional<std::size_t> num_threads = std::nullopt);
+
 } // namespace apm
 
 #endif // APM_OUTCOME_IMPUTATION_H
