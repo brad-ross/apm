@@ -352,11 +352,11 @@ TEST(OutcomeImputationTest, ImputationComponents_WithCohortSuff_CovarsAndFixedEf
 	expect_same_subspace(out.G, ctx.G_true);
 	// Alpha recovered
 	ASSERT_TRUE(out.a.has_value());
-	EXPECT_TRUE(arma::approx_equal(*out.a, ctx.a_true, "absdiff", 1e-4));
+	EXPECT_TRUE(arma::approx_equal(*out.a, ctx.a_true, "absdiff", 1e-8));
 	// g0 recovered up to orthogonal projection to rows of G
 	ASSERT_TRUE(out.g_0.has_value());
 	arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
-	EXPECT_TRUE(arma::approx_equal(*out.g_0, g0_exp, "absdiff", 1e-6));
+	EXPECT_TRUE(arma::approx_equal(*out.g_0, g0_exp, "absdiff", 1e-8));
 	// L should be C x r and close to cohort mean loadings adjusted by gamma from FE
 	ASSERT_TRUE(out.L.has_value());
 	const arma::mat& L = *out.L;
