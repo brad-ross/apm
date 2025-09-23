@@ -5,13 +5,13 @@
 #ifdef APM_HAS_TBB
 #include <oneapi/tbb/info.h>
 #include <oneapi/tbb/parallel_for.h>
-#include <oneapi/tbb/global_control.h>
 #endif
 #include "factor_model_estimators/FactorModelEstimator.h"
 #include "factor_model_estimators/pc_estimators.h"
 #include "OutcomeMeanSuffStatEstimator.h"
 #include "nuisance_param_estimators.h"
 #include "panels/InMemoryUnbalancedPanel.h"
+#include "utils.h"
 
 namespace apm {
 namespace {
@@ -222,18 +222,8 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
     const std::size_t q = panel.q();
     const std::size_t d = panel.d();
 
-#ifdef APM_HAS_TBB
-    std::size_t nt = num_threads.has_value() ? *num_threads : oneapi::tbb::info::default_concurrency();
-    std::unique_ptr<oneapi::tbb::global_control> tbb_gc;
-    if (nt > 1) {
-        tbb_gc = std::make_unique<oneapi::tbb::global_control>(
-            oneapi::tbb::global_control::max_allowed_parallelism,
-            static_cast<std::size_t>(nt)
-        );
-    }
-#else
-    std::size_t nt = num_threads.has_value() ? *num_threads : 1;
-#endif
+    apm::ParallelismScope par_scope(num_threads);
+    std::size_t nt = par_scope.nt;
 
     // Determine effective observed outcome indices after optional masking
     const bool has_mask = !cohort_outcomes_to_mask.empty();

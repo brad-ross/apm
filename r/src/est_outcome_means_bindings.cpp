@@ -5,6 +5,7 @@
 #include "r_utils.h"
 #include "cohort_specific_estimates_helpers.h"
 #include "../../core/src/est_outcome_means.h"
+#include "../../core/src/utils.h"
 #include "../../core/src/agg_cohort_specific_factor_model_params.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
@@ -157,9 +158,7 @@ Rcpp::List est_target_param_components_from_panel_cpp(
 //------------------------------------------------------------------------------
 
 // [[Rcpp::export]]
-int get_cpp_default_concurrency() {
-    return static_cast<int>(apm::get_cpp_default_concurrency());
-}
+int get_cpp_default_concurrency() { return static_cast<int>(apm::get_cpp_default_concurrency()); }
 
 //------------------------------------------------------------------------------
 // Simple factories to aid tests

@@ -10,6 +10,12 @@
 
 #include <vector>
 #include <unordered_map>
+#include <optional>
+#include <memory>
+#ifdef APM_HAS_TBB
+#include <oneapi/tbb/global_control.h>
+#include <oneapi/tbb/info.h>
+#endif
 
 namespace apm {
 
@@ -28,6 +34,22 @@ ObservedOutcomeIndices get_masked_observed_outcome_indices(
 
 // Count total outcomes T across all cohorts (1 + max index if any, else 0)
 arma::uword num_outcomes(const ObservedOutcomeIndices& observed_outcome_indices);
+
+// Threading utilities
+struct ParallelismScope {
+	std::size_t nt;
+
+	explicit ParallelismScope(std::optional<std::size_t> num_threads);
+	~ParallelismScope() = default;
+
+private:
+#ifdef APM_HAS_TBB
+	std::unique_ptr<oneapi::tbb::global_control> gc_;
+#endif
+};
+
+// Return default concurrency (uses oneTBB when available, else 1)
+std::size_t get_cpp_default_concurrency();
 
 } // namespace apm
 

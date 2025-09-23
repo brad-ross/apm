@@ -59,13 +59,6 @@ std::unordered_map<std::string, OutcomeMeansEstimates> estimate_outcome_means_ac
     const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<OutcomeMeanSuffStatEstimates>& suff_stat_estimates_vec);
 
-/**
- * @brief Return the default number of threads available to C++ parallel runtime.
- *
- * Uses oneTBB when available; otherwise returns 1.
- */
-std::size_t get_cpp_default_concurrency();
-
 } // namespace apm
 
 #endif // APM_EST_OUTCOME_MEANS_H
