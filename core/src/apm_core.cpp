@@ -167,6 +167,21 @@ void validate_X_c(const arma::mat& X_c, arma::uword T, arma::uword q) {
     }
 }
 
+void validate_G_and_L(const arma::mat& G, const arma::mat& L) {
+    if (G.n_cols != L.n_cols) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: number of columns in G must match number of columns in L.");
+    }
+}
+
+void validate_X_vec(const std::vector<arma::mat>& X_vec, arma::uword C, arma::uword T, arma::uword q) {
+    if (X_vec.size() != C) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: number of X matrices must equal number of cohorts.");
+    }
+    for (arma::uword c = 0; c < C; ++c) {
+        validate_X_c(X_vec[c], T, q);
+    }
+}
+
 // Define the graph type using Boost Graph Library
 using Graph = boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS>;
 
@@ -506,6 +521,7 @@ arma::vec impute_outcomes(
 arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::mat& L) {
+    validate_G_and_L(G, L);
     const arma::uword C = L.n_rows;
     arma::mat M(C, G.n_rows);
     for (arma::uword c = 0; c < C; ++c) {
@@ -520,6 +536,7 @@ arma::mat impute_outcomes_across_cohorts(
     const arma::vec& g_0,
     const arma::mat& L) {
     const arma::uword T = G.n_rows;
+    validate_G_and_L(G, L);
     if (g_0.n_elem != T) {
         throw std::invalid_argument("impute_outcomes_across_cohorts: length of g_0 must match number of rows of G.");
     }
@@ -539,6 +556,8 @@ arma::mat impute_outcomes_across_cohorts(
     const arma::mat& L) {
     const arma::uword T = G.n_rows;
     const arma::uword C = L.n_rows;
+    validate_G_and_L(G, L);
+    validate_X_vec(X, C, T, a.n_elem);
     arma::mat M(C, T);
     for (arma::uword c = 0; c < C; ++c) {
         arma::vec lambda = L.row(c).t();
@@ -555,6 +574,9 @@ arma::mat impute_outcomes_across_cohorts(
     const arma::mat& L) {
     const arma::uword T = G.n_rows;
     const arma::uword C = L.n_rows;
+    validate_G_and_L(G, L);
+    validate_g0_length(g_0, T);
+    validate_X_vec(X, C, T, a.n_elem);
     arma::mat M(C, T);
     for (arma::uword c = 0; c < C; ++c) {
         arma::vec lambda = L.row(c).t();
@@ -570,6 +592,7 @@ arma::mat impute_outcomes_across_cohorts(
     }
     const arma::mat& G = params.G;
     const arma::mat& L = *params.L;
+    validate_G_and_L(G, L);
 
     if (params.has_covariate_coefs()) {
         throw std::invalid_argument("impute_outcomes_across_cohorts: X_c is required when covariate coefficients a are present.");
@@ -588,14 +611,21 @@ arma::mat impute_outcomes_across_cohorts(
     }
     const arma::mat& G = params.G;
     const arma::mat& L = *params.L;
+    validate_G_and_L(G, L);
+    const arma::uword T = G.n_rows;
+    const arma::uword C = L.n_rows;
 
     if (params.has_fixed_effects() && params.has_covariate_coefs()) {
+        validate_g0_length(*params.g_0, T);
+        validate_X_vec(X, C, T, static_cast<arma::uword>(params.a->n_elem));
         return impute_outcomes_across_cohorts(G, *params.g_0, *params.a, X, L);
     }
     if (params.has_fixed_effects() && !params.has_covariate_coefs()) {
+        validate_g0_length(*params.g_0, T);
         return impute_outcomes_across_cohorts(G, *params.g_0, L);
     }
     if (!params.has_fixed_effects() && params.has_covariate_coefs()) {
+        validate_X_vec(X, C, T, static_cast<arma::uword>(params.a->n_elem));
         return impute_outcomes_across_cohorts(G, *params.a, X, L);
     }
     return impute_outcomes_across_cohorts(G, L);
