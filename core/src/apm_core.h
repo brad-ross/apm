@@ -113,7 +113,7 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
  * @param X_c A T x q matrix containing the values of q covariates corresponding to each outcome for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
-arma::vec impute_outcomes(
+arma::vec estimate_all_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::vec& a,
@@ -129,7 +129,7 @@ arma::vec impute_outcomes(
  * @param m_c A vector containing the observed outcomes for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
-arma::vec impute_outcomes(
+arma::vec estimate_all_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::uvec& T_c,
@@ -144,7 +144,7 @@ arma::vec impute_outcomes(
  * @param X_c A T x q matrix containing the values of q covariates corresponding to each outcome for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
-arma::vec impute_outcomes(
+arma::vec estimate_all_outcomes(
     const arma::mat& G,
     const arma::vec& a,
     const arma::uvec& T_c,
@@ -158,7 +158,7 @@ arma::vec impute_outcomes(
  * @param m_c A vector containing the observed outcomes for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
-arma::vec impute_outcomes(
+arma::vec estimate_all_outcomes(
     const arma::mat& G,
     const arma::uvec& T_c,
     const arma::vec& m_c);
@@ -181,7 +181,7 @@ arma::vec impute_outcomes(
  *                                (length T_c) and optional covar_means (T x q).
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
-arma::vec impute_outcomes(
+arma::vec estimate_all_outcomes(
     const FactorModelParameters& factor_model_parameters,
     const arma::uvec& T_c,
     const OutcomeMeanSufficientStatistics& outcome_mean_suff_stats);

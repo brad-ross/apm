@@ -184,7 +184,7 @@ TEST(APMTest, EstimateMeans_ParamsAndSuffStats_FactorsOnly) {
 }
 
 
-TEST(APMTest, ImputeOutcomes_Dispatcher_AllComponents) {
+TEST(APMTest, EstimateAllOutcomes_Dispatcher_AllComponents) {
     auto data = setup_estimation_test_data();
 
     apm::FactorModelParameters params(data.G, data.g_0, data.a);
@@ -195,8 +195,8 @@ TEST(APMTest, ImputeOutcomes_Dispatcher_AllComponents) {
     arma::vec m_c = m_full.elem(T_c);
     apm::OutcomeMeanSufficientStatistics stats(m_c, data.X_c_vec[c]);
 
-    arma::vec via_dispatch = apm::impute_outcomes(params, T_c, stats);
-    arma::vec via_raw = apm::impute_outcomes(data.G, data.g_0, data.a, T_c, m_c, data.X_c_vec[c]);
+    arma::vec via_dispatch = apm::estimate_all_outcomes(params, T_c, stats);
+    arma::vec via_raw = apm::estimate_all_outcomes(data.G, data.g_0, data.a, T_c, m_c, data.X_c_vec[c]);
 
     ASSERT_TRUE(arma::approx_equal(via_dispatch, via_raw, "absdiff", 1e-12));
 }

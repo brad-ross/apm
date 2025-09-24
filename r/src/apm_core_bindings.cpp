@@ -114,7 +114,7 @@ arma::vec aggregate_cohort_specific_outcome_fes(
 //' @return A T-dimensional vector containing the estimated outcomes for the representative unit.
 //' @export
 // [[Rcpp::export]]
-arma::vec impute_outcomes(
+arma::vec estimate_all_outcomes(
     const arma::mat& G,
     const arma::uvec& T_c,
     const arma::vec& m_c,
@@ -138,16 +138,16 @@ arma::vec impute_outcomes(
         arma::vec g_0_cpp = Rcpp::as<arma::vec>(g_0);
         arma::vec a_cpp = Rcpp::as<arma::vec>(a);
         arma::mat X_c_cpp = Rcpp::as<arma::mat>(X_c);
-        return apm::impute_outcomes(G, g_0_cpp, a_cpp, T_c_zero_based, m_c, X_c_cpp);
+        return apm::estimate_all_outcomes(G, g_0_cpp, a_cpp, T_c_zero_based, m_c, X_c_cpp);
     } else if (has_g0) {
         arma::vec g_0_cpp = Rcpp::as<arma::vec>(g_0);
-        return apm::impute_outcomes(G, g_0_cpp, T_c_zero_based, m_c);
+        return apm::estimate_all_outcomes(G, g_0_cpp, T_c_zero_based, m_c);
     } else if (has_a) {
         arma::vec a_cpp = Rcpp::as<arma::vec>(a);
         arma::mat X_c_cpp = Rcpp::as<arma::mat>(X_c);
-        return apm::impute_outcomes(G, a_cpp, T_c_zero_based, m_c, X_c_cpp);
+        return apm::estimate_all_outcomes(G, a_cpp, T_c_zero_based, m_c, X_c_cpp);
     } else {
-        return apm::impute_outcomes(G, T_c_zero_based, m_c);
+        return apm::estimate_all_outcomes(G, T_c_zero_based, m_c);
     }
 }
 
