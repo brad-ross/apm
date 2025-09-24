@@ -615,3 +615,40 @@ FactorModelEstimates comp_imputation_components(
 }
 
 } // namespace apm
+
+namespace apm {
+
+std::unordered_map<std::string, FactorModelEstimates> comp_imputation_components(
+    const AbstractUnbalancedPanel& panel,
+    const std::unordered_map<std::string, FactorModelEstimates>& factor_model_estimates_map,
+    const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests,
+    std::optional<arma::vec> unit_weights_opt,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt,
+    double tol,
+    std::size_t max_iters,
+    const std::string& fixed_point_method,
+    std::optional<std::size_t> num_threads)
+{
+    std::unordered_map<std::string, FactorModelEstimates> out;
+    out.reserve(factor_model_estimates_map.size());
+
+    for (const auto& kv : factor_model_estimates_map) {
+        const std::string& key = kv.first;
+        const FactorModelEstimates& ests = kv.second;
+        FactorModelEstimates res = comp_imputation_components(
+            panel,
+            ests,
+            cohort_outcome_mean_suff_stat_ests,
+            unit_weights_opt,
+            effective_ooi_opt,
+            tol,
+            max_iters,
+            fixed_point_method,
+            num_threads);
+        out.emplace(key, std::move(res));
+    }
+
+    return out;
+}
+
+} // namespace apm

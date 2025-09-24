@@ -368,3 +368,50 @@ TEST(OutcomeImputationTest, ImputationComponents_WithCohortSuff_CovarsAndFixedEf
 		EXPECT_TRUE(arma::approx_equal(L.row(static_cast<arma::uword>(c)), L_exp, "absdiff", 1e-5));
 	}
 }
+
+TEST(OutcomeImputationTest, ImputationComponents_MapDispatch_Simple) {
+    // Build a simple context without covariates; include fixed effects
+    auto ctx = make_staircase_panel_context(/*T=*/6, /*r=*/2, /*T_c=*/3, /*units_per=*/4, /*q=*/0, /*with_covariates=*/false, /*with_fixed_effects=*/true);
+    auto rp = make_raw_panel(ctx);
+
+    std::vector<const double*> covar_cols;      // q = 0
+    std::vector<const double*> auxiliary_cols;  // d = 0
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+    // Parameter-based spec
+    apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, std::nullopt);
+
+    // Direct (single) call result for comparison
+    apm::FactorModelParameters direct = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{}, std::nullopt);
+
+    // Map-based dispatch using estimates overload
+    apm::FactorModelEstimates fme(fmp);
+    std::unordered_map<std::string, apm::FactorModelEstimates> fmap;
+    fmap.emplace("spec1", fme);
+    fmap.emplace("spec2", fme);
+
+    auto out_map = apm::comp_imputation_components(panel, fmap, /*cohort_outcome_mean_suff_stat_ests=*/{}, std::nullopt);
+
+    // Validate both keys present
+    ASSERT_EQ(out_map.size(), static_cast<std::size_t>(2));
+    ASSERT_TRUE(out_map.find("spec1") != out_map.end());
+    ASSERT_TRUE(out_map.find("spec2") != out_map.end());
+
+    // For each, compare to the direct result
+    for (const auto& kv : out_map) {
+        const apm::FactorModelParameters& params = kv.second.parameter_estimates;
+        expect_same_subspace(params.G, direct.G);
+        // g0 present and close to expected projection
+        ASSERT_TRUE(params.g_0.has_value());
+        ASSERT_TRUE(direct.g_0.has_value());
+        EXPECT_TRUE(arma::approx_equal(*params.g_0, *direct.g_0, "absdiff", 1e-6));
+        // no covariates
+        EXPECT_FALSE(params.a.has_value());
+        // L present with expected dimensions
+        ASSERT_TRUE(params.L.has_value());
+        EXPECT_EQ(params.L->n_cols, direct.L->n_cols);
+        EXPECT_EQ(params.L->n_rows, direct.L->n_rows);
+    }
+}
