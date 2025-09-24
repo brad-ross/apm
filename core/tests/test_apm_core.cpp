@@ -243,16 +243,11 @@ TEST(APMTest, ImputeOutcomesAcrossCohorts_FactorsAndCovariates_CommonX) {
         L.row(c) = data.l_c[c].t();
     }
 
-    // Use a common X_c across cohorts to match the imputer API
-    const arma::mat& X_c = data.X_c_vec[0];
-
     arma::mat expected(data.C, data.T);
-    arma::vec Xa = X_c * data.a;
     for (arma::uword c = 0; c < data.C; ++c) {
-        expected.row(c) = (data.G * data.l_c[c] + Xa).t();
+        expected.row(c) = (data.G * data.l_c[c] + data.X_c_vec[c] * data.a).t();
     }
-
-    arma::mat got = apm::impute_outcomes_across_cohorts(data.G, data.a, X_c, L);
+    arma::mat got = apm::impute_outcomes_across_cohorts(data.G, data.a, data.X_c_vec, L);
     ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
 }
 
@@ -264,15 +259,11 @@ TEST(APMTest, ImputeOutcomesAcrossCohorts_AllComponents_CommonX) {
         L.row(c) = data.l_c[c].t();
     }
 
-    const arma::mat& X_c = data.X_c_vec[0];
-    arma::vec Xa = X_c * data.a;
-
     arma::mat expected(data.C, data.T);
     for (arma::uword c = 0; c < data.C; ++c) {
-        expected.row(c) = (data.G * data.l_c[c] + data.g_0 + Xa).t();
+        expected.row(c) = (data.G * data.l_c[c] + data.g_0 + data.X_c_vec[c] * data.a).t();
     }
-
-    arma::mat got = apm::impute_outcomes_across_cohorts(data.G, data.g_0, data.a, X_c, L);
+    arma::mat got = apm::impute_outcomes_across_cohorts(data.G, data.g_0, data.a, data.X_c_vec, L);
     ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
 }
 
@@ -287,13 +278,11 @@ TEST(APMTest, ImputeOutcomesAcrossCohorts_Dispatch_AllComponents) {
     apm::FactorModelParameters params(data.G, data.g_0, data.a);
     params.L = L;
 
-    const arma::mat& X_c = data.X_c_vec[0];
-    arma::mat got = apm::impute_outcomes_across_cohorts(params, X_c);
+    arma::mat got = apm::impute_outcomes_across_cohorts(params, data.X_c_vec);
 
     arma::mat expected(data.C, data.T);
-    arma::vec Xa = X_c * data.a;
     for (arma::uword c = 0; c < data.C; ++c) {
-        expected.row(c) = (data.G * data.l_c[c] + data.g_0 + Xa).t();
+        expected.row(c) = (data.G * data.l_c[c] + data.g_0 + data.X_c_vec[c] * data.a).t();
     }
     ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
 }
@@ -329,13 +318,11 @@ TEST(APMTest, ImputeOutcomesAcrossCohorts_Dispatch_CovariatesOnly) {
     apm::FactorModelParameters params(data.G, std::nullopt, data.a);
     params.L = L;
 
-    const arma::mat& X_c = data.X_c_vec[0];
-    arma::mat got = apm::impute_outcomes_across_cohorts(params, X_c);
+    arma::mat got = apm::impute_outcomes_across_cohorts(params, data.X_c_vec);
 
     arma::mat expected(data.C, data.T);
-    arma::vec Xa = X_c * data.a;
     for (arma::uword c = 0; c < data.C; ++c) {
-        expected.row(c) = (data.G * data.l_c[c] + Xa).t();
+        expected.row(c) = (data.G * data.l_c[c] + data.X_c_vec[c] * data.a).t();
     }
     ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
 }

@@ -187,6 +187,48 @@ arma::vec estimate_all_outcomes(
     const OutcomeMeanSufficientStatistics& outcome_mean_suff_stats);
 
 /**
+ * @brief Impute a single cohort's outcomes from factors and loadings.
+ *
+ * Returns G * lambda.
+ */
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& lambda);
+
+/**
+ * @brief Impute a single cohort's outcomes with fixed effects.
+ *
+ * Returns G * lambda + g_0.
+ */
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& lambda);
+
+/**
+ * @brief Impute a single cohort's outcomes with covariates.
+ *
+ * Returns G * lambda + X_c * a.
+ */
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& a,
+    const arma::mat& X_c,
+    const arma::vec& lambda);
+
+/**
+ * @brief Impute a single cohort's outcomes with fixed effects and covariates.
+ *
+ * Returns G * lambda + g_0 + X_c * a.
+ */
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& a,
+    const arma::mat& X_c,
+    const arma::vec& lambda);
+
+/**
  * @brief Impute cohort outcome means directly from factors and cohort mean loadings.
  *
  * Computes a C x T matrix of cohort-by-outcome means using combinations of:
@@ -209,14 +251,14 @@ arma::mat impute_outcomes_across_cohorts(
 arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::vec& a,
-    const arma::mat& X_c,
+    const std::vector<arma::mat>& X,
     const arma::mat& L);
 
 arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::vec& a,
-    const arma::mat& X_c,
+    const std::vector<arma::mat>& X,
     const arma::mat& L);
 
 /**
@@ -227,7 +269,7 @@ arma::mat impute_outcomes_across_cohorts(
 
 arma::mat impute_outcomes_across_cohorts(
     const FactorModelParameters& factor_model_parameters,
-    const arma::mat& X_c);
+    const std::vector<arma::mat>& X);
 
 //==============================================================================
 // Outcome Mean Estimation Across Cohorts

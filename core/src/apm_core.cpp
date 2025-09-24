@@ -472,29 +472,78 @@ arma::vec estimate_all_outcomes(
     return estimate_all_outcomes(args.G, args.T_c, args.m_c);
 }
 
+// Single-cohort imputation from loadings (lambda)
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& lambda) {
+    return G * lambda;
+}
+
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& lambda) {
+    return G * lambda + g_0;
+}
+
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& a,
+    const arma::mat& X_c,
+    const arma::vec& lambda) {
+    return G * lambda + X_c * a;
+}
+
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& a,
+    const arma::mat& X_c,
+    const arma::vec& lambda) {
+    return G * lambda + g_0 + X_c * a;
+}
+
 arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::mat& L) {
-    return (G * L.t()).t();
+    const arma::uword C = L.n_rows;
+    arma::mat M(C, G.n_rows);
+    for (arma::uword c = 0; c < C; ++c) {
+        arma::vec lambda = L.row(c).t();
+        M.row(c) = impute_outcomes(G, lambda).t();
+    }
+    return M;
 }
 
 arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::mat& L) {
-    arma::mat M = (G * L.t()).t(); // C x T
-    M.each_row() += g_0.t();
+    const arma::uword T = G.n_rows;
+    if (g_0.n_elem != T) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: length of g_0 must match number of rows of G.");
+    }
+    const arma::uword C = L.n_rows;
+    arma::mat M(C, T);
+    for (arma::uword c = 0; c < C; ++c) {
+        arma::vec lambda = L.row(c).t();
+        M.row(c) = impute_outcomes(G, g_0, lambda).t();
+    }
     return M;
 }
 
 arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::vec& a,
-    const arma::mat& X_c,
+    const std::vector<arma::mat>& X,
     const arma::mat& L) {
-    arma::mat M = (G * L.t()).t(); // C x T
-    arma::rowvec Xa = (X_c * a).t();
-    M.each_row() += Xa;
+    const arma::uword T = G.n_rows;
+    const arma::uword C = L.n_rows;
+    arma::mat M(C, T);
+    for (arma::uword c = 0; c < C; ++c) {
+        arma::vec lambda = L.row(c).t();
+        M.row(c) = impute_outcomes(G, a, X[c], lambda).t();
+    }
     return M;
 }
 
@@ -502,12 +551,15 @@ arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::vec& a,
-    const arma::mat& X_c,
+    const std::vector<arma::mat>& X,
     const arma::mat& L) {
-    arma::mat M = (G * L.t()).t(); // C x T
-    M.each_row() += g_0.t();
-    arma::rowvec Xa = (X_c * a).t();
-    M.each_row() += Xa;
+    const arma::uword T = G.n_rows;
+    const arma::uword C = L.n_rows;
+    arma::mat M(C, T);
+    for (arma::uword c = 0; c < C; ++c) {
+        arma::vec lambda = L.row(c).t();
+        M.row(c) = impute_outcomes(G, g_0, a, X[c], lambda).t();
+    }
     return M;
 }
 
@@ -530,7 +582,7 @@ arma::mat impute_outcomes_across_cohorts(
 
 arma::mat impute_outcomes_across_cohorts(
     const FactorModelParameters& params,
-    const arma::mat& X_c) {
+    const std::vector<arma::mat>& X) {
     if (!params.L) {
         throw std::invalid_argument("impute_outcomes_across_cohorts: L is not provided in FactorModelParameters.");
     }
@@ -538,13 +590,13 @@ arma::mat impute_outcomes_across_cohorts(
     const arma::mat& L = *params.L;
 
     if (params.has_fixed_effects() && params.has_covariate_coefs()) {
-        return impute_outcomes_across_cohorts(G, *params.g_0, *params.a, X_c, L);
+        return impute_outcomes_across_cohorts(G, *params.g_0, *params.a, X, L);
     }
     if (params.has_fixed_effects() && !params.has_covariate_coefs()) {
         return impute_outcomes_across_cohorts(G, *params.g_0, L);
     }
     if (!params.has_fixed_effects() && params.has_covariate_coefs()) {
-        return impute_outcomes_across_cohorts(G, *params.a, X_c, L);
+        return impute_outcomes_across_cohorts(G, *params.a, X, L);
     }
     return impute_outcomes_across_cohorts(G, L);
 }
