@@ -201,6 +201,182 @@ TEST(APMTest, EstimateAllOutcomes_Dispatcher_AllComponents) {
     ASSERT_TRUE(arma::approx_equal(via_dispatch, via_raw, "absdiff", 1e-12));
 }
 
+TEST(APMTest, ImputeOutcomesAcrossCohorts_FactorsOnly) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat L(data.C, data.G.n_cols);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        L.row(c) = data.l_c[c].t();
+    }
+
+    arma::mat expected(data.C, data.T);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        expected.row(c) = (data.G * data.l_c[c]).t();
+    }
+
+    arma::mat got = apm::impute_outcomes_across_cohorts(data.G, L);
+    ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
+}
+
+TEST(APMTest, ImputeOutcomesAcrossCohorts_FactorsAndFixedEffects) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat L(data.C, data.G.n_cols);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        L.row(c) = data.l_c[c].t();
+    }
+
+    arma::mat expected(data.C, data.T);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        expected.row(c) = (data.G * data.l_c[c] + data.g_0).t();
+    }
+
+    arma::mat got = apm::impute_outcomes_across_cohorts(data.G, data.g_0, L);
+    ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
+}
+
+TEST(APMTest, ImputeOutcomesAcrossCohorts_FactorsAndCovariates_CommonX) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat L(data.C, data.G.n_cols);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        L.row(c) = data.l_c[c].t();
+    }
+
+    // Use a common X_c across cohorts to match the imputer API
+    const arma::mat& X_c = data.X_c_vec[0];
+
+    arma::mat expected(data.C, data.T);
+    arma::vec Xa = X_c * data.a;
+    for (arma::uword c = 0; c < data.C; ++c) {
+        expected.row(c) = (data.G * data.l_c[c] + Xa).t();
+    }
+
+    arma::mat got = apm::impute_outcomes_across_cohorts(data.G, data.a, X_c, L);
+    ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
+}
+
+TEST(APMTest, ImputeOutcomesAcrossCohorts_AllComponents_CommonX) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat L(data.C, data.G.n_cols);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        L.row(c) = data.l_c[c].t();
+    }
+
+    const arma::mat& X_c = data.X_c_vec[0];
+    arma::vec Xa = X_c * data.a;
+
+    arma::mat expected(data.C, data.T);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        expected.row(c) = (data.G * data.l_c[c] + data.g_0 + Xa).t();
+    }
+
+    arma::mat got = apm::impute_outcomes_across_cohorts(data.G, data.g_0, data.a, X_c, L);
+    ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
+}
+
+TEST(APMTest, ImputeOutcomesAcrossCohorts_Dispatch_AllComponents) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat L(data.C, data.G.n_cols);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        L.row(c) = data.l_c[c].t();
+    }
+
+    apm::FactorModelParameters params(data.G, data.g_0, data.a);
+    params.L = L;
+
+    const arma::mat& X_c = data.X_c_vec[0];
+    arma::mat got = apm::impute_outcomes_across_cohorts(params, X_c);
+
+    arma::mat expected(data.C, data.T);
+    arma::vec Xa = X_c * data.a;
+    for (arma::uword c = 0; c < data.C; ++c) {
+        expected.row(c) = (data.G * data.l_c[c] + data.g_0 + Xa).t();
+    }
+    ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
+}
+
+TEST(APMTest, ImputeOutcomesAcrossCohorts_Dispatch_FixedEffectsOnly) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat L(data.C, data.G.n_cols);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        L.row(c) = data.l_c[c].t();
+    }
+
+    apm::FactorModelParameters params(data.G, data.g_0, std::nullopt);
+    params.L = L;
+
+    arma::mat got = apm::impute_outcomes_across_cohorts(params);
+
+    arma::mat expected(data.C, data.T);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        expected.row(c) = (data.G * data.l_c[c] + data.g_0).t();
+    }
+    ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
+}
+
+TEST(APMTest, ImputeOutcomesAcrossCohorts_Dispatch_CovariatesOnly) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat L(data.C, data.G.n_cols);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        L.row(c) = data.l_c[c].t();
+    }
+
+    apm::FactorModelParameters params(data.G, std::nullopt, data.a);
+    params.L = L;
+
+    const arma::mat& X_c = data.X_c_vec[0];
+    arma::mat got = apm::impute_outcomes_across_cohorts(params, X_c);
+
+    arma::mat expected(data.C, data.T);
+    arma::vec Xa = X_c * data.a;
+    for (arma::uword c = 0; c < data.C; ++c) {
+        expected.row(c) = (data.G * data.l_c[c] + Xa).t();
+    }
+    ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
+}
+
+TEST(APMTest, ImputeOutcomesAcrossCohorts_Dispatch_FactorsOnly) {
+    auto data = setup_estimation_test_data();
+
+    arma::mat L(data.C, data.G.n_cols);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        L.row(c) = data.l_c[c].t();
+    }
+
+    apm::FactorModelParameters params(data.G, std::nullopt, std::nullopt);
+    params.L = L;
+
+    arma::mat got = apm::impute_outcomes_across_cohorts(params);
+
+    arma::mat expected(data.C, data.T);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        expected.row(c) = (data.G * data.l_c[c]).t();
+    }
+    ASSERT_TRUE(arma::approx_equal(got, expected, "absdiff", 1e-12));
+}
+
+TEST(APMTest, ImputeOutcomesAcrossCohorts_Dispatch_Errors) {
+    auto data = setup_estimation_test_data();
+
+    // Missing L should throw
+    apm::FactorModelParameters params_no_L(data.G, data.g_0, std::nullopt);
+    EXPECT_THROW({ (void)apm::impute_outcomes_across_cohorts(params_no_L); }, std::invalid_argument);
+
+    // Has a but no X_c provided should throw
+    arma::mat L(data.C, data.G.n_cols);
+    for (arma::uword c = 0; c < data.C; ++c) {
+        L.row(c) = data.l_c[c].t();
+    }
+    apm::FactorModelParameters params_need_X(data.G, std::nullopt, data.a);
+    params_need_X.L = L;
+    EXPECT_THROW({ (void)apm::impute_outcomes_across_cohorts(params_need_X); }, std::invalid_argument);
+}
+
 TEST(APMTest, AlignFactorsAPMNonContiguousPattern) {
     // T=5 (max outcome index is 4), r=2.
     arma::mat true_factors = {

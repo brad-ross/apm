@@ -186,6 +186,49 @@ arma::vec estimate_all_outcomes(
     const arma::uvec& T_c,
     const OutcomeMeanSufficientStatistics& outcome_mean_suff_stats);
 
+/**
+ * @brief Impute cohort outcome means directly from factors and cohort mean loadings.
+ *
+ * Computes a C x T matrix of cohort-by-outcome means using combinations of:
+ * - G (T x r) factor matrix
+ * - L (C x r) cohort mean loadings
+ * - optional g_0 (T) outcome fixed effects, broadcast across cohorts
+ * - optional X_c (T x q) and a (q) covariate term, broadcast across cohorts
+ *
+ * Returns (G * L.t()).t() with optional addends broadcasted row-wise.
+ */
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::mat& L);
+
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::mat& L);
+
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& a,
+    const arma::mat& X_c,
+    const arma::mat& L);
+
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& a,
+    const arma::mat& X_c,
+    const arma::mat& L);
+
+/**
+ * @brief Dispatch overloads using FactorModelParameters; uses params.L and throws if absent.
+ */
+arma::mat impute_outcomes_across_cohorts(
+    const FactorModelParameters& factor_model_parameters);
+
+arma::mat impute_outcomes_across_cohorts(
+    const FactorModelParameters& factor_model_parameters,
+    const arma::mat& X_c);
+
 //==============================================================================
 // Outcome Mean Estimation Across Cohorts
 //==============================================================================

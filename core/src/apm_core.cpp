@@ -472,6 +472,83 @@ arma::vec estimate_all_outcomes(
     return estimate_all_outcomes(args.G, args.T_c, args.m_c);
 }
 
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::mat& L) {
+    return (G * L.t()).t();
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::mat& L) {
+    arma::mat M = (G * L.t()).t(); // C x T
+    M.each_row() += g_0.t();
+    return M;
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& a,
+    const arma::mat& X_c,
+    const arma::mat& L) {
+    arma::mat M = (G * L.t()).t(); // C x T
+    arma::rowvec Xa = (X_c * a).t();
+    M.each_row() += Xa;
+    return M;
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& a,
+    const arma::mat& X_c,
+    const arma::mat& L) {
+    arma::mat M = (G * L.t()).t(); // C x T
+    M.each_row() += g_0.t();
+    arma::rowvec Xa = (X_c * a).t();
+    M.each_row() += Xa;
+    return M;
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const FactorModelParameters& params) {
+    if (!params.L) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: L is not provided in FactorModelParameters.");
+    }
+    const arma::mat& G = params.G;
+    const arma::mat& L = *params.L;
+
+    if (params.has_covariate_coefs()) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: X_c is required when covariate coefficients a are present.");
+    }
+    if (params.has_fixed_effects()) {
+        return impute_outcomes_across_cohorts(G, *params.g_0, L);
+    }
+    return impute_outcomes_across_cohorts(G, L);
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const FactorModelParameters& params,
+    const arma::mat& X_c) {
+    if (!params.L) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: L is not provided in FactorModelParameters.");
+    }
+    const arma::mat& G = params.G;
+    const arma::mat& L = *params.L;
+
+    if (params.has_fixed_effects() && params.has_covariate_coefs()) {
+        return impute_outcomes_across_cohorts(G, *params.g_0, *params.a, X_c, L);
+    }
+    if (params.has_fixed_effects() && !params.has_covariate_coefs()) {
+        return impute_outcomes_across_cohorts(G, *params.g_0, L);
+    }
+    if (!params.has_fixed_effects() && params.has_covariate_coefs()) {
+        return impute_outcomes_across_cohorts(G, *params.a, X_c, L);
+    }
+    return impute_outcomes_across_cohorts(G, L);
+}
+
 //==============================================================================
 // Outcome Mean Estimation Across Cohorts
 //==============================================================================
