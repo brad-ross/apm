@@ -114,7 +114,7 @@ arma::vec aggregate_cohort_specific_outcome_fes(
 //' @return A T-dimensional vector containing the estimated outcomes for the representative unit.
 //' @export
 // [[Rcpp::export]]
-arma::vec estimate_all_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const arma::mat& G,
     const arma::uvec& T_c,
     const arma::vec& m_c,
@@ -138,16 +138,16 @@ arma::vec estimate_all_outcomes(
         arma::vec g_0_cpp = Rcpp::as<arma::vec>(g_0);
         arma::vec a_cpp = Rcpp::as<arma::vec>(a);
         arma::mat X_c_cpp = Rcpp::as<arma::mat>(X_c);
-        return apm::estimate_all_outcomes(G, g_0_cpp, a_cpp, T_c_zero_based, m_c, X_c_cpp);
+        return apm::impute_outcomes_from_obs_outcomes(G, g_0_cpp, a_cpp, T_c_zero_based, m_c, X_c_cpp);
     } else if (has_g0) {
         arma::vec g_0_cpp = Rcpp::as<arma::vec>(g_0);
-        return apm::estimate_all_outcomes(G, g_0_cpp, T_c_zero_based, m_c);
+        return apm::impute_outcomes_from_obs_outcomes(G, g_0_cpp, T_c_zero_based, m_c);
     } else if (has_a) {
         arma::vec a_cpp = Rcpp::as<arma::vec>(a);
         arma::mat X_c_cpp = Rcpp::as<arma::mat>(X_c);
-        return apm::estimate_all_outcomes(G, a_cpp, T_c_zero_based, m_c, X_c_cpp);
+        return apm::impute_outcomes_from_obs_outcomes(G, a_cpp, T_c_zero_based, m_c, X_c_cpp);
     } else {
-        return apm::estimate_all_outcomes(G, T_c_zero_based, m_c);
+        return apm::impute_outcomes_from_obs_outcomes(G, T_c_zero_based, m_c);
     }
 }
 
@@ -166,7 +166,7 @@ arma::vec estimate_all_outcomes(
 //' @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
 //' @export
 // [[Rcpp::export]]
-arma::mat estimate_outcome_means_across_cohorts_raw(
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     Rcpp::List observed_outcome_indices,
     Rcpp::List m_c_vec,
@@ -199,10 +199,10 @@ arma::mat estimate_outcome_means_across_cohorts_raw(
         for (SEXP mat : r_X_c_vec) {
             cpp_X_c_vec.push_back(Rcpp::as<arma::mat>(mat));
         }
-        return apm::estimate_outcome_means_across_cohorts(G, g_0_cpp, a_cpp, cpp_observed_outcome_indices, cpp_m_c_vec, cpp_X_c_vec);
+        return apm::impute_outcomes_across_cohorts_from_obs_outcomes(G, g_0_cpp, a_cpp, cpp_observed_outcome_indices, cpp_m_c_vec, cpp_X_c_vec);
     } else if (has_g0) {
         arma::vec g_0_cpp = Rcpp::as<arma::vec>(g_0);
-        return apm::estimate_outcome_means_across_cohorts(G, g_0_cpp, cpp_observed_outcome_indices, cpp_m_c_vec);
+        return apm::impute_outcomes_across_cohorts_from_obs_outcomes(G, g_0_cpp, cpp_observed_outcome_indices, cpp_m_c_vec);
     } else if (has_a) {
         arma::vec a_cpp = Rcpp::as<arma::vec>(a);
         std::vector<arma::mat> cpp_X_c_vec;
@@ -210,11 +210,11 @@ arma::mat estimate_outcome_means_across_cohorts_raw(
         for (SEXP mat : r_X_c_vec) {
             cpp_X_c_vec.push_back(Rcpp::as<arma::mat>(mat));
         }
-        return apm::estimate_outcome_means_across_cohorts(G, a_cpp, cpp_observed_outcome_indices, cpp_m_c_vec, cpp_X_c_vec);
+        return apm::impute_outcomes_across_cohorts_from_obs_outcomes(G, a_cpp, cpp_observed_outcome_indices, cpp_m_c_vec, cpp_X_c_vec);
     } else {
-        return apm::estimate_outcome_means_across_cohorts(G, cpp_observed_outcome_indices, cpp_m_c_vec);
+        return apm::impute_outcomes_across_cohorts_from_obs_outcomes(G, cpp_observed_outcome_indices, cpp_m_c_vec);
     }
-} 
+}
 
 //' Implements the Observed Outcome Overlap (O^3) algorithm to assess factor identification.
 //'

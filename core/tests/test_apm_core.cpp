@@ -35,7 +35,7 @@ TEST(APMTest, EstimateMeans_FactorsCovariatesFixedEffects) {
         arma::vec(true_m.row(1).t()).elem(data.observed_outcome_indices[1])
     };
 
-    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+    arma::mat estimated_m = apm::impute_outcomes_across_cohorts_from_obs_outcomes(
         data.G, data.g_0, data.a, data.observed_outcome_indices, m_c_vec, data.X_c_vec);
 
     ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
@@ -53,7 +53,7 @@ TEST(APMTest, EstimateMeans_FactorsAndFixedEffects) {
         arma::vec(true_m.row(1).t()).elem(data.observed_outcome_indices[1])
     };
 
-    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+    arma::mat estimated_m = apm::impute_outcomes_across_cohorts_from_obs_outcomes(
         data.G, data.g_0, data.observed_outcome_indices, m_c_vec);
 
     ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
@@ -71,7 +71,7 @@ TEST(APMTest, EstimateMeans_FactorsAndCovariates) {
         arma::vec(true_m.row(1).t()).elem(data.observed_outcome_indices[1])
     };
 
-    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+    arma::mat estimated_m = apm::impute_outcomes_across_cohorts_from_obs_outcomes(
         data.G, data.a, data.observed_outcome_indices, m_c_vec, data.X_c_vec);
 
     ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
@@ -89,7 +89,7 @@ TEST(APMTest, EstimateMeans_FactorsOnly) {
         arma::vec(true_m.row(1).t()).elem(data.observed_outcome_indices[1])
     };
 
-    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+    arma::mat estimated_m = apm::impute_outcomes_across_cohorts_from_obs_outcomes(
         data.G, data.observed_outcome_indices, m_c_vec);
 
     ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
@@ -111,7 +111,7 @@ TEST(APMTest, EstimateMeans_ParamsAndSuffStats_AllComponents) {
         suff_stats_vec.emplace_back(m_c, data.X_c_vec[c]);
     }
 
-    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+    arma::mat estimated_m = apm::impute_outcomes_across_cohorts_from_obs_outcomes(
         params, data.observed_outcome_indices, suff_stats_vec);
 
     ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
@@ -133,7 +133,7 @@ TEST(APMTest, EstimateMeans_ParamsAndSuffStats_FixedEffectsOnly) {
         suff_stats_vec.emplace_back(m_c, std::nullopt);
     }
 
-    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+    arma::mat estimated_m = apm::impute_outcomes_across_cohorts_from_obs_outcomes(
         params, data.observed_outcome_indices, suff_stats_vec);
 
     ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
@@ -155,7 +155,7 @@ TEST(APMTest, EstimateMeans_ParamsAndSuffStats_CovariatesOnly) {
         suff_stats_vec.emplace_back(m_c, data.X_c_vec[c]);
     }
 
-    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+    arma::mat estimated_m = apm::impute_outcomes_across_cohorts_from_obs_outcomes(
         params, data.observed_outcome_indices, suff_stats_vec);
 
     ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
@@ -177,7 +177,7 @@ TEST(APMTest, EstimateMeans_ParamsAndSuffStats_FactorsOnly) {
         suff_stats_vec.emplace_back(m_c, std::nullopt);
     }
 
-    arma::mat estimated_m = apm::estimate_outcome_means_across_cohorts(
+    arma::mat estimated_m = apm::impute_outcomes_across_cohorts_from_obs_outcomes(
         params, data.observed_outcome_indices, suff_stats_vec);
 
     ASSERT_TRUE(arma::approx_equal(estimated_m, true_m, "absdiff", 1e-9));
@@ -195,8 +195,8 @@ TEST(APMTest, EstimateAllOutcomes_Dispatcher_AllComponents) {
     arma::vec m_c = m_full.elem(T_c);
     apm::OutcomeMeanSufficientStatistics stats(m_c, data.X_c_vec[c]);
 
-    arma::vec via_dispatch = apm::estimate_all_outcomes(params, T_c, stats);
-    arma::vec via_raw = apm::estimate_all_outcomes(data.G, data.g_0, data.a, T_c, m_c, data.X_c_vec[c]);
+    arma::vec via_dispatch = apm::impute_outcomes_from_obs_outcomes(params, T_c, stats);
+    arma::vec via_raw = apm::impute_outcomes_from_obs_outcomes(data.G, data.g_0, data.a, T_c, m_c, data.X_c_vec[c]);
 
     ASSERT_TRUE(arma::approx_equal(via_dispatch, via_raw, "absdiff", 1e-12));
 }

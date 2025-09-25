@@ -113,7 +113,7 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
  * @param X_c A T x q matrix containing the values of q covariates corresponding to each outcome for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
-arma::vec estimate_all_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::vec& a,
@@ -129,7 +129,7 @@ arma::vec estimate_all_outcomes(
  * @param m_c A vector containing the observed outcomes for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
-arma::vec estimate_all_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::uvec& T_c,
@@ -144,7 +144,7 @@ arma::vec estimate_all_outcomes(
  * @param X_c A T x q matrix containing the values of q covariates corresponding to each outcome for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
-arma::vec estimate_all_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& a,
     const arma::uvec& T_c,
@@ -158,7 +158,7 @@ arma::vec estimate_all_outcomes(
  * @param m_c A vector containing the observed outcomes for the representative unit.
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
-arma::vec estimate_all_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const arma::mat& G,
     const arma::uvec& T_c,
     const arma::vec& m_c);
@@ -181,7 +181,7 @@ arma::vec estimate_all_outcomes(
  *                                (length T_c) and optional covar_means (T x q).
  * @return A T-dimensional vector containing the estimated outcomes for the representative unit.
  */
-arma::vec estimate_all_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const FactorModelParameters& factor_model_parameters,
     const arma::uvec& T_c,
     const OutcomeMeanSufficientStatistics& outcome_mean_suff_stats);
@@ -285,7 +285,7 @@ arma::mat impute_outcomes_across_cohorts(
  * @param X_c_vec A vector of T x q matrices, where each matrix X_c contains the average values of q covariates for each outcome within a cohort.
  * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
  */
-arma::mat estimate_outcome_means_across_cohorts(
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::vec& a,
@@ -301,7 +301,7 @@ arma::mat estimate_outcome_means_across_cohorts(
  * @param m_c_vec A vector of arma::vec, where each vector m_c contains the observed outcomes for a cohort.
  * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
  */
-arma::mat estimate_outcome_means_across_cohorts(
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
     const ObservedOutcomeIndices& observed_outcome_indices,
@@ -316,7 +316,7 @@ arma::mat estimate_outcome_means_across_cohorts(
  * @param X_c_vec A vector of T x q matrices, where each matrix X_c contains the average values of q covariates for each outcome within a cohort.
  * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
  */
-arma::mat estimate_outcome_means_across_cohorts(
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& a,
     const ObservedOutcomeIndices& observed_outcome_indices,
@@ -330,7 +330,7 @@ arma::mat estimate_outcome_means_across_cohorts(
  * @param m_c_vec A vector of arma::vec, where each vector m_c contains the observed outcomes for a cohort.
  * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
  */
-arma::mat estimate_outcome_means_across_cohorts(
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec);
@@ -349,6 +349,15 @@ arma::mat estimate_outcome_means_across_cohorts(
  * @param suff_stats_vec A vector of `apm::OutcomeMeanSufficientStatistics`, one per cohort, each
  *                       with observed_outcome_means (length T_c) and optional covar_means (T x q).
  * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
+ */
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
+    const FactorModelParameters& factor_model_parameters,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::vector<OutcomeMeanSufficientStatistics>& suff_stats_vec);
+
+/**
+ * @brief Convenience dispatcher: if L is present in parameters, use impute_outcomes_across_cohorts;
+ *        otherwise impute from observed outcomes via impute_outcomes_across_cohorts_from_obs_outcomes.
  */
 arma::mat estimate_outcome_means_across_cohorts(
     const FactorModelParameters& factor_model_parameters,
