@@ -55,5 +55,71 @@ Rcpp::List masked_means_to_r_list(const std::unordered_map<int, apm::OutcomeMean
     return masked_means;
 }
 
+// Convert est_specs: named list → unordered_map<string, EstimatorSpecification>
+std::unordered_map<std::string, apm::EstimatorSpecification> to_cpp_specs(const Rcpp::List& est_specs_r) {
+    std::unordered_map<std::string, apm::EstimatorSpecification> out;
+    SEXP nmSxp = Rf_getAttrib(est_specs_r, R_NamesSymbol);
+    const bool has_names = (nmSxp != R_NilValue);
+    Rcpp::CharacterVector nm;
+    if (has_names) nm = Rcpp::CharacterVector(nmSxp);
+    for (int i = 0; i < est_specs_r.size(); ++i) {
+        Rcpp::List sp = est_specs_r[i];
+        apm::EstimatorSpecification csp;
+        csp.factor_model_estimator = Rcpp::as<std::string>(sp["factor_model_estimator"]);
+        csp.include_outcome_fes = Rcpp::as<bool>(sp["include_outcome_fes"]);
+        csp.r = static_cast<std::size_t>(Rcpp::as<int>(sp["r"]));
+        if (sp.containsElementNamed("cohort_weighting")) {
+            csp.cohort_weighting = Rcpp::as<std::string>(sp["cohort_weighting"]);
+        }
+        std::string key = has_names ? std::string(Rcpp::as<std::string>(nm[i])) : std::string("spec_") + std::to_string(i + 1);
+        out.emplace(std::move(key), std::move(csp));
+    }
+    return out;
+}
+
+// Convert mask R list (names = cohort ids 1-based, values = integer vectors 1-based outcomes) to C++ 0-based
+apm::CohortOutcomeMask to_cpp_mask(Rcpp::Nullable<Rcpp::List> mask_in) {
+    apm::CohortOutcomeMask out;
+    if (mask_in.isNull()) return out;
+    Rcpp::List L(mask_in);
+    if (L.size() == 0) return out;
+    Rcpp::CharacterVector nms = Rcpp::as<Rcpp::CharacterVector>(L.names());
+    for (int i = 0; i < L.size(); ++i) {
+        std::string s = Rcpp::as<std::string>(nms[i]);
+        int cohort1 = std::stoi(s);
+        int cohort0 = cohort1 - 1;
+        Rcpp::IntegerVector v = L[i];
+        arma::uvec vv(static_cast<arma::uword>(v.size()));
+        for (int j = 0; j < v.size(); ++j) {
+            if (Rcpp::IntegerVector::is_na(v[j]) || v[j] <= 0) Rcpp::stop("mask outcome ids must be positive integers");
+            vv[static_cast<arma::uword>(j)] = static_cast<arma::uword>(v[j] - 1);
+        }
+        out.emplace(cohort0, std::move(vv));
+    }
+    return out;
+}
+
+std::pair<bool, std::size_t> resolve_num_threads(Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in) {
+    if (num_threads_in.isNotNull()) {
+        Rcpp::IntegerVector nt(num_threads_in);
+        std::size_t num_threads = 1;
+        if (nt.size() > 0 && !Rcpp::IntegerVector::is_na(nt[0])) {
+            num_threads = static_cast<std::size_t>(std::max(1, static_cast<int>(nt[0])));
+        }
+        return {true, num_threads};
+    }
+    return {false, 0};
+}
+
+const apm::InMemoryUnbalancedPanel& panel_ref_from_panel_holder(SEXP panel_holder_xptr) {
+    Rcpp::XPtr<PanelHolder> ph(panel_holder_xptr);
+    return ph->panel;
+}
+
+apm::ObservedOutcomeIndices observed_outcome_indices_from_panel_holder(SEXP panel_holder_xptr) {
+    Rcpp::XPtr<PanelHolder> ph(panel_holder_xptr);
+    return ph->panel.observed_outcome_indices();
+}
+
 } // namespace r_utils
 } // namespace apm

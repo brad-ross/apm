@@ -3,10 +3,8 @@
 #include <string>
 #include <set>
 #include "r_utils.h"
-#include "cohort_specific_estimates_helpers.h"
 #include "../../core/src/est_outcome_means.h"
 #include "../../core/src/utils.h"
-#include "../../core/src/agg_cohort_specific_factor_model_params.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
@@ -74,84 +72,6 @@ Rcpp::List estimate_outcome_means_across_cohorts_by_spec_cpp(
     return out;
 }
 
-//------------------------------------------------------------------------------
-// End-to-end: estimate target parameter components from panel (by spec)
-//------------------------------------------------------------------------------
-
-// [[Rcpp::export]]
-Rcpp::List est_target_param_components_from_panel_cpp(
-    SEXP panel_holder_xptr,
-    Rcpp::List est_specs,
-    SEXP bootstrap_xptr = R_NilValue,
-    Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue,
-    Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue)
-{
-    // 1) Cohort-specific estimates (raw C++) via panel-holder core
-    apm::CohortSpecificEstimates ests = cohort_specific_estimates_from_panel_cpp_core(
-        panel_holder_xptr,
-        est_specs,
-        bootstrap_xptr,
-        num_threads_in,
-        cohort_outcomes_to_mask_in
-    );
-
-    // 2) Observed outcome indices (prefer masked if present)
-    const apm::ObservedOutcomeIndices obs_idx_panel = observed_outcome_indices_from_panel_holder(panel_holder_xptr);
-    const apm::ObservedOutcomeIndices& obs_idx_eff = ests.masked_observed_outcome_indices.has_value()
-        ? *ests.masked_observed_outcome_indices
-        : obs_idx_panel;
-
-    // 3) Aggregate factor model params by spec (use obs_idx_eff)
-    std::unordered_map<std::string, apm::FactorModelEstimates> agg_by_spec =
-        apm::aggregate_cohort_specific_factor_model_params(
-            ests.cohort_specific_factor_ests,
-            obs_idx_eff,
-            ests.cohort_weights);
-
-    // 4) Estimate outcome means by spec (use obs_idx_eff)
-    std::unordered_map<std::string, apm::OutcomeMeansEstimates> ome_by_spec =
-        apm::estimate_outcome_means_across_cohorts(
-            agg_by_spec,
-            obs_idx_eff,
-            ests.cohort_outcome_mean_ests);
-
-    // 5) Build return list with outcome_means (by spec) and optional auxiliary_means (by cohort)
-    Rcpp::List ome_out(static_cast<int>(ome_by_spec.size()));
-    Rcpp::CharacterVector names(static_cast<int>(ome_by_spec.size()));
-    int k = 0;
-    for (auto& kv : ome_by_spec) {
-        names[k] = kv.first;
-        ome_out[k] = make_xptr(std::move(kv.second));
-        ++k;
-    }
-    ome_out.attr("names") = names;
-
-    Rcpp::RObject aux_out = R_NilValue;
-    if (!ests.cohort_auxiliary_means.empty()) {
-        Rcpp::List aux_list(static_cast<int>(ests.cohort_auxiliary_means.size()));
-        for (int i = 0; i < static_cast<int>(ests.cohort_auxiliary_means.size()); ++i) {
-            aux_list[i] = make_xptr(apm::CohortAuxiliaryDataMeanEstimates(ests.cohort_auxiliary_means[static_cast<std::size_t>(i)]));
-        }
-        aux_out = aux_list;
-    }
-
-    // Build final list with required fields
-    Rcpp::List final(2);
-    final["outcome_means"] = ome_out;
-    final["auxiliary_means"] = aux_out;
-
-    // Attach masked outputs if present (mirror cohort-specific bindings)
-    if (ests.masked_observed_outcome_indices.has_value()) {
-        final.push_back(apm::r_utils::to_r_observed_outcome_indices(*ests.masked_observed_outcome_indices),
-                        "masked_observed_outcome_indices");
-    }
-    if (!ests.masked_cohort_outcome_means.empty()) {
-        final.push_back(apm::r_utils::masked_means_to_r_list(ests.masked_cohort_outcome_means),
-                        "masked_cohort_outcome_means");
-    }
-
-    return final;
-}
 
 //------------------------------------------------------------------------------
 // oneTBB helpers

@@ -18,4 +18,7 @@ apm::CohortSpecificEstimates cohort_specific_estimates_from_panel_cpp_core(
 // Access observed_outcome_indices (0-based) from a panel holder XPtr
 apm::ObservedOutcomeIndices observed_outcome_indices_from_panel_holder(SEXP panel_holder_xptr);
 
+// Access underlying panel reference from a panel holder XPtr
+const apm::InMemoryUnbalancedPanel& panel_ref_from_panel_holder(SEXP panel_holder_xptr);
+
 #endif // APM_COHORT_SPECIFIC_ESTIMATES_HELPERS_H

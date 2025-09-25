@@ -8,6 +8,7 @@
 #include "../../core/src/target_params/est_target_params.h"
 #include "../../core/src/est_outcome_means.h"
 #include "../../core/src/cohort_specific_param_structs.h"
+#include "cohort_specific_estimates_helpers.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
@@ -211,4 +212,59 @@ std::unordered_map<std::string, OutcomeMeansEstimates> ome_map;
     return out;
 }
 
+//------------------------------------------------------------------------------
+// End-to-end: estimate target parameter components from panel (by spec)
+//------------------------------------------------------------------------------
 
+// [[Rcpp::export]]
+Rcpp::List est_target_param_components_from_panel_cpp(
+    SEXP panel_holder_xptr,
+    Rcpp::List est_specs,
+    SEXP bootstrap_xptr = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue)
+{
+    const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
+    auto cpp_specs = apm::r_utils::to_cpp_specs(est_specs);
+    auto wb = apm::r_utils::xp_to_const_wb_shared(bootstrap_xptr);
+    std::optional<std::size_t> nt_opt = std::nullopt; {
+        auto p = apm::r_utils::resolve_num_threads(num_threads_in);
+        if (p.first) nt_opt = p.second;
+    }
+    apm::CohortOutcomeMask mask = apm::r_utils::to_cpp_mask(cohort_outcomes_to_mask_in);
+
+    apm::TargetParamComponents comps = apm::est_target_param_components_from_panel(
+        panel, cpp_specs, wb, nt_opt, mask);
+
+    Rcpp::List ome_out(static_cast<int>(comps.outcome_means_by_spec.size()));
+    Rcpp::CharacterVector names(static_cast<int>(comps.outcome_means_by_spec.size()));
+    int k = 0;
+    for (auto& kv : comps.outcome_means_by_spec) {
+        names[k] = kv.first;
+        ome_out[k] = make_xptr(std::move(kv.second));
+        ++k;
+    }
+    ome_out.attr("names") = names;
+
+    Rcpp::RObject aux_out = R_NilValue;
+    if (!comps.cohort_auxiliary_means.empty()) {
+        Rcpp::List aux_list(static_cast<int>(comps.cohort_auxiliary_means.size()));
+        for (int i = 0; i < static_cast<int>(comps.cohort_auxiliary_means.size()); ++i) {
+            aux_list[i] = make_xptr(apm::CohortAuxiliaryDataMeanEstimates(comps.cohort_auxiliary_means[static_cast<std::size_t>(i)]));
+        }
+        aux_out = aux_list;
+    }
+
+    Rcpp::List final(2);
+    final["outcome_means"] = ome_out;
+    final["auxiliary_means"] = aux_out;
+    if (comps.masked_observed_outcome_indices.has_value()) {
+        final.push_back(apm::r_utils::to_r_observed_outcome_indices(*comps.masked_observed_outcome_indices),
+                        "masked_observed_outcome_indices");
+    }
+    if (!comps.masked_cohort_outcome_means.empty()) {
+        final.push_back(apm::r_utils::masked_means_to_r_list(comps.masked_cohort_outcome_means),
+                        "masked_cohort_outcome_means");
+    }
+    return final;
+}

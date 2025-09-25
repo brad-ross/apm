@@ -9,6 +9,10 @@
 #include <oneapi/tbb/global_control.h>
 #endif
 
+#include "../agg_cohort_specific_factor_model_params.h"
+#include "../est_outcome_means.h"
+#include "../panels/InMemoryUnbalancedPanel.h"
+
 namespace apm {
 
 static std::vector<CohortAuxiliaryDataMeans>
@@ -106,6 +110,50 @@ std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
         out.emplace(key, est_target_params(ome, stats_vec, eta_vec, fn, num_threads));
     }
     return out;
+}
+
+TargetParamComponents est_target_param_components_from_panel(
+    const InMemoryUnbalancedPanel& panel,
+    const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
+    std::shared_ptr<const WeightedBootstrap> bootstrap,
+    std::optional<std::size_t> num_threads,
+    const CohortOutcomeMask& cohort_outcomes_to_mask)
+{
+    // 1) Cohort-specific estimates (raw C++) via panel-based core
+    CohortSpecificEstimates ests = estimate_cohort_specific_params_from_internal_panel_rep(
+        panel,
+        est_specs,
+        bootstrap,
+        num_threads,
+        cohort_outcomes_to_mask);
+
+    // 2) Observed outcome indices (prefer masked if present)
+    const ObservedOutcomeIndices obs_idx_panel = panel.observed_outcome_indices();
+    const ObservedOutcomeIndices& obs_idx_eff = ests.masked_observed_outcome_indices.has_value()
+        ? *ests.masked_observed_outcome_indices
+        : obs_idx_panel;
+
+    // 3) Aggregate factor model params by spec (use obs_idx_eff)
+    std::unordered_map<std::string, FactorModelEstimates> agg_by_spec =
+        aggregate_cohort_specific_factor_model_params(
+            ests.cohort_specific_factor_ests,
+            obs_idx_eff,
+            ests.cohort_weights);
+
+    // 4) Estimate outcome means by spec (use obs_idx_eff)
+    std::unordered_map<std::string, OutcomeMeansEstimates> ome_by_spec =
+        estimate_outcome_means_across_cohorts(
+            agg_by_spec,
+            obs_idx_eff,
+            ests.cohort_outcome_mean_ests);
+
+    TargetParamComponents res;
+    res.outcome_means_by_spec = std::move(ome_by_spec);
+    res.cohort_outcome_mean_ests = std::move(ests.cohort_outcome_mean_ests);
+    res.cohort_auxiliary_means = std::move(ests.cohort_auxiliary_means);
+    res.masked_cohort_outcome_means = std::move(ests.masked_cohort_outcome_means);
+    res.masked_observed_outcome_indices = std::move(ests.masked_observed_outcome_indices);
+    return res;
 }
 
 } // namespace apm

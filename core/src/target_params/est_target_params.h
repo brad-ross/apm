@@ -18,6 +18,7 @@
 
 #include "est_outcome_means.h"
 #include "cohort_specific_param_structs.h"
+#include "est_cohort_specific_params.h"
 
 namespace apm {
 
@@ -53,6 +54,26 @@ std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
     const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
     const TargetFn& fn,
     std::optional<std::size_t> num_threads = std::nullopt);
+
+//------------------------------------------------------------------------------
+// End-to-end components from panel (used by R bindings)
+//------------------------------------------------------------------------------
+
+struct TargetParamComponents {
+    std::unordered_map<std::string, OutcomeMeansEstimates> outcome_means_by_spec;
+    std::vector<OutcomeMeanSuffStatEstimates> cohort_outcome_mean_ests;
+    std::vector<CohortAuxiliaryDataMeanEstimates> cohort_auxiliary_means;
+    std::unordered_map<int, OutcomeMeanSufficientStatistics> masked_cohort_outcome_means;
+    std::optional<ObservedOutcomeIndices> masked_observed_outcome_indices;
+};
+
+class InMemoryUnbalancedPanel; // fwd
+TargetParamComponents est_target_param_components_from_panel(
+    const InMemoryUnbalancedPanel& panel,
+    const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
+    std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
+    std::optional<std::size_t> num_threads = std::nullopt,
+    const CohortOutcomeMask& cohort_outcomes_to_mask = CohortOutcomeMask());
 
 } // namespace apm
 
