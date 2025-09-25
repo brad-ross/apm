@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "panels/AbstractUnbalancedPanel.h"
+#include "panels/InMemoryUnbalancedPanel.h"
 #include "cohort_specific_param_structs.h"
 #include "utils.h"
 #include "outcome_imputation_helpers.h"
@@ -20,7 +21,7 @@ namespace apm {
 
 // High-level orchestration that returns G, optional a, g_0, and L
 FactorModelParameters comp_imputation_components(
-    const AbstractUnbalancedPanel& panel,
+    const InMemoryUnbalancedPanel& panel,
     const FactorModelParameters& factor_model_params,
     const std::vector<OutcomeMeanSufficientStatistics>& cohort_outcome_mean_suff_stats = std::vector<OutcomeMeanSufficientStatistics>(),
     std::optional<arma::vec> unit_weights_opt = std::nullopt,
@@ -31,7 +32,7 @@ FactorModelParameters comp_imputation_components(
 
 // Overload that accepts FactorModelEstimates and OutcomeMeanSuffStatEstimates, with optional parallelization
 FactorModelEstimates comp_imputation_components(
-    const AbstractUnbalancedPanel& panel,
+    const InMemoryUnbalancedPanel& panel,
     const FactorModelEstimates& factor_model_ests,
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests = std::vector<OutcomeMeanSuffStatEstimates>(),
     std::optional<arma::vec> unit_weights_opt = std::nullopt,
@@ -43,7 +44,7 @@ FactorModelEstimates comp_imputation_components(
 
 // Map-of-estimators overload (dispatches per key)
 std::unordered_map<std::string, FactorModelEstimates> comp_imputation_components(
-    const AbstractUnbalancedPanel& panel,
+    const InMemoryUnbalancedPanel& panel,
     const std::unordered_map<std::string, FactorModelEstimates>& factor_model_estimates_map,
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests = std::vector<OutcomeMeanSuffStatEstimates>(),
     std::optional<arma::vec> unit_weights_opt = std::nullopt,

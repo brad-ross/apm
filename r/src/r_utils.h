@@ -49,6 +49,13 @@ apm::CohortOutcomeMask to_cpp_mask(Rcpp::Nullable<Rcpp::List> mask_in);
 // Resolve num_threads optional parameter (returns optional value flag and size)
 std::pair<bool, std::size_t> resolve_num_threads(Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in);
 
+// OutcomeMeanSuffStatEstimates helpers
+// Convert a nullable R list of XPtr<OutcomeMeanSuffStatEstimates> to a C++ vector
+std::vector<apm::OutcomeMeanSuffStatEstimates> list_to_stats_vec(Rcpp::Nullable<Rcpp::List> maybe_list);
+
+// Extract point sufficient statistics from a vector of OutcomeMeanSuffStatEstimates
+std::vector<apm::OutcomeMeanSufficientStatistics> point_stats_from_estimates(const std::vector<apm::OutcomeMeanSuffStatEstimates>& v);
+
 // Panel holder shared across bindings
 struct PanelHolder {
     Rcpp::IntegerVector unit_idx;

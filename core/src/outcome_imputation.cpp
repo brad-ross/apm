@@ -8,6 +8,7 @@
 #include <iostream>
 #include <vector>
 #include "panels/CohortLevelUnbalancedPanel.h"
+#include "panels/InMemoryUnbalancedPanel.h"
 #ifdef APM_HAS_TBB
 #include <oneapi/tbb/info.h>
 #include <oneapi/tbb/parallel_for.h>
@@ -432,7 +433,7 @@ static void validate_unit_weights_opt(const std::optional<arma::vec>& unit_weigh
 } // anonymous namespace
 
 FactorModelParameters comp_imputation_components(
-    const AbstractUnbalancedPanel& panel,
+    const InMemoryUnbalancedPanel& panel,
     const FactorModelParameters& factor_model_params,
     const std::vector<OutcomeMeanSufficientStatistics>& cohort_outcome_mean_suff_stats,
     std::optional<arma::vec> unit_weights_opt,
@@ -525,7 +526,7 @@ FactorModelParameters comp_imputation_components(
 namespace apm {
 
 FactorModelEstimates comp_imputation_components(
-    const AbstractUnbalancedPanel& panel,
+    const InMemoryUnbalancedPanel& panel,
     const FactorModelEstimates& factor_model_ests,
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests,
     std::optional<arma::vec> unit_weights_opt,
@@ -619,7 +620,7 @@ FactorModelEstimates comp_imputation_components(
 namespace apm {
 
 std::unordered_map<std::string, FactorModelEstimates> comp_imputation_components(
-    const AbstractUnbalancedPanel& panel,
+    const InMemoryUnbalancedPanel& panel,
     const std::unordered_map<std::string, FactorModelEstimates>& factor_model_estimates_map,
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests,
     std::optional<arma::vec> unit_weights_opt,

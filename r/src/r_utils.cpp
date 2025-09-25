@@ -111,6 +111,27 @@ std::pair<bool, std::size_t> resolve_num_threads(Rcpp::Nullable<Rcpp::IntegerVec
     return {false, 0};
 }
 
+std::vector<apm::OutcomeMeanSuffStatEstimates> list_to_stats_vec(Rcpp::Nullable<Rcpp::List> maybe_list) {
+    std::vector<apm::OutcomeMeanSuffStatEstimates> out;
+    if (maybe_list.isNotNull()) {
+        Rcpp::List L(maybe_list);
+        out.reserve(L.size());
+        for (int i = 0; i < L.size(); ++i) {
+            if (Rf_isNull(L[i])) continue;
+            Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates> xp(L[i]);
+            out.push_back(*xp);
+        }
+    }
+    return out;
+}
+
+std::vector<apm::OutcomeMeanSufficientStatistics> point_stats_from_estimates(const std::vector<apm::OutcomeMeanSuffStatEstimates>& v) {
+    std::vector<apm::OutcomeMeanSufficientStatistics> out;
+    out.reserve(v.size());
+    for (const auto& e : v) out.push_back(e.suff_stat_estimates);
+    return out;
+}
+
 const apm::InMemoryUnbalancedPanel& panel_ref_from_panel_holder(SEXP panel_holder_xptr) {
     Rcpp::XPtr<PanelHolder> ph(panel_holder_xptr);
     return ph->panel;
