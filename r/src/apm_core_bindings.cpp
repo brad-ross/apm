@@ -276,3 +276,59 @@ bool aligned_factors_identified(
 
     return apm::aligned_factors_identified(cpp_observed_outcome_indices, r);
 } 
+
+//' Impute outcomes across cohorts using factors and cohort mean loadings (L)
+//'
+//' Supports optional fixed effects (g_0) and covariates (a, X_c list).
+//'
+//' @param G A T x r matrix of factor scores.
+//' @param L A C x r matrix of cohort mean loadings.
+//' @param g_0 Optional T-vector of outcome fixed effects.
+//' @param a Optional q-vector of covariate coefficients. Requires X_c.
+//' @param X_c Optional list of T x q matrices, one per cohort (required if a is provided).
+//' @return A C x T matrix where row c contains imputed outcomes for cohort c.
+//' @export
+// [[Rcpp::export]]
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::mat& L,
+    Rcpp::Nullable<Rcpp::NumericVector> g_0 = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> a = R_NilValue,
+    Rcpp::Nullable<Rcpp::List> X_c = R_NilValue) {
+
+    const bool has_g0 = g_0.isNotNull();
+    const bool has_a  = a.isNotNull();
+
+    if (has_a && !X_c.isNotNull()) {
+        Rcpp::stop("If 'a' is provided, 'X_c' must also be provided.");
+    }
+    if (!has_a && X_c.isNotNull()) {
+        Rcpp::warning("'X_c' is provided but 'a' is not; covariates will be ignored.");
+    }
+
+    if (has_g0 && has_a) {
+        arma::vec g0_cpp = Rcpp::as<arma::vec>(g_0);
+        arma::vec a_cpp  = Rcpp::as<arma::vec>(a);
+        std::vector<arma::mat> X_cpp;
+        Rcpp::List X_list(X_c);
+        X_cpp.reserve(X_list.size());
+        for (SEXP mat : X_list) {
+            X_cpp.push_back(Rcpp::as<arma::mat>(mat));
+        }
+        return apm::impute_outcomes_across_cohorts(G, g0_cpp, a_cpp, X_cpp, L);
+    } else if (has_g0) {
+        arma::vec g0_cpp = Rcpp::as<arma::vec>(g_0);
+        return apm::impute_outcomes_across_cohorts(G, g0_cpp, L);
+    } else if (has_a) {
+        arma::vec a_cpp  = Rcpp::as<arma::vec>(a);
+        std::vector<arma::mat> X_cpp;
+        Rcpp::List X_list(X_c);
+        X_cpp.reserve(X_list.size());
+        for (SEXP mat : X_list) {
+            X_cpp.push_back(Rcpp::as<arma::mat>(mat));
+        }
+        return apm::impute_outcomes_across_cohorts(G, a_cpp, X_cpp, L);
+    }
+
+    return apm::impute_outcomes_across_cohorts(G, L);
+}

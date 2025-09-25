@@ -116,6 +116,58 @@ test_that("EstimateMeans_FactorsOnly", {
   expect_equal(estimated_m, true_m, tolerance = 1e-9)
 }) 
 
+test_that("ImputeOutcomesAcrossCohorts_FactorsOnly", {
+  data <- setup_estimation_test_data_r()
+
+  L <- matrix(0, nrow = data$Cval, ncol = ncol(data$G))
+  for (c in seq_len(data$Cval)) L[c, ] <- data$l_c[[c]]
+
+  expected <- matrix(0, nrow = data$Cval, ncol = data$Tval)
+  for (c in seq_len(data$Cval)) expected[c, ] <- (data$G %*% data$l_c[[c]])
+
+  got <- impute_outcomes_across_cohorts(data$G, L)
+  expect_equal(got, expected, tolerance = 1e-12)
+})
+
+test_that("ImputeOutcomesAcrossCohorts_FactorsAndFixedEffects", {
+  data <- setup_estimation_test_data_r()
+
+  L <- matrix(0, nrow = data$Cval, ncol = ncol(data$G))
+  for (c in seq_len(data$Cval)) L[c, ] <- data$l_c[[c]]
+
+  expected <- matrix(0, nrow = data$Cval, ncol = data$Tval)
+  for (c in seq_len(data$Cval)) expected[c, ] <- (data$G %*% data$l_c[[c]] + data$g_0)
+
+  got <- impute_outcomes_across_cohorts(data$G, L, g_0 = data$g_0)
+  expect_equal(got, expected, tolerance = 1e-12)
+})
+
+test_that("ImputeOutcomesAcrossCohorts_FactorsAndCovariates", {
+  data <- setup_estimation_test_data_r()
+
+  L <- matrix(0, nrow = data$Cval, ncol = ncol(data$G))
+  for (c in seq_len(data$Cval)) L[c, ] <- data$l_c[[c]]
+
+  expected <- matrix(0, nrow = data$Cval, ncol = data$Tval)
+  for (c in seq_len(data$Cval)) expected[c, ] <- (data$G %*% data$l_c[[c]] + data$X_c_vec[[c]] %*% data$a)
+
+  got <- impute_outcomes_across_cohorts(data$G, L, a = data$a, X_c = data$X_c_vec)
+  expect_equal(got, expected, tolerance = 1e-12)
+})
+
+test_that("ImputeOutcomesAcrossCohorts_AllComponents", {
+  data <- setup_estimation_test_data_r()
+
+  L <- matrix(0, nrow = data$Cval, ncol = ncol(data$G))
+  for (c in seq_len(data$Cval)) L[c, ] <- data$l_c[[c]]
+
+  expected <- matrix(0, nrow = data$Cval, ncol = data$Tval)
+  for (c in seq_len(data$Cval)) expected[c, ] <- (data$G %*% data$l_c[[c]] + data$g_0 + data$X_c_vec[[c]] %*% data$a)
+
+  got <- impute_outcomes_across_cohorts(data$G, L, g_0 = data$g_0, a = data$a, X_c = data$X_c_vec)
+  expect_equal(got, expected, tolerance = 1e-12)
+})
+
 #===============================================================================
 # O3 Algorithm Tests
 #===============================================================================
