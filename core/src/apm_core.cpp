@@ -656,44 +656,6 @@ arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     return m;
 }
 
-// Convenience dispatcher: use L when available, otherwise impute from observed outcomes
-arma::mat estimate_outcome_means_across_cohorts(
-    const FactorModelParameters& factor_model_parameters,
-    const ObservedOutcomeIndices& observed_outcome_indices,
-    const std::vector<OutcomeMeanSufficientStatistics>& suff_stats_vec) {
-
-    if (factor_model_parameters.L) {
-        const arma::uword C = observed_outcome_indices.size();
-        if (suff_stats_vec.size() != C) {
-            throw std::invalid_argument("Input vectors must have a size equal to the number of cohorts.");
-        }
-
-        // With L present, dispatch to impute_outcomes_across_cohorts. If covariates are present, build X.
-        if (factor_model_parameters.has_covariate_coefs()) {
-            const arma::mat& G = factor_model_parameters.G;
-            const arma::uword T = G.n_rows;
-            std::vector<arma::mat> X;
-            X.reserve(C);
-            for (arma::uword c = 0; c < C; ++c) {
-                const auto& stats = suff_stats_vec[c];
-                if (!stats.has_covar_means()) {
-                    throw std::invalid_argument("Covariate presence mismatch between parameters and sufficient statistics.");
-                }
-                validate_X_c(*(stats.covar_means), T, static_cast<arma::uword>(factor_model_parameters.a->n_elem));
-                X.push_back(*(stats.covar_means));
-            }
-            return impute_outcomes_across_cohorts(factor_model_parameters, X);
-        }
-        return impute_outcomes_across_cohorts(factor_model_parameters);
-    }
-
-    // Fall back to imputing from observed outcomes when L is not provided
-    return impute_outcomes_across_cohorts_from_obs_outcomes(
-        factor_model_parameters,
-        observed_outcome_indices,
-        suff_stats_vec);
-}
-
 arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
@@ -824,6 +786,44 @@ arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
         G,
         observed_outcome_indices,
         m_c_vec);
+}
+
+// Convenience dispatcher: use L when available, otherwise impute from observed outcomes
+arma::mat estimate_outcome_means_across_cohorts(
+    const FactorModelParameters& factor_model_parameters,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::vector<OutcomeMeanSufficientStatistics>& suff_stats_vec) {
+
+    if (factor_model_parameters.L) {
+        const arma::uword C = observed_outcome_indices.size();
+        if (suff_stats_vec.size() != C) {
+            throw std::invalid_argument("Input vectors must have a size equal to the number of cohorts.");
+        }
+
+        // With L present, dispatch to impute_outcomes_across_cohorts. If covariates are present, build X.
+        if (factor_model_parameters.has_covariate_coefs()) {
+            const arma::mat& G = factor_model_parameters.G;
+            const arma::uword T = G.n_rows;
+            std::vector<arma::mat> X;
+            X.reserve(C);
+            for (arma::uword c = 0; c < C; ++c) {
+                const auto& stats = suff_stats_vec[c];
+                if (!stats.has_covar_means()) {
+                    throw std::invalid_argument("Covariate presence mismatch between parameters and sufficient statistics.");
+                }
+                validate_X_c(*(stats.covar_means), T, static_cast<arma::uword>(factor_model_parameters.a->n_elem));
+                X.push_back(*(stats.covar_means));
+            }
+            return impute_outcomes_across_cohorts(factor_model_parameters, X);
+        }
+        return impute_outcomes_across_cohorts(factor_model_parameters);
+    }
+
+    // Fall back to imputing from observed outcomes when L is not provided
+    return impute_outcomes_across_cohorts_from_obs_outcomes(
+        factor_model_parameters,
+        observed_outcome_indices,
+        suff_stats_vec);
 }
 
 //==============================================================================
