@@ -14,17 +14,9 @@
 #include "panels/AbstractUnbalancedPanel.h"
 #include "cohort_specific_param_structs.h"
 #include "utils.h"
+#include "outcome_imputation_helpers.h"
 
 namespace apm {
-
-struct VariableSpec {
-    enum class Kind { Outcome, Covariate };
-    Kind kind;
-    std::size_t covariate_index = 0;
-
-    static VariableSpec outcome() { return VariableSpec{Kind::Outcome, 0}; }
-    static VariableSpec covariate(std::size_t j) { return VariableSpec{Kind::Covariate, j}; }
-};
 
 // High-level orchestration that returns G, optional a, g_0, and L
 FactorModelParameters comp_imputation_components(

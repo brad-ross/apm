@@ -14,9 +14,18 @@
 
 #include "panels/AbstractUnbalancedPanel.h"
 #include "cohort_specific_param_structs.h"
-#include "outcome_imputation.h" // for VariableSpec
+// VariableSpec moved here from outcome_imputation.h
 
 namespace apm {
+
+struct VariableSpec {
+    enum class Kind { Outcome, Covariate };
+    Kind kind;
+    std::size_t covariate_index = 0;
+
+    static VariableSpec outcome() { return VariableSpec{Kind::Outcome, 0}; }
+    static VariableSpec covariate(std::size_t j) { return VariableSpec{Kind::Covariate, j}; }
+};
 namespace internal {
 
 // Centralized lambda computation
