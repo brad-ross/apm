@@ -158,7 +158,9 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                                             r = 2L,
                                             rotate = TRUE,
                                             ctx = NULL,
-                                            add_no_missing_cohort = FALSE) {
+                                            add_no_missing_cohort = FALSE,
+                                            a = NULL,
+                                            g0 = NULL) {
     # If requested, extend cohorts and units with a fully observed cohort
     if (isTRUE(add_no_missing_cohort)) {
         T <- length(outcomes)
@@ -185,7 +187,18 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                     outcome_id = outcomes
                 )
                 dt[, ("y") := NA_real_]
+                # Base factor-implied outcomes for observed indices
                 y_obs <- expected_Y_for_units_ctx(ctx, k, unit_ids = c(u), T_idx = observed_idxs)[1, ]
+                # Optional fixed effects term
+                if (!is.null(g0)) {
+                    y_obs <- y_obs + as.numeric(g0[observed_idxs])
+                }
+                # Optional covariate contribution X * a
+                if (isTRUE(include_covariates) && !is.null(a)) {
+                    X_arr <- expected_covariates_for_units_ctx(ctx, k, unit_ids = c(u), T_idx = observed_idxs)
+                    X_mat <- cbind(X_arr[1, , 1], X_arr[1, , 2])
+                    y_obs <- y_obs + as.numeric(X_mat %*% as.numeric(a))
+                }
                 dt[get("outcome_id") %in% observed_outcomes, ("y") := y_obs]
                 if (isTRUE(include_covariates)) {
                     dt[, ("cov1") := as.integer(match(u, ctx$all_units))]
@@ -202,6 +215,9 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                     outcome_id = observed_outcomes
                 )
                 y_obs <- expected_Y_for_units_ctx(ctx, k, unit_ids = c(u), T_idx = observed_idxs)[1, ]
+                if (!is.null(g0)) {
+                    y_obs <- y_obs + as.numeric(g0[observed_idxs])
+                }
                 dt[, ("y") := y_obs]
                 dt
             }

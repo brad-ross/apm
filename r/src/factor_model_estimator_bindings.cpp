@@ -135,4 +135,21 @@ arma::vec fme_boot_a_cpp(SEXP fme, std::size_t b) {
     return *(rep.a);
 }
 
+// New accessors for optional L (loadings) matrices
+// [[Rcpp::export]]
+arma::mat fme_point_L_cpp(SEXP fme){
+    Rcpp::XPtr<apm::FactorModelEstimates> p(fme);
+    if(!p->parameter_estimates.L) Rcpp::stop("L not present");
+    return *(p->parameter_estimates.L);
+}
+
+// [[Rcpp::export]]
+arma::mat fme_boot_L_cpp(SEXP fme, std::size_t b){
+    Rcpp::XPtr<apm::FactorModelEstimates> p(fme);
+    if (b < 1 || b > p->bootstrap_replicates.size()) Rcpp::stop("bootstrap index out of range");
+    auto& rep = p->bootstrap_replicates[b - 1];
+    if(!rep.L) Rcpp::stop("L not present in bootstrap replicate");
+    return *(rep.L);
+}
+
 
