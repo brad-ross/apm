@@ -16,6 +16,7 @@
 #include "cohort_specific_param_structs.h"
 #include "utils.h"
 #include "outcome_imputation_helpers.h"
+#include "bootstrap.h"
 
 namespace apm {
 
@@ -35,7 +36,7 @@ FactorModelEstimates comp_imputation_components(
     const InMemoryUnbalancedPanel& panel,
     const FactorModelEstimates& factor_model_ests,
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests = std::vector<OutcomeMeanSuffStatEstimates>(),
-    std::optional<arma::vec> unit_weights_opt = std::nullopt,
+    std::shared_ptr<const WeightedBootstrap> wb = nullptr,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
     double tol = 1e-10,
     std::size_t max_iters = 1000,
@@ -47,7 +48,7 @@ std::unordered_map<std::string, FactorModelEstimates> comp_imputation_components
     const InMemoryUnbalancedPanel& panel,
     const std::unordered_map<std::string, FactorModelEstimates>& factor_model_estimates_map,
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests = std::vector<OutcomeMeanSuffStatEstimates>(),
-    std::optional<arma::vec> unit_weights_opt = std::nullopt,
+    std::shared_ptr<const WeightedBootstrap> wb = nullptr,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
     double tol = 1e-10,
     std::size_t max_iters = 1000,

@@ -392,7 +392,7 @@ TEST(OutcomeImputationTest, ImputationComponents_MapDispatch_Simple) {
     fmap.emplace("spec1", fme);
     fmap.emplace("spec2", fme);
 
-    auto out_map = apm::comp_imputation_components(panel, fmap, /*cohort_outcome_mean_suff_stat_ests=*/{}, std::nullopt);
+    auto out_map = apm::comp_imputation_components(panel, fmap, /*cohort_outcome_mean_suff_stat_ests=*/{}, nullptr);
 
     // Validate both keys present
     ASSERT_EQ(out_map.size(), static_cast<std::size_t>(2));

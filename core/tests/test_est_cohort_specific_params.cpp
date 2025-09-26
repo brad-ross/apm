@@ -12,14 +12,6 @@
 #include "utils.h"
 #include "test_helpers.h"
 
-namespace {
-
-class TestBootstrap : public apm::WeightedBootstrap {
-public:
-    explicit TestBootstrap(const arma::mat& W) : apm::WeightedBootstrap(W) {}
-};
-
-} // namespace
 
 TEST(CohortSpecificRawTest, InvalidEstimatorNameThrows) {
     // Generic staircase setup

@@ -12,6 +12,7 @@
 
 #include "apm_core.h"
 #include "est_outcome_means.h"
+#include "bootstrap.h"
 
 // -------- Utilities and assertions --------
 
@@ -115,6 +116,14 @@ struct RawPanelData {
 RawPanelData make_raw_panel(
     const StaircasePanelContext& ctx,
     bool with_auxiliary = false);
+
+// -------- Test bootstrap helpers --------
+
+// Lightweight derived bootstrap to inject deterministic weights in tests
+class TestBootstrap : public apm::WeightedBootstrap {
+public:
+    explicit TestBootstrap(const arma::mat& W) : apm::WeightedBootstrap(W) {}
+};
 
 #endif // APM_TEST_HELPERS_H
 

@@ -14,6 +14,7 @@
 #include <oneapi/tbb/parallel_for.h>
 #endif
 #include "utils.h"
+#include "bootstrap.h"
 
 namespace apm {
 
@@ -529,7 +530,7 @@ FactorModelEstimates comp_imputation_components(
     const InMemoryUnbalancedPanel& panel,
     const FactorModelEstimates& factor_model_ests,
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests,
-    std::optional<arma::vec> unit_weights_opt,
+    std::shared_ptr<const WeightedBootstrap> wb,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
     double tol,
     std::size_t max_iters,
@@ -538,6 +539,7 @@ FactorModelEstimates comp_imputation_components(
 {
     apm::ParallelismScope par_scope(num_threads);
     std::size_t nt = par_scope.nt;
+    std::cerr << "has bootstrap: " << (wb != nullptr) << std::endl;
 
     // If cohort stats are provided, construct point slice. If empty, pass through empty vector.
     std::vector<OutcomeMeanSufficientStatistics> suff_stats_point;
@@ -549,16 +551,19 @@ FactorModelEstimates comp_imputation_components(
         }
     }
 
-    // Point estimate via parameter-based overload
+    std::cerr << "point estimate" << std::endl;
+    // Point estimate via parameter-based overload (no unit weights for point estimate)
     FactorModelParameters point_params = comp_imputation_components(
         panel,
         factor_model_ests.parameter_estimates,
         suff_stats_point,
-        unit_weights_opt,
+        std::nullopt,
         effective_ooi_opt,
         tol,
         max_iters,
         fixed_point_method);
+
+    std::cerr << "point estimate done" << std::endl;
 
     // Bootstrap replicates
     const bool has_param_boot = factor_model_ests.has_bootstrap_replicates();
@@ -577,7 +582,14 @@ FactorModelEstimates comp_imputation_components(
 
     std::vector<FactorModelParameters> boot_out;
     if (B > 0) {
+        if (!wb) {
+            throw std::invalid_argument("WeightedBootstrap must be provided when bootstrap replicates are present.");
+        }
+        if (wb->n_obs() != panel.num_units()) throw std::invalid_argument("WeightedBootstrap n_obs must equal panel.num_units()");
+        
         boot_out.resize(B);
+
+        std::cerr << "bootstrap replicates" << std::endl;
 
         auto worker = [&](std::size_t b) {
             std::vector<OutcomeMeanSufficientStatistics> suff_stats_b;
@@ -590,11 +602,12 @@ FactorModelEstimates comp_imputation_components(
             }
 
             const FactorModelParameters& params_b = factor_model_ests.bootstrap_replicates[b];
+            arma::vec unit_weights_b = wb->draw(b);
             boot_out[b] = comp_imputation_components(
                 panel,
                 params_b,
                 suff_stats_b,
-                unit_weights_opt,
+                std::optional<arma::vec>(std::move(unit_weights_b)),
                 effective_ooi_opt,
                 tol,
                 max_iters,
@@ -603,8 +616,10 @@ FactorModelEstimates comp_imputation_components(
 
 #ifdef APM_HAS_TBB
         if (nt <= 1) {
+            std::cerr << "nt <= 1" << std::endl;
             for (std::size_t b = 0; b < B; ++b) worker(b);
         } else {
+            std::cerr << "nt > 1" << std::endl;
             oneapi::tbb::parallel_for(std::size_t(0), B, [&](std::size_t b){ worker(b); });
         }
 #else
@@ -623,7 +638,7 @@ std::unordered_map<std::string, FactorModelEstimates> comp_imputation_components
     const InMemoryUnbalancedPanel& panel,
     const std::unordered_map<std::string, FactorModelEstimates>& factor_model_estimates_map,
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests,
-    std::optional<arma::vec> unit_weights_opt,
+    std::shared_ptr<const WeightedBootstrap> wb,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
     double tol,
     std::size_t max_iters,
@@ -640,7 +655,7 @@ std::unordered_map<std::string, FactorModelEstimates> comp_imputation_components
             panel,
             ests,
             cohort_outcome_mean_suff_stat_ests,
-            unit_weights_opt,
+            wb,
             effective_ooi_opt,
             tol,
             max_iters,

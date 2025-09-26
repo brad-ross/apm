@@ -73,7 +73,8 @@ TargetParamComponents est_target_param_components_from_panel(
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
     std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
     std::optional<std::size_t> num_threads = std::nullopt,
-    const CohortOutcomeMask& cohort_outcomes_to_mask = CohortOutcomeMask());
+    const CohortOutcomeMask& cohort_outcomes_to_mask = CohortOutcomeMask(),
+    bool est_outcome_means_via_imputation = true);
 
 } // namespace apm
 

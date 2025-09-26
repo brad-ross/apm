@@ -11,6 +11,8 @@
 #include "../est_outcome_means.h"
 #include "../panels/InMemoryUnbalancedPanel.h"
 #include "../utils.h"
+#include "../outcome_imputation.h"
+#include "../bootstrap.h"
 
 namespace apm {
 
@@ -115,7 +117,8 @@ TargetParamComponents est_target_param_components_from_panel(
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
     std::shared_ptr<const WeightedBootstrap> bootstrap,
     std::optional<std::size_t> num_threads,
-    const CohortOutcomeMask& cohort_outcomes_to_mask)
+    const CohortOutcomeMask& cohort_outcomes_to_mask,
+    bool est_outcome_means_via_imputation)
 {
     // 1) Cohort-specific estimates (raw C++) via panel-based core
     CohortSpecificEstimates ests = estimate_cohort_specific_params_from_internal_panel_rep(
@@ -138,10 +141,26 @@ TargetParamComponents est_target_param_components_from_panel(
             obs_idx_eff,
             ests.cohort_weights);
 
-    // 4) Estimate outcome means by spec (use obs_idx_eff)
+    // 4) Optionally compute imputation components by spec (use obs_idx_eff)
+    std::unordered_map<std::string, FactorModelEstimates> params_for_means = agg_by_spec;
+    if (est_outcome_means_via_imputation) {
+        std::cerr << "est_outcome_means_via_imputation" << std::endl;
+        params_for_means = comp_imputation_components(
+            panel,
+            agg_by_spec,
+            ests.cohort_outcome_mean_ests,
+            bootstrap,
+            std::optional<ObservedOutcomeIndices>{obs_idx_eff},
+            1e-10,
+            1000,
+            "irons-tuck",
+            num_threads);
+    }
+
+    // 5) Estimate outcome means by spec (use obs_idx_eff)
     std::unordered_map<std::string, OutcomeMeansEstimates> ome_by_spec =
         estimate_outcome_means_across_cohorts(
-            agg_by_spec,
+            params_for_means,
             obs_idx_eff,
             ests.cohort_outcome_mean_ests);
 
