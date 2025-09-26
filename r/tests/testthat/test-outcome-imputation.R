@@ -34,7 +34,7 @@ testthat::test_that("comp_imputation_components recovers g0 and L without covari
   testthat::expect_equal(as.numeric(out$g0()), as.numeric(g0_proj), tolerance = 1e-6)
 
   # L present and finite with expected dims: N x r
-  L <- fme_point_L_cpp(out$.__enclos_env__$private$xp)
+  L <- out$L()
   unit_cohorts <- panel$get_unit_cohorts()
   N <- nrow(unit_cohorts)
   testthat::expect_equal(dim(L), c(N, r))
