@@ -4,14 +4,13 @@
 #include <optional>
 #include <memory>
 #ifdef APM_HAS_TBB
-#include <oneapi/tbb/info.h>
 #include <oneapi/tbb/parallel_for.h>
-#include <oneapi/tbb/global_control.h>
 #endif
 
 #include "../agg_cohort_specific_factor_model_params.h"
 #include "../est_outcome_means.h"
 #include "../panels/InMemoryUnbalancedPanel.h"
+#include "../utils.h"
 
 namespace apm {
 
@@ -72,17 +71,16 @@ TargetParameterEstimates est_target_params(
                           collect_eta_across_cohorts(eta_by_cohort, b));
         };
 
-#ifdef APM_HAS_TBB
-        std::size_t nt = num_threads.has_value() ? *num_threads : oneapi::tbb::info::default_concurrency();
-        std::unique_ptr<oneapi::tbb::global_control> tbb_gc;
-        if (nt > 1) {
-            tbb_gc = std::make_unique<oneapi::tbb::global_control>(
-                oneapi::tbb::global_control::max_allowed_parallelism, nt);
-            oneapi::tbb::parallel_for(std::size_t(0), B, [&](std::size_t b) { process_boot(b); });
-        } else
-#endif
         {
-            for (std::size_t b = 0; b < B; ++b) process_boot(b);
+            ParallelismScope pscope(num_threads);
+#ifdef APM_HAS_TBB
+            if (pscope.nt > 1) {
+                oneapi::tbb::parallel_for(std::size_t(0), B, [&](std::size_t b) { process_boot(b); });
+            } else
+#endif
+            {
+                for (std::size_t b = 0; b < B; ++b) process_boot(b);
+            }
         }
     }
 
