@@ -59,7 +59,8 @@ estimate_outcome_means_across_cohorts <- function(factor_model_estimates, observ
 #' @return list with `outcome_means` and `auxiliary_means`.
 #' @export
 est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_threads = NULL,
-                                       cohort_outcomes_to_mask = NULL) {
+                                       cohort_outcomes_to_mask = NULL,
+                                       est_outcome_means_via_imputation = TRUE) {
   stopifnot(inherits(panel, "UnbalancedPanel"))
   if (!is.null(bootstrap) && !inherits(bootstrap, "WeightedBootstrap")) stop("bootstrap must be a WeightedBootstrap or NULL")
   .validate_est_specs(est_specs)
@@ -76,7 +77,8 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
     est_specs = est_specs,
     bootstrap_xptr = xp,
     num_threads_in = nt,
-    cohort_outcomes_to_mask_in = cohort_outcomes_to_mask
+    cohort_outcomes_to_mask_in = cohort_outcomes_to_mask,
+    est_outcome_means_via_imputation = est_outcome_means_via_imputation
   )
   out <- list(
     outcome_means = .wrap_outcome_means_xptr_list(res$outcome_means),

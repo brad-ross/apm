@@ -5,6 +5,7 @@
 #include "cohort_specific_estimates_helpers.h"
 #include "../../core/src/outcome_imputation.h"
 #include "../../core/src/cohort_specific_param_structs.h"
+#include "../../core/src/bootstrap.h"
 
 using apm::r_utils::make_xptr;
 
@@ -18,7 +19,7 @@ SEXP comp_imputation_components_cpp(
     SEXP panel_holder_xptr,
     SEXP factor_model_estimates_xptr,
     Rcpp::Nullable<Rcpp::List> cohort_outcome_mean_suff_stat_ests = R_NilValue,
-    Rcpp::Nullable<Rcpp::NumericVector> unit_weights = R_NilValue,
+    SEXP weighted_bootstrap_xptr = R_NilValue,
     Rcpp::Nullable<Rcpp::List> effective_observed_outcome_indices = R_NilValue,
     double tol = 1e-10,
     std::size_t max_iters = 1000,
@@ -28,11 +29,11 @@ SEXP comp_imputation_components_cpp(
     const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
     Rcpp::XPtr<apm::FactorModelEstimates> fptr(factor_model_estimates_xptr);
 
-    // Optional args
-    std::optional<arma::vec> unit_w_opt = std::nullopt;
-    if (unit_weights.isNotNull()) {
-        arma::vec w = Rcpp::as<arma::vec>(unit_weights);
-        if (w.n_elem > 0) unit_w_opt = std::move(w);
+    // Optional weighted bootstrap
+    std::shared_ptr<const apm::WeightedBootstrap> wb;
+    if (weighted_bootstrap_xptr != R_NilValue) {
+        Rcpp::XPtr<std::shared_ptr<apm::WeightedBootstrap>> wb_xp(weighted_bootstrap_xptr);
+        wb = *wb_xp;
     }
 
     std::optional<apm::ObservedOutcomeIndices> eff_ooi_opt = std::nullopt;
@@ -53,7 +54,7 @@ SEXP comp_imputation_components_cpp(
         panel,
         *fptr,
         stats_vec,
-        unit_w_opt,
+        wb,
         eff_ooi_opt,
         tol,
         max_iters,
@@ -71,7 +72,7 @@ Rcpp::List comp_imputation_components_by_spec_cpp(
     SEXP panel_holder_xptr,
     Rcpp::List factor_model_estimates_by_spec,
     Rcpp::Nullable<Rcpp::List> cohort_outcome_mean_suff_stat_ests = R_NilValue,
-    Rcpp::Nullable<Rcpp::NumericVector> unit_weights = R_NilValue,
+    SEXP weighted_bootstrap_xptr = R_NilValue,
     Rcpp::Nullable<Rcpp::List> effective_observed_outcome_indices = R_NilValue,
     double tol = 1e-10,
     std::size_t max_iters = 1000,
@@ -90,11 +91,11 @@ Rcpp::List comp_imputation_components_by_spec_cpp(
         }
     }
 
-    // Optional args
-    std::optional<arma::vec> unit_w_opt = std::nullopt;
-    if (unit_weights.isNotNull()) {
-        arma::vec w = Rcpp::as<arma::vec>(unit_weights);
-        if (w.n_elem > 0) unit_w_opt = std::move(w);
+    // Optional weighted bootstrap
+    std::shared_ptr<const apm::WeightedBootstrap> wb;
+    if (weighted_bootstrap_xptr != R_NilValue) {
+        Rcpp::XPtr<std::shared_ptr<apm::WeightedBootstrap>> wb_xp(weighted_bootstrap_xptr);
+        wb = *wb_xp;
     }
 
     std::optional<apm::ObservedOutcomeIndices> eff_ooi_opt = std::nullopt;
@@ -115,7 +116,7 @@ Rcpp::List comp_imputation_components_by_spec_cpp(
         panel,
         fmap,
         stats_vec,
-        unit_w_opt,
+        wb,
         eff_ooi_opt,
         tol,
         max_iters,

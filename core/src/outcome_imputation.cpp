@@ -450,7 +450,9 @@ FactorModelParameters comp_imputation_components(
 
     // Prepare cohort-level panel and weights once, if provided and sized correctly
     const bool have_cohort_stats = !cohort_outcome_mean_suff_stats.empty();
-    const std::size_t n_cohorts = panel.observed_outcome_indices().size();
+    const ObservedOutcomeIndices& ooi = effective_ooi_opt ? *effective_ooi_opt
+                                                          : panel.observed_outcome_indices();
+    const std::size_t n_cohorts = ooi.size();
 
     std::optional<CohortLevelUnbalancedPanel> cohort_panel_opt;
     std::optional<arma::vec> cohort_weights_opt;
@@ -459,7 +461,7 @@ FactorModelParameters comp_imputation_components(
         if (cohort_outcome_mean_suff_stats.size() != n_cohorts) {
             throw std::invalid_argument("cohort_outcome_mean_suff_stats length must equal number of cohorts");
         }
-        cohort_panel_opt.emplace(cohort_outcome_mean_suff_stats, panel.observed_outcome_indices());
+        cohort_panel_opt.emplace(cohort_outcome_mean_suff_stats, ooi);
 
         arma::vec cw(static_cast<arma::uword>(cohort_outcome_mean_suff_stats.size()));
         for (std::size_t i = 0; i < cohort_outcome_mean_suff_stats.size(); ++i) {
@@ -539,7 +541,6 @@ FactorModelEstimates comp_imputation_components(
 {
     apm::ParallelismScope par_scope(num_threads);
     std::size_t nt = par_scope.nt;
-    std::cerr << "has bootstrap: " << (wb != nullptr) << std::endl;
 
     // If cohort stats are provided, construct point slice. If empty, pass through empty vector.
     std::vector<OutcomeMeanSufficientStatistics> suff_stats_point;
@@ -551,7 +552,6 @@ FactorModelEstimates comp_imputation_components(
         }
     }
 
-    std::cerr << "point estimate" << std::endl;
     // Point estimate via parameter-based overload (no unit weights for point estimate)
     FactorModelParameters point_params = comp_imputation_components(
         panel,
@@ -562,8 +562,6 @@ FactorModelEstimates comp_imputation_components(
         tol,
         max_iters,
         fixed_point_method);
-
-    std::cerr << "point estimate done" << std::endl;
 
     // Bootstrap replicates
     const bool has_param_boot = factor_model_ests.has_bootstrap_replicates();
@@ -588,8 +586,6 @@ FactorModelEstimates comp_imputation_components(
         if (wb->n_obs() != panel.num_units()) throw std::invalid_argument("WeightedBootstrap n_obs must equal panel.num_units()");
         
         boot_out.resize(B);
-
-        std::cerr << "bootstrap replicates" << std::endl;
 
         auto worker = [&](std::size_t b) {
             std::vector<OutcomeMeanSufficientStatistics> suff_stats_b;
@@ -616,10 +612,8 @@ FactorModelEstimates comp_imputation_components(
 
 #ifdef APM_HAS_TBB
         if (nt <= 1) {
-            std::cerr << "nt <= 1" << std::endl;
             for (std::size_t b = 0; b < B; ++b) worker(b);
         } else {
-            std::cerr << "nt > 1" << std::endl;
             oneapi::tbb::parallel_for(std::size_t(0), B, [&](std::size_t b){ worker(b); });
         }
 #else

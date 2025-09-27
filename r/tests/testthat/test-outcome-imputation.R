@@ -22,7 +22,9 @@ testthat::test_that("comp_imputation_components recovers g0 and L without covari
   fme <- FactorModelEstimates$new(make_factor_model_estimates_cpp(G_true, g0 = g0_proj))
 
   # Run comp
-  out <- comp_imputation_components(panel, fme)
+  N <- nrow(panel$get_unit_cohorts())
+  wb <- get_weighted_bootstrap_draws(N, 1L, type = "multinomial", seed = 1L)
+  out <- comp_imputation_components(panel, fme, weighted_bootstrap = wb)
 
   # Check span(G) unchanged (projection matrices equal)
   P_out <- projection_matrix_r(out$G())
@@ -57,7 +59,9 @@ testthat::test_that("comp_imputation_components recovers alpha with covariates (
   G_true <- ctx$true_factors
   fme <- FactorModelEstimates$new(make_factor_model_estimates_cpp(G_true, a = a_true))
 
-  out <- comp_imputation_components(panel, fme)
+  N <- nrow(panel$get_unit_cohorts())
+  wb <- get_weighted_bootstrap_draws(N, 1L, type = "multinomial", seed = 1L)
+  out <- comp_imputation_components(panel, fme, weighted_bootstrap = wb)
 
   testthat::expect_true(out$has_a())
   testthat::expect_equal(as.numeric(out$a()), as.numeric(a_true), tolerance = 1e-4)
@@ -82,7 +86,9 @@ testthat::test_that("comp_imputation_components handles by-spec map dispatch", {
 
   fme <- FactorModelEstimates$new(make_factor_model_estimates_cpp(G_true, g0 = g0_proj))
 
-  res <- comp_imputation_components(panel, list(spec1 = fme, spec2 = fme))
+  N <- nrow(panel$get_unit_cohorts())
+  wb <- get_weighted_bootstrap_draws(N, 1L, type = "multinomial", seed = 1L)
+  res <- comp_imputation_components(panel, list(spec1 = fme, spec2 = fme), weighted_bootstrap = wb)
   testthat::expect_true(all(sort(names(res)) == c("spec1", "spec2")))
   for (k in names(res)) {
     outk <- res[[k]]

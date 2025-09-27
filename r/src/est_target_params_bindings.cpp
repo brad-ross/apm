@@ -222,7 +222,8 @@ Rcpp::List est_target_param_components_from_panel_cpp(
     Rcpp::List est_specs,
     SEXP bootstrap_xptr = R_NilValue,
     Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue,
-    Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue)
+    Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue,
+    bool est_outcome_means_via_imputation = true)
 {
     const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
     auto cpp_specs = apm::r_utils::to_cpp_specs(est_specs);
@@ -234,7 +235,7 @@ Rcpp::List est_target_param_components_from_panel_cpp(
     apm::CohortOutcomeMask mask = apm::r_utils::to_cpp_mask(cohort_outcomes_to_mask_in);
 
     apm::TargetParamComponents comps = apm::est_target_param_components_from_panel(
-        panel, cpp_specs, wb, nt_opt, mask);
+        panel, cpp_specs, wb, nt_opt, mask, est_outcome_means_via_imputation);
 
     Rcpp::List ome_out(static_cast<int>(comps.outcome_means_by_spec.size()));
     Rcpp::CharacterVector names(static_cast<int>(comps.outcome_means_by_spec.size()));

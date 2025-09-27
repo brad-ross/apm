@@ -144,7 +144,6 @@ TargetParamComponents est_target_param_components_from_panel(
     // 4) Optionally compute imputation components by spec (use obs_idx_eff)
     std::unordered_map<std::string, FactorModelEstimates> params_for_means = agg_by_spec;
     if (est_outcome_means_via_imputation) {
-        std::cerr << "est_outcome_means_via_imputation" << std::endl;
         params_for_means = comp_imputation_components(
             panel,
             agg_by_spec,

@@ -7,7 +7,7 @@
 #' @param panel an `UnbalancedPanel` R6 object used to derive cohort and unit structure
 #' @param factor_model_estimates a `FactorModelEstimates` or a named list of them (by-spec)
 #' @param cohort_outcome_mean_suff_stat_ests optional list of `OutcomeMeanSuffStatEstimates`
-#' @param unit_weights optional numeric vector of unit weights
+#' @param weighted_bootstrap optional WeightedBootstrap R6 instance providing unit weights per bootstrap draw
 #' @param effective_observed_outcome_indices optional list of 1-based outcome indices to override panel
 #' @param num_threads optional integer, number of threads for internal parallel sections
 #' @param tol numeric tolerance for fixed-point iterations
@@ -17,7 +17,7 @@
 comp_imputation_components <- function(panel,
                                        factor_model_estimates,
                                        cohort_outcome_mean_suff_stat_ests = NULL,
-                                       unit_weights = NULL,
+                                       weighted_bootstrap = NULL,
                                        effective_observed_outcome_indices = NULL,
                                        num_threads = NULL,
                                        tol = 1e-10,
@@ -33,7 +33,7 @@ comp_imputation_components <- function(panel,
       panel_holder_xptr = holder_xp,
       factor_model_estimates_xptr = factor_model_estimates$.__enclos_env__$private$xp,
       cohort_outcome_mean_suff_stat_ests = xplist,
-      unit_weights = unit_weights,
+      weighted_bootstrap_xptr = if (is.null(weighted_bootstrap)) NULL else weighted_bootstrap$.__enclos_env__$private$xp,
       effective_observed_outcome_indices = effective_observed_outcome_indices,
       tol = tol,
       max_iters = as.integer(max_iters),
@@ -56,7 +56,7 @@ comp_imputation_components <- function(panel,
       panel_holder_xptr = holder_xp,
       factor_model_estimates_by_spec = fmap,
       cohort_outcome_mean_suff_stat_ests = xplist,
-      unit_weights = unit_weights,
+      weighted_bootstrap_xptr = if (is.null(weighted_bootstrap)) NULL else weighted_bootstrap$.__enclos_env__$private$xp,
       effective_observed_outcome_indices = effective_observed_outcome_indices,
       tol = tol,
       max_iters = as.integer(max_iters),

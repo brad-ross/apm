@@ -89,16 +89,9 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
         arma::mat P_est_no_fe = apm::internal::projection_matrix(est_no_fe.G);
         arma::mat P_est_fe    = apm::internal::projection_matrix(est_fe.G);
         arma::mat P_true      = apm::internal::projection_matrix(G0_true);
-        if (!arma::approx_equal(P_est_no_fe, P_true, "absdiff", 1e-9)) {
-            largest_diff = std::max(largest_diff, arma::abs(P_est_no_fe - P_true).max());
-            // std::cerr << "P_est_no_fe:\n" << P_est_no_fe << "\nP_true:\n" << P_true
-            //     << "\nabsdiff: " << arma::abs(P_est_no_fe - P_true).max() << std::endl;
-        }
+        
         // Align with R tests: assert span match for no-FE estimator only
         expect_same_subspace(est_no_fe.G, G0_true);
-    }
-    if (largest_diff > 0.0) {
-        std::cerr << "largest_diff: " << largest_diff << std::endl;
     }
 
     const auto& oms0 = out.cohort_outcome_mean_ests[0].suff_stat_estimates;
