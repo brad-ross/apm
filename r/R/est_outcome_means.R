@@ -46,57 +46,6 @@ estimate_outcome_means_across_cohorts <- function(factor_model_estimates, observ
 }
 
 # -----------------------------------------------------------------------------
-# End-to-end wrapper
-# -----------------------------------------------------------------------------
-#' End-to-end: estimate target parameter components across cohorts (by spec)
-#'
-#' This runs cohort-specific estimation and immediately aggregates/estimates cohort
-#' mean outcomes across cohorts, returning a list with:
-#' - outcome_means: named list (by spec) of `OutcomeMeansEstimates` objects
-#' - auxiliary_means: list of `CohortAuxiliaryDataMeanEstimates` (one per cohort), or NULL if none
-#'
-#' @inheritParams est_cohort_specific_params
-#' @return list with `outcome_means` and `auxiliary_means`.
-#' @export
-est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_threads = NULL,
-                                       cohort_outcomes_to_mask = NULL,
-                                       est_outcome_means_via_imputation = TRUE) {
-  stopifnot(inherits(panel, "UnbalancedPanel"))
-  if (!is.null(bootstrap) && !inherits(bootstrap, "WeightedBootstrap")) stop("bootstrap must be a WeightedBootstrap or NULL")
-  .validate_est_specs(est_specs)
-
-  holder_xp <- panel$get_panel_holder_xptr()
-
-  validate_mask_arg(cohort_outcomes_to_mask)
-
-  xp <- if (is.null(bootstrap)) NULL else bootstrap$.__enclos_env__$private$xp
-  nt <- if (is.null(num_threads)) NULL else as.integer(num_threads)
-
-  res <- est_target_param_components_from_panel_cpp(
-    panel_holder_xptr = holder_xp,
-    est_specs = est_specs,
-    bootstrap_xptr = xp,
-    num_threads_in = nt,
-    cohort_outcomes_to_mask_in = cohort_outcomes_to_mask,
-    est_outcome_means_via_imputation = est_outcome_means_via_imputation
-  )
-  out <- list(
-    outcome_means = .wrap_outcome_means_xptr_list(res$outcome_means),
-    auxiliary_means = NULL
-  )
-  if (!is.null(res$auxiliary_means)) {
-    out$auxiliary_means <- lapply(res$auxiliary_means, function(xp) CohortAuxiliaryDataMeanEstimates$new(xp))
-  }
-  if (!is.null(res$masked_cohort_outcome_means)) {
-    out$masked_cohort_outcome_means <- res$masked_cohort_outcome_means
-  }
-  if (!is.null(res$masked_observed_outcome_indices)) {
-    out$masked_observed_outcome_indices <- res$masked_observed_outcome_indices
-  }
-  out
-}
-
-# -----------------------------------------------------------------------------
 # Internal helpers (not exported)
 # -----------------------------------------------------------------------------
 

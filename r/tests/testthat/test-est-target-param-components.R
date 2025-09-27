@@ -48,9 +48,21 @@ test_that("recovers true cohort mean outcomes on staircase data", {
     )
   )
 
-  # Run end-to-end estimator
-  res <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = 1L)
-  M_hat <- res$outcome_means$pc$mean_outcomes()  # C x T
+  # Run end-to-end estimator (both via imputation and direct composition)
+  res_imp <- est_target_param_components(
+    panel_obj,
+    est_specs = est_specs,
+    num_threads = 1L,
+    est_outcome_means_via_imputation = TRUE
+  )
+  res_dir <- est_target_param_components(
+    panel_obj,
+    est_specs = est_specs,
+    num_threads = 1L,
+    est_outcome_means_via_imputation = FALSE
+  )
+  M_hat_imp <- res_imp$outcome_means$pc$mean_outcomes()  # C x T
+  M_hat_dir <- res_dir$outcome_means$pc$mean_outcomes()  # C x T
 
   # Align cohort order using exact index match from original to panel order
   ooi_panel <- panel_obj$get_observed_outcome_indices()
@@ -67,7 +79,9 @@ test_that("recovers true cohort mean outcomes on staircase data", {
     true_M[cp, ] <- as.numeric(ctx$true_factors %*% lbar)
   }
 
-  expect_equal(M_hat, true_M, tolerance = comp_rel_tol(1e-8, M_hat, true_M), scale = 1)
+  expect_equal(M_hat_imp, true_M, tolerance = comp_rel_tol(1e-8, M_hat_imp, true_M), scale = 1)
+  expect_equal(M_hat_dir, true_M, tolerance = comp_rel_tol(1e-8, M_hat_dir, true_M), scale = 1)
+  expect_equal(M_hat_imp, M_hat_dir, tolerance = comp_rel_tol(1e-8, M_hat_imp, M_hat_dir), scale = 1)
 
   # Also test the constituent steps yield the same result
   est1 <- est_cohort_specific_params(panel_obj, est_specs = est_specs, num_threads = 1L)
@@ -111,7 +125,8 @@ test_that("recovers true cohort mean outcomes on staircase data", {
   expect_equal(ome$mean_outcomes(), true_M, tolerance = comp_rel_tol(1e-8, ome$mean_outcomes(), true_M), scale = 1)
 
   # One-shot and three-step pipelines must match exactly
-  expect_equal(M_hat, ome$mean_outcomes(), tolerance = comp_rel_tol(1e-8, M_hat, ome$mean_outcomes()), scale = 1)
+  expect_equal(M_hat_imp, ome$mean_outcomes(), tolerance = comp_rel_tol(1e-8, M_hat_imp, ome$mean_outcomes()), scale = 1)
+  expect_equal(M_hat_dir, ome$mean_outcomes(), tolerance = comp_rel_tol(1e-8, M_hat_dir, ome$mean_outcomes()), scale = 1)
 })
 
 test_that("pipeline runs reasonably fast on a larger panel (optional perf check)", {
@@ -148,15 +163,23 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
 
   est_specs <- list(pc = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = r))
 
-  t1 <- system.time(res1 <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = 1L))["elapsed"]
-  t2 <- system.time(res2 <- est_target_param_components(panel_obj, est_specs = est_specs))["elapsed"]
+  t1 <- system.time(res1_imp <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = 1L, est_outcome_means_via_imputation = TRUE))["elapsed"]
+  t2 <- system.time(res2_imp <- est_target_param_components(panel_obj, est_specs = est_specs, est_outcome_means_via_imputation = TRUE))["elapsed"]
+  # Also compute direct composition (no imputation) variants
+  res1_dir <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = 1L, est_outcome_means_via_imputation = FALSE)
+  res2_dir <- est_target_param_components(panel_obj, est_specs = est_specs, est_outcome_means_via_imputation = FALSE)
 
   print(sprintf("Elapsed time (1 thread): %f", t1))
   print(sprintf("Elapsed time (%d threads): %f", get_cpp_default_concurrency(), t2))
 
-  M1 <- res1$outcome_means$pc$mean_outcomes()
-  M2 <- res2$outcome_means$pc$mean_outcomes()
-  expect_equal(M1, M2, tolerance = comp_rel_tol(1e-6, M1, M2))
+  M1_imp <- res1_imp$outcome_means$pc$mean_outcomes()
+  M2_imp <- res2_imp$outcome_means$pc$mean_outcomes()
+  M1_dir <- res1_dir$outcome_means$pc$mean_outcomes()
+  M2_dir <- res2_dir$outcome_means$pc$mean_outcomes()
+  expect_equal(M1_imp, M2_imp, tolerance = comp_rel_tol(1e-6, M1_imp, M2_imp))
+  expect_equal(M1_dir, M2_dir, tolerance = comp_rel_tol(1e-6, M1_dir, M2_dir))
+  expect_equal(M1_imp, M1_dir, tolerance = comp_rel_tol(1e-6, M1_imp, M1_dir))
+  expect_equal(M2_imp, M2_dir, tolerance = comp_rel_tol(1e-6, M2_imp, M2_dir))
 
   # Align cohort order using exact index match from original to panel order
   ooi_panel <- panel_obj$get_observed_outcome_indices()
@@ -173,8 +196,10 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
     true_M[cp, ] <- as.numeric(ctx$true_factors %*% lbar)
   }
 
-  expect_equal(M1, true_M, tolerance = comp_rel_tol(1e-4, M1, true_M), scale = 1)
-  expect_equal(M2, true_M, tolerance = comp_rel_tol(1e-4, M2, true_M), scale = 1)
+  expect_equal(M1_imp, true_M, tolerance = comp_rel_tol(1e-4, M1_imp, true_M), scale = 1)
+  expect_equal(M2_imp, true_M, tolerance = comp_rel_tol(1e-4, M2_imp, true_M), scale = 1)
+  expect_equal(M1_dir, true_M, tolerance = comp_rel_tol(1e-4, M1_dir, true_M), scale = 1)
+  expect_equal(M2_dir, true_M, tolerance = comp_rel_tol(1e-4, M2_dir, true_M), scale = 1)
 
   # Soft perf sanity: multi-thread not egregiously slower than single-thread
   expect_lt(as.numeric(t2), as.numeric(t1) * 2.0 + 1.0)
