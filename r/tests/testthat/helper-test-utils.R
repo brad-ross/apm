@@ -82,17 +82,25 @@ unit_loading_from_all_units <- function(u_name, all_units, r, cohort_id, C) {
     sapply(0:(r - 1L), function(j) 1.0 + (u_idx / N) + (j / r))
 }
 
-build_factor_model_context <- function(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE) {
+build_factor_model_context <- function(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE, include_outcome_fes = FALSE) {
     all_units <- sort(unique(unlist(units_by_cohort)))
     T <- length(outcomes)
     r <- as.integer(r)
     true_factors <- make_true_factors_general(T, r)
+    # Optional outcome fixed effects orthogonal to span(true_factors)
+    g0 <- NULL
+    if (isTRUE(include_outcome_fes)) {
+        # Deterministic vector then orthogonalize onto complement of span(G)
+        g0_raw <- as.numeric(seq_len(T)) / (T + 1)
+        G <- true_factors
+        g0 <- as.numeric(g0_raw - G %*% solve(crossprod(G), crossprod(G, g0_raw)))
+    }
     rotations <- make_rotations(length(cohort_indices), r, rotate)
     cohort_G_list <- lapply(seq_along(cohort_indices), function(cid) {
         idx <- as.integer(cohort_indices[[cid]])
         as.matrix(true_factors[idx, , drop = FALSE] %*% rotations[[cid]])
     })
-    list(
+    out <- list(
         outcomes = outcomes,
         cohort_indices = cohort_indices,
         units_by_cohort = units_by_cohort,
@@ -102,11 +110,13 @@ build_factor_model_context <- function(outcomes, cohort_indices, units_by_cohort
         rotations = rotations,
         cohort_G_list = cohort_G_list
     )
+    if (!is.null(g0)) out$g0 <- g0
+    out
 }
 
 expected_Y_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
     G_c <- ctx$true_factors[T_idx, ]
-    do.call(rbind, lapply(unit_ids, function(u) {
+    Y_base <- do.call(rbind, lapply(unit_ids, function(u) {
         l_u <- unit_loading_from_all_units(
             u,
             ctx$all_units,
@@ -122,6 +132,11 @@ expected_Y_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
             as.numeric(G_c %*% l_u)
         }
     }))
+    if (!is.null(ctx$g0)) {
+        g0_c <- as.numeric(ctx$g0[T_idx])
+        Y_base <- sweep(Y_base, 2L, g0_c, "+")
+    }
+    Y_base
 }
 
 expected_covariates_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
@@ -175,6 +190,8 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
     if (is.null(ctx)) {
         ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = rotate)
     }
+    # Prefer explicit g0 argument; else use context g0 if available
+    if (is.null(g0) && !is.null(ctx$g0)) g0 <- ctx$g0
 
     data.table::rbindlist(lapply(seq_along(cohort_indices), function(k) {
         observed_idxs <- cohort_indices[[k]]

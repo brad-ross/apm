@@ -14,7 +14,7 @@ test_that("recovers true cohort mean outcomes on staircase data", {
   units_by_cohort <- make_units_by_cohort(n_cohorts = C, units_per_cohort = units_per_cohort, prefix = "u")
 
   # One shared ctx used for both panel generation and truth construction
-  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE)
+  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE, include_outcome_fes = TRUE)
 
   # Deterministic, noise-free panel from the ctx; then shuffle rows
   panel <- build_panel_from_indices_factor(
@@ -76,7 +76,7 @@ test_that("recovers true cohort mean outcomes on staircase data", {
     L_mat <- do.call(rbind, lapply(unit_ids, function(u) unit_loading_from_all_units(u, ctx$all_units, ctx$r, c, C)))
     # Mean loadings are defined in the original global basis; no cohort rotation is applied
     lbar <- colMeans(L_mat)
-    true_M[cp, ] <- as.numeric(ctx$true_factors %*% lbar)
+    true_M[cp, ] <- as.numeric(ctx$true_factors %*% lbar) + as.numeric(ctx$g0)
   }
 
   expect_equal(M_hat_imp, true_M, tolerance = comp_rel_tol(1e-8, M_hat_imp, true_M), scale = 1)
@@ -143,7 +143,7 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
   units_per_cohort <- 1000L
   units_by_cohort <- make_units_by_cohort(n_cohorts = C, units_per_cohort = units_per_cohort)
 
-  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE)
+  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE, include_outcome_fes = TRUE)
   panel <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE, ctx = ctx)
   panel <- panel[sample(nrow(panel))]
 
@@ -193,7 +193,7 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
     unit_ids <- units_by_cohort[[c]]
     L_mat <- do.call(rbind, lapply(unit_ids, function(u) unit_loading_from_all_units(u, ctx$all_units, ctx$r)))
     lbar <- colMeans(L_mat)
-    true_M[cp, ] <- as.numeric(ctx$true_factors %*% lbar)
+    true_M[cp, ] <- as.numeric(ctx$true_factors %*% lbar) + as.numeric(ctx$g0)
   }
 
   expect_equal(M1_imp, true_M, tolerance = comp_rel_tol(1e-4, M1_imp, true_M), scale = 1)

@@ -4,22 +4,17 @@ testthat::test_that("comp_imputation_components recovers g0 and L without covari
   outcomes <- make_outcomes(T)
   cohort_indices <- make_staircase_observed_indices(T, T_c)
   units_by_cohort <- make_units_by_cohort(length(cohort_indices), units_per)
-  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE)
-  # Generate g0 per C++ tests logic: arbitrary then orthogonalize w.r.t. span(G)
-  set.seed(1)
-  g0_raw <- as.numeric(seq_len(T)) / (T + 1)
+  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE, include_outcome_fes = TRUE)
   G_true <- ctx$true_factors
-  g0_proj <- as.numeric(g0_raw - G_true %*% solve(crossprod(G_true), crossprod(G_true, g0_raw)))
-
-  # Embed g0 in panel generating process
+  # Embed g0 in panel generating process via ctx
   panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort,
                                               include_covariates = FALSE, include_auxiliary = FALSE,
-                                              r = r, rotate = TRUE, ctx = ctx, g0 = g0_proj)
+                                              r = r, rotate = TRUE, ctx = ctx)
 
   panel <- UnbalancedPanel$new(panel_dt, unit_id_col = "unit_id", outcome_id_col = "outcome_id", outcome_value_col = "y", model_rank = r)
 
-  # Build FactorModelEstimates via helper (pass orthogonalized g0)
-  fme <- FactorModelEstimates$new(make_factor_model_estimates_cpp(G_true, g0 = g0_proj))
+  # Build FactorModelEstimates via helper (pass ctx$g0)
+  fme <- FactorModelEstimates$new(make_factor_model_estimates_cpp(G_true, g0 = ctx$g0))
 
   # Run comp
   N <- nrow(panel$get_unit_cohorts())
@@ -33,7 +28,7 @@ testthat::test_that("comp_imputation_components recovers g0 and L without covari
 
   # g0 should be equal (already orthogonalized against span(G))
   testthat::expect_true(out$has_g0())
-  testthat::expect_equal(as.numeric(out$g0()), as.numeric(g0_proj), tolerance = 1e-6)
+  testthat::expect_equal(as.numeric(out$g0()), as.numeric(ctx$g0), tolerance = 1e-6)
 
   # L present and finite with expected dims: N x r
   L <- out$L()
@@ -48,7 +43,7 @@ testthat::test_that("comp_imputation_components recovers alpha with covariates (
   outcomes <- make_outcomes(T)
   cohort_indices <- make_staircase_observed_indices(T, T_c)
   units_by_cohort <- make_units_by_cohort(length(cohort_indices), units_per)
-  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE)
+  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE, include_outcome_fes = FALSE)
   a_true <- c(0.5, 1.0)
   panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort,
                                               include_covariates = TRUE, include_auxiliary = FALSE,
@@ -75,16 +70,14 @@ testthat::test_that("comp_imputation_components handles by-spec map dispatch", {
   outcomes <- make_outcomes(T)
   cohort_indices <- make_staircase_observed_indices(T, T_c)
   units_by_cohort <- make_units_by_cohort(length(cohort_indices), units_per)
-  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE)
-  g0_raw <- seq_len(T) / (T + 1)
+  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE, include_outcome_fes = TRUE)
   G_true <- ctx$true_factors
-  g0_proj <- as.numeric(g0_raw - G_true %*% solve(crossprod(G_true), crossprod(G_true, g0_raw)))
   panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort,
                                               include_covariates = FALSE, include_auxiliary = FALSE,
-                                              r = r, rotate = TRUE, ctx = ctx, g0 = g0_proj)
+                                              r = r, rotate = TRUE, ctx = ctx)
   panel <- UnbalancedPanel$new(panel_dt, unit_id_col = "unit_id", outcome_id_col = "outcome_id", outcome_value_col = "y", model_rank = r)
 
-  fme <- FactorModelEstimates$new(make_factor_model_estimates_cpp(G_true, g0 = g0_proj))
+  fme <- FactorModelEstimates$new(make_factor_model_estimates_cpp(G_true, g0 = ctx$g0))
 
   N <- nrow(panel$get_unit_cohorts())
   wb <- get_weighted_bootstrap_draws(N, 1L, type = "multinomial", seed = 1L)
@@ -93,7 +86,7 @@ testthat::test_that("comp_imputation_components handles by-spec map dispatch", {
   for (k in names(res)) {
     outk <- res[[k]]
     testthat::expect_true(outk$has_g0())
-    testthat::expect_equal(as.numeric(outk$g0()), as.numeric(g0_proj), tolerance = 1e-6)
+    testthat::expect_equal(as.numeric(outk$g0()), as.numeric(ctx$g0), tolerance = 1e-6)
     P_out <- projection_matrix_r(outk$G())
     P_true <- projection_matrix_r(G_true)
     testthat::expect_equal(P_out, P_true, tolerance = 1e-9)
