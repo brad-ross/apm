@@ -19,6 +19,7 @@
 #include "est_outcome_means.h"
 #include "cohort_specific_param_structs.h"
 #include "est_cohort_specific_params.h"
+#include "../outcome_imputation.h"
 
 namespace apm {
 
@@ -74,7 +75,10 @@ TargetParamComponents est_target_param_components_from_panel(
     std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
     std::optional<std::size_t> num_threads = std::nullopt,
     const CohortOutcomeMask& cohort_outcomes_to_mask = CohortOutcomeMask(),
-    bool est_outcome_means_via_imputation = true);
+    bool est_outcome_means_via_imputation = true,
+    double imputation_tol = DEFAULT_TOL,
+    std::size_t imputation_max_iters = DEFAULT_MAX_ITERS,
+    const std::string& imputation_fixed_point_method = DEFAULT_FP_METHOD);
 
 } // namespace apm
 

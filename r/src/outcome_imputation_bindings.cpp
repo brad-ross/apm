@@ -21,9 +21,9 @@ SEXP comp_imputation_components_cpp(
     Rcpp::Nullable<Rcpp::List> cohort_outcome_mean_suff_stat_ests = R_NilValue,
     SEXP weighted_bootstrap_xptr = R_NilValue,
     Rcpp::Nullable<Rcpp::List> effective_observed_outcome_indices = R_NilValue,
-    double tol = 1e-10,
-    std::size_t max_iters = 1000,
-    const std::string& fixed_point_method = "irons-tuck",
+    Rcpp::Nullable<Rcpp::NumericVector> tol_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> max_iters_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::String> fixed_point_method_in = R_NilValue,
     Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue)
 {
     const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
@@ -50,6 +50,11 @@ SEXP comp_imputation_components_cpp(
         if (p.first) nt_opt = p.second;
     }
 
+    // Resolve defaults for algorithm controls if not provided from R
+    double tol = tol_in.isNotNull() ? Rcpp::as<double>(tol_in.get()) : apm::DEFAULT_TOL;
+    std::size_t max_iters = max_iters_in.isNotNull() ? static_cast<std::size_t>(Rcpp::as<int>(max_iters_in.get())) : apm::DEFAULT_MAX_ITERS;
+    std::string fixed_point_method = fixed_point_method_in.isNotNull() ? Rcpp::as<std::string>(fixed_point_method_in.get()) : std::string(apm::DEFAULT_FP_METHOD);
+
     apm::FactorModelEstimates out = apm::comp_imputation_components(
         panel,
         *fptr,
@@ -74,9 +79,9 @@ Rcpp::List comp_imputation_components_by_spec_cpp(
     Rcpp::Nullable<Rcpp::List> cohort_outcome_mean_suff_stat_ests = R_NilValue,
     SEXP weighted_bootstrap_xptr = R_NilValue,
     Rcpp::Nullable<Rcpp::List> effective_observed_outcome_indices = R_NilValue,
-    double tol = 1e-10,
-    std::size_t max_iters = 1000,
-    const std::string& fixed_point_method = "irons-tuck",
+    Rcpp::Nullable<Rcpp::NumericVector> tol_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> max_iters_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::String> fixed_point_method_in = R_NilValue,
     Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue)
 {
     const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
@@ -111,6 +116,11 @@ Rcpp::List comp_imputation_components_by_spec_cpp(
         auto p = apm::r_utils::resolve_num_threads(num_threads_in);
         if (p.first) nt_opt = p.second;
     }
+
+    // Resolve defaults for algorithm controls if not provided from R
+    double tol = tol_in.isNotNull() ? Rcpp::as<double>(tol_in.get()) : apm::DEFAULT_TOL;
+    std::size_t max_iters = max_iters_in.isNotNull() ? static_cast<std::size_t>(Rcpp::as<int>(max_iters_in.get())) : apm::DEFAULT_MAX_ITERS;
+    std::string fixed_point_method = fixed_point_method_in.isNotNull() ? Rcpp::as<std::string>(fixed_point_method_in.get()) : std::string(apm::DEFAULT_FP_METHOD);
 
     auto out_map = apm::comp_imputation_components(
         panel,

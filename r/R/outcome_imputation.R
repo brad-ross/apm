@@ -20,9 +20,9 @@ comp_imputation_components <- function(panel,
                                        weighted_bootstrap = NULL,
                                        effective_observed_outcome_indices = NULL,
                                        num_threads = NULL,
-                                       tol = 1e-10,
-                                       max_iters = 1000L,
-                                       fixed_point_method = "irons-tuck") {
+                                       tol = NULL,
+                                       max_iters = NULL,
+                                       fixed_point_method = NULL) {
   stopifnot(inherits(panel, "UnbalancedPanel"))
   holder_xp <- panel$get_panel_holder_xptr()
   nt <- if (is.null(num_threads)) NULL else as.integer(num_threads)
@@ -35,9 +35,9 @@ comp_imputation_components <- function(panel,
       cohort_outcome_mean_suff_stat_ests = xplist,
       weighted_bootstrap_xptr = if (is.null(weighted_bootstrap)) NULL else weighted_bootstrap$.__enclos_env__$private$xp,
       effective_observed_outcome_indices = effective_observed_outcome_indices,
-      tol = tol,
-      max_iters = as.integer(max_iters),
-      fixed_point_method = fixed_point_method,
+      tol_in = tol,
+      max_iters_in = if (is.null(max_iters)) NULL else as.integer(max_iters),
+      fixed_point_method_in = fixed_point_method,
       num_threads_in = nt
     )
     return(FactorModelEstimates$new(xp_res))
@@ -58,9 +58,9 @@ comp_imputation_components <- function(panel,
       cohort_outcome_mean_suff_stat_ests = xplist,
       weighted_bootstrap_xptr = if (is.null(weighted_bootstrap)) NULL else weighted_bootstrap$.__enclos_env__$private$xp,
       effective_observed_outcome_indices = effective_observed_outcome_indices,
-      tol = tol,
-      max_iters = as.integer(max_iters),
-      fixed_point_method = fixed_point_method,
+      tol_in = tol,
+      max_iters_in = if (is.null(max_iters)) NULL else as.integer(max_iters),
+      fixed_point_method_in = fixed_point_method,
       num_threads_in = nt
     )
     nms <- names(res)

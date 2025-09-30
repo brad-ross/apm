@@ -11,7 +11,6 @@
 #include "../est_outcome_means.h"
 #include "../panels/InMemoryUnbalancedPanel.h"
 #include "../utils.h"
-#include "../outcome_imputation.h"
 #include "../bootstrap.h"
 
 namespace apm {
@@ -118,7 +117,10 @@ TargetParamComponents est_target_param_components_from_panel(
     std::shared_ptr<const WeightedBootstrap> bootstrap,
     std::optional<std::size_t> num_threads,
     const CohortOutcomeMask& cohort_outcomes_to_mask,
-    bool est_outcome_means_via_imputation)
+    bool est_outcome_means_via_imputation,
+    double imputation_tol,
+    std::size_t imputation_max_iters,
+    const std::string& imputation_fixed_point_method)
 {
     // 1) Cohort-specific estimates (raw C++) via panel-based core
     CohortSpecificEstimates ests = estimate_cohort_specific_params_from_internal_panel_rep(
@@ -150,9 +152,9 @@ TargetParamComponents est_target_param_components_from_panel(
             ests.cohort_outcome_mean_ests,
             bootstrap,
             std::optional<ObservedOutcomeIndices>{obs_idx_eff},
-            1e-10,
-            1000,
-            "irons-tuck",
+            imputation_tol,
+            imputation_max_iters,
+            imputation_fixed_point_method,
             num_threads);
     }
 

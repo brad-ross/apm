@@ -273,7 +273,7 @@ std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::com
     }
     
     if (iter == max_iters) {
-        std::cerr << "Warning: comp_unit_and_outcome_specific_params_vanilla_fixed_point did not converge within max_iters="
+        std::cerr << "Warning: comp_unit_and_outcome_specific_params_fixed_point with fixed_point_method=" << fixed_point_method << " did not converge within max_iters="
                   << max_iters << ", tol=" << tol << std::endl;
     }
 

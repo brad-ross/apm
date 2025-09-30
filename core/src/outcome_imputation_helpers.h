@@ -14,6 +14,7 @@
 
 #include "panels/AbstractUnbalancedPanel.h"
 #include "cohort_specific_param_structs.h"
+#include "outcome_imputation.h" // for DEFAULT_* constants
 // VariableSpec moved here from outcome_imputation.h
 
 namespace apm {
@@ -66,9 +67,9 @@ arma::vec comp_outcome_specific_params_fixed_point(
     const FactorModelParameters& factor_model_params,
     std::optional<arma::vec> unit_weights_opt = std::nullopt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
-    double tol = 1e-10,
-    std::size_t max_iters = 1000,
-    const std::string& fixed_point_method = "vanilla");
+    double tol = DEFAULT_TOL,
+    std::size_t max_iters = DEFAULT_MAX_ITERS,
+    const std::string& fixed_point_method = DEFAULT_FP_METHOD);
 
 std::pair<std::optional<arma::vec>, std::optional<arma::mat>> comp_unit_and_outcome_specific_params_fixed_point(
     const AbstractUnbalancedPanel& panel,
@@ -76,9 +77,9 @@ std::pair<std::optional<arma::vec>, std::optional<arma::mat>> comp_unit_and_outc
     const FactorModelParameters& factor_model_params,
     std::optional<arma::vec> unit_weights_opt = std::nullopt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
-    double tol = 1e-10,
-    std::size_t max_iters = 1000,
-    const std::string& fixed_point_method = "vanilla",
+    double tol = DEFAULT_TOL,
+    std::size_t max_iters = DEFAULT_MAX_ITERS,
+    const std::string& fixed_point_method = DEFAULT_FP_METHOD,
     std::optional<arma::vec> covar_coefs_for_residualization = std::nullopt,
     bool store_unit_params = false);
 
