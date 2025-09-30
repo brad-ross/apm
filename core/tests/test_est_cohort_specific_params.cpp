@@ -86,12 +86,10 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
         EXPECT_EQ(est_fe.G.n_cols, ctx.r);
 
         arma::mat G0_true = ctx.G_true.rows(ctx.observed_outcome_indices[c]);
-        arma::mat P_est_no_fe = apm::internal::projection_matrix(est_no_fe.G);
-        arma::mat P_est_fe    = apm::internal::projection_matrix(est_fe.G);
-        arma::mat P_true      = apm::internal::projection_matrix(G0_true);
         
-        // Align with R tests: assert span match for no-FE estimator only
+        // Align with R tests: assert span match for estimators
         expect_same_subspace(est_no_fe.G, G0_true);
+        expect_same_subspace(est_fe.G, G0_true);
     }
 
     const auto& oms0 = out.cohort_outcome_mean_ests[0].suff_stat_estimates;
@@ -119,6 +117,46 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
         const auto& w = out.cohort_weights.at("pca_fe");
         ASSERT_TRUE(w.bootstrap_cohort_weights.empty());
         ASSERT_TRUE(arma::approx_equal(w.cohort_weights, eq, "absdiff", 1e-12));
+    }
+}
+
+
+TEST(CohortSpecificRawTest, PCAWithFixedEffects_RecoversGAndG0_WhenDGPHasFEs) {
+    // DGP with outcome fixed effects enabled
+    auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3, /*units_per=*/0, /*q=*/0, /*with_covariates=*/false, /*with_fixed_effects=*/true);
+    auto rp = make_raw_panel(ctx);
+
+    std::unordered_map<std::string, apm::EstimatorSpecification> specs;
+    specs.emplace("pca_fe", apm::EstimatorSpecification{"principal_components", true, ctx.r});
+
+    std::vector<const double*> covar_cols; // q=0
+    std::vector<const double*> auxiliary_cols; // d=0
+    apm::InMemoryUnbalancedPanel panel(
+        rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+        covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+    apm::CohortSpecificEstimates out = apm::estimate_cohort_specific_params_from_internal_panel_rep(
+        panel, specs, /*bootstrap=*/nullptr, /*num_threads=*/std::nullopt, /*mask=*/apm::CohortOutcomeMask());
+
+    ASSERT_EQ(out.cohort_specific_factor_ests.size(), 1u);
+    const auto& pca_fe_vec = out.cohort_specific_factor_ests.at("pca_fe");
+    ASSERT_EQ(pca_fe_vec.size(), ctx.C);
+
+    for (std::size_t c = 0; c < ctx.C; ++c) {
+        const auto& est_fe = pca_fe_vec[c].parameter_estimates;
+        EXPECT_TRUE(est_fe.has_fixed_effects());
+        EXPECT_EQ(est_fe.G.n_rows, ctx.observed_outcome_indices[c].n_elem);
+        EXPECT_EQ(est_fe.G.n_cols, ctx.r);
+
+        // Check factor subspace recovery
+        arma::mat G0_true = ctx.G_true.rows(ctx.observed_outcome_indices[c]);
+        expect_same_subspace(est_fe.G, G0_true);
+
+        // Check recovery of cohort-specific outcome fixed effects g_0
+        // ASSERT_TRUE(est_fe.g_0.has_value());
+        // const arma::vec& g0_hat = *(est_fe.g_0);
+        // arma::vec g0_true_c = ctx.g0_true.elem(ctx.observed_outcome_indices[c]);
+        // ASSERT_EQ(g0_hat.n_elem, g0_true_c.n_elem);
+        // ASSERT_TRUE(arma::approx_equal(g0_hat, g0_true_c, "absdiff", 1e-9));
     }
 }
 

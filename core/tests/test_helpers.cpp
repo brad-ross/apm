@@ -39,7 +39,7 @@ void expect_same_subspace(const arma::mat& G1, const arma::mat& G2, double tol) 
     arma::mat P1 = apm::internal::projection_matrix(G1);
     arma::mat P2 = apm::internal::projection_matrix(G2);
     double rel_tol = std::max(arma::abs(P1).max(), arma::abs(P2).max());
-    ASSERT_TRUE(arma::approx_equal(P1, P2, "absdiff", rel_tol));
+    ASSERT_TRUE(arma::approx_equal(P1, P2, "absdiff", tol * rel_tol));
 }
 
 // -------- Estimation fixtures --------
@@ -231,7 +231,10 @@ StaircasePanelContext make_staircase_panel_context(
     ctx.l_unit.reserve(total_units);
     for (arma::uword u = 0; u < total_units; ++u) {
         arma::vec l(ctx.r);
-        for (arma::uword j = 0; j < ctx.r; ++j) l(j) = 1.0 + static_cast<double>(u)/static_cast<double>(total_units) + static_cast<double>(j)/static_cast<double>(ctx.r);
+        double x = (static_cast<double>(u) + 1.0) / (static_cast<double>(total_units) + 1.0);
+        for (arma::uword j = 0; j < ctx.r; ++j) {
+            l(j) = 1.0 + std::pow(x, static_cast<int>(j + 1));
+        }
         ctx.l_unit.push_back(std::move(l));
     }
     return ctx;

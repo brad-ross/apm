@@ -76,10 +76,12 @@ make_rotations <- function(C, r, rotate = TRUE) {
 }
 
 unit_loading_from_all_units <- function(u_name, all_units, r, cohort_id, C) {
-    # Match C++: for global unit index u (0-based), l_j = 1.0 + u/total_units + j/r for j=0..r-1
+    # Match C++ deterministic full-rank variation: for global unit index u (0-based),
+    # set x = (u+1)/(N+1) and l_j = 1.0 + x^(j+1) for j = 0..r-1
     N <- length(all_units)
     u_idx <- match(u_name, all_units) - 1L
-    sapply(0:(r - 1L), function(j) 1.0 + (u_idx / N) + (j / r))
+    x <- (as.numeric(u_idx) + 1.0) / (N + 1.0)
+    sapply(0:(r - 1L), function(j) 1.0 + x^(j + 1L))
 }
 
 build_factor_model_context <- function(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE, include_outcome_fes = FALSE) {
@@ -116,6 +118,14 @@ build_factor_model_context <- function(outcomes, cohort_indices, units_by_cohort
 
 expected_Y_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
     G_c <- ctx$true_factors[T_idx, ]
+    T_c <- dim(G_c)[1]
+    if (is.null(T_c)) {
+        T_c <- length(G_c)
+    }
+    g0_c <- double(T_c)
+    if (!is.null(ctx$g0)) {
+        g0_c <- ctx$g0[T_idx]
+    }
     Y_base <- do.call(rbind, lapply(unit_ids, function(u) {
         l_u <- unit_loading_from_all_units(
             u,
@@ -126,16 +136,16 @@ expected_Y_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
         )
         if (is.null(dim(G_c))) {
             # G_c is a vector (length T), l_u is scalar
-            as.numeric(G_c * l_u)
+            as.numeric(G_c * l_u) + g0_c
         } else {
             # G_c is a matrix (T x r), l_u is a vector (r)
-            as.numeric(G_c %*% l_u)
+            as.numeric(G_c %*% l_u) + g0_c
         }
     }))
-    if (!is.null(ctx$g0)) {
-        g0_c <- as.numeric(ctx$g0[T_idx])
-        Y_base <- sweep(Y_base, 2L, g0_c, "+")
-    }
+    # if (!is.null(ctx$g0)) {
+    #     g0_c <- as.numeric(ctx$g0[T_idx])
+    #     Y_base <- sweep(Y_base, 2L, g0_c, "+")
+    # }
     Y_base
 }
 
@@ -206,10 +216,7 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                 dt[, ("y") := NA_real_]
                 # Base factor-implied outcomes for observed indices
                 y_obs <- expected_Y_for_units_ctx(ctx, k, unit_ids = c(u), T_idx = observed_idxs)[1, ]
-                # Optional fixed effects term
-                if (!is.null(g0)) {
-                    y_obs <- y_obs + as.numeric(g0[observed_idxs])
-                }
+
                 # Optional covariate contribution X * a
                 if (isTRUE(include_covariates) && !is.null(a)) {
                     X_arr <- expected_covariates_for_units_ctx(ctx, k, unit_ids = c(u), T_idx = observed_idxs)
@@ -232,9 +239,6 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                     outcome_id = observed_outcomes
                 )
                 y_obs <- expected_Y_for_units_ctx(ctx, k, unit_ids = c(u), T_idx = observed_idxs)[1, ]
-                if (!is.null(g0)) {
-                    y_obs <- y_obs + as.numeric(g0[observed_idxs])
-                }
                 dt[, ("y") := y_obs]
                 dt
             }
