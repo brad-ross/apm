@@ -115,8 +115,8 @@ OutcomeMeanSuffStatEstimator <- R6::R6Class(
       invisible(self)
     },
 
-    estimate = function() {
-      fxp <- omsse_estimate_cpp(private$xp)
+    estimate = function(total_units) {
+      fxp <- omsse_estimate_with_total_cpp(private$xp, as.integer(total_units))
       OutcomeMeanSuffStatEstimates$new(fxp)
     },
 
@@ -196,6 +196,14 @@ OutcomeMeanSuffStatEstimates <- R6::R6Class(
         omsse_point_covar_means_cpp(private$xp)
       } else {
         omsse_boot_covar_means_cpp(private$xp, as.integer(b))
+      }
+    },
+
+    cohort_pop_share = function(b = NULL) {
+      if (is.null(b)) {
+        omsse_point_cohort_pop_share_cpp(private$xp)
+      } else {
+        omsse_boot_cohort_pop_share_cpp(private$xp, as.integer(b))
       }
     }
   ),

@@ -8,12 +8,15 @@ find_package(GTest REQUIRED)
 add_executable(test_apm
     test_helpers.cpp
     test_est_outcome_means.cpp
+    test_agg_cohort_specific_factor_model_params.cpp
     test_apm_core.cpp
     test_linear_algebra_utils.cpp
     test_bootstrap.cpp
     test_pc_estimators.cpp
     test_outcome_mean_suff_stat_estimators.cpp
     test_est_cohort_specific_params.cpp
+    test_outcome_imputation.cpp
+    test_est_target_param_components.cpp
 )
 
 # Link with the core library and Google Test

@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cstddef>
+#include <optional>
 #include "../../core/src/est_cohort_specific_params.h"
 #include "r_utils.h"
 #include "cohort_specific_estimates_helpers.h"
@@ -54,73 +55,6 @@ to_cpp_specs(const Rcpp::List& est_specs_r) {
     return out;
 }
 
-// (removed) ordered_spec_names: we now source names from the result maps
-
-// Convert mask R list (names = cohort ids 1-based, values = integer vectors 1-based outcomes) to C++ 0-based
-static apm::CohortOutcomeMask to_cpp_mask(Rcpp::Nullable<Rcpp::List> mask_in) {
-    apm::CohortOutcomeMask out;
-    if (mask_in.isNull()) return out;
-    Rcpp::List L(mask_in);
-    if (L.size() == 0) return out;
-    Rcpp::CharacterVector nms = Rcpp::as<Rcpp::CharacterVector>(L.names());
-    for (int i = 0; i < L.size(); ++i) {
-        std::string s = Rcpp::as<std::string>(nms[i]);
-        int cohort1 = std::stoi(s);
-        int cohort0 = cohort1 - 1;
-        Rcpp::IntegerVector v = L[i];
-        arma::uvec vv(static_cast<arma::uword>(v.size()));
-        for (int j = 0; j < v.size(); ++j) {
-            if (Rcpp::IntegerVector::is_na(v[j]) || v[j] <= 0) Rcpp::stop("mask outcome ids must be positive integers");
-            vv[static_cast<arma::uword>(j)] = static_cast<arma::uword>(v[j] - 1);
-        }
-        out.emplace(cohort0, std::move(vv));
-    }
-    return out;
-}
-
-// Holder that pins R vectors and embeds the panel by value
-struct PanelHolder {
-    Rcpp::IntegerVector unit_idx;
-    Rcpp::IntegerVector cohort_id;
-    Rcpp::IntegerVector outcome_idx;
-    Rcpp::NumericVector y;
-    std::vector<Rcpp::NumericVector> covars;
-    std::vector<Rcpp::NumericVector> aux;
-    std::vector<const double*> covar_ptrs;
-    std::vector<const double*> aux_ptrs;
-    apm::InMemoryUnbalancedPanel panel;
-
-    static std::vector<const double*> to_ptrs(const std::vector<Rcpp::NumericVector>& cols) {
-        std::vector<const double*> out;
-        out.reserve(cols.size());
-        for (const auto& v : cols) out.push_back(REAL(v));
-        return out;
-    }
-
-    PanelHolder(Rcpp::IntegerVector unit_idx_,
-                Rcpp::IntegerVector cohort_id_,
-                Rcpp::IntegerVector outcome_idx_,
-                Rcpp::NumericVector y_,
-                std::vector<Rcpp::NumericVector> covars_,
-                std::vector<Rcpp::NumericVector> aux_,
-                const apm::ObservedOutcomeIndices& ooi0b)
-        : unit_idx(unit_idx_)
-        , cohort_id(cohort_id_)
-        , outcome_idx(outcome_idx_)
-        , y(y_)
-        , covars(std::move(covars_))
-        , aux(std::move(aux_))
-        , covar_ptrs(to_ptrs(covars))
-        , aux_ptrs(to_ptrs(aux))
-        , panel(
-            INTEGER(unit_idx), INTEGER(cohort_id), INTEGER(outcome_idx), REAL(y),
-            covar_ptrs, aux_ptrs,
-            static_cast<std::size_t>(unit_idx.size()),
-            ooi0b,
-            /*one_indexed=*/true
-        )
-    {}
-};
 
 // Extract covariate columns as numeric vectors and raw pointers
 struct CovariateColumns {
@@ -146,7 +80,8 @@ SEXP build_R_panel_holder_cpp(Rcpp::DataFrame processed_panel,
                               Rcpp::List observed_outcome_indices,
                               const std::string& outcome_value_col,
                               Rcpp::CharacterVector covar_cols,
-                              Rcpp::CharacterVector auxiliary_cols) {
+                              Rcpp::CharacterVector auxiliary_cols,
+                              Rcpp::Nullable<Rcpp::IntegerVector> num_units_in = R_NilValue) {
     Rcpp::IntegerVector unit_idx_r = processed_panel["unit_idx"];
     Rcpp::IntegerVector cohort_id_r = processed_panel["cohort_id"];
     Rcpp::IntegerVector outcome_idx_r = processed_panel["outcome_idx"];
@@ -160,22 +95,19 @@ SEXP build_R_panel_holder_cpp(Rcpp::DataFrame processed_panel,
     auto covs = grab_numeric_cols(processed_panel, covar_cols, n_rows);
     auto aux = grab_numeric_cols(processed_panel, auxiliary_cols, n_rows);
 
-    auto* holder = new PanelHolder(unit_idx_r, cohort_id_r, outcome_idx_r, y_r, std::move(covs), std::move(aux), ooi0b);
-    return Rcpp::XPtr<PanelHolder>(holder, true);
+    std::optional<std::size_t> num_units_opt = std::nullopt;
+    if (num_units_in.isNotNull()) {
+        Rcpp::IntegerVector nu(num_units_in);
+        if (nu.size() > 0 && !Rcpp::IntegerVector::is_na(nu[0]) && nu[0] > 0) {
+            num_units_opt = static_cast<std::size_t>(nu[0]);
+        }
+    }
+
+    auto* holder = new apm::r_utils::PanelHolder(unit_idx_r, cohort_id_r, outcome_idx_r, y_r, std::move(covs), std::move(aux), ooi0b, num_units_opt);
+    return Rcpp::XPtr<apm::r_utils::PanelHolder>(holder, true);
 }
 
 // Resolve num_threads optional parameter (returns optional value flag and size)
-static std::pair<bool, std::size_t> resolve_num_threads(Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in) {
-    if (num_threads_in.isNotNull()) {
-        Rcpp::IntegerVector nt(num_threads_in);
-        std::size_t num_threads = 1;
-        if (nt.size() > 0 && !Rcpp::IntegerVector::is_na(nt[0])) {
-            num_threads = static_cast<std::size_t>(std::max(1, static_cast<int>(nt[0])));
-        }
-        return {true, num_threads};
-    }
-    return {false, 0};
-}
 
 // Convert core results to R list; move into heap allocations; source spec names from result maps
 static Rcpp::List build_return_list(apm::CohortSpecificEstimates&& ests) {
@@ -268,12 +200,12 @@ apm::CohortSpecificEstimates cohort_specific_estimates_from_panel_cpp_core(
 	Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in,
 	Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in)
 {
-	Rcpp::XPtr<PanelHolder> ph(panel_holder_xptr);
+	Rcpp::XPtr<apm::r_utils::PanelHolder> ph(panel_holder_xptr);
 	auto cpp_specs = to_cpp_specs(est_specs);
 	auto wb = apm::r_utils::xp_to_const_wb_shared(bootstrap_xptr);
-	auto [has_threads, nt] = resolve_num_threads(num_threads_in);
+	auto [has_threads, nt] = apm::r_utils::resolve_num_threads(num_threads_in);
 
-	apm::CohortOutcomeMask mask = to_cpp_mask(cohort_outcomes_to_mask_in);
+	apm::CohortOutcomeMask mask = apm::r_utils::to_cpp_mask(cohort_outcomes_to_mask_in);
 
 	std::optional<std::size_t> nt_opt = has_threads ? std::optional<std::size_t>(nt) : std::nullopt;
 	return apm::estimate_cohort_specific_params_from_internal_panel_rep(
@@ -283,12 +215,6 @@ apm::CohortSpecificEstimates cohort_specific_estimates_from_panel_cpp_core(
 		nt_opt,
 		mask
 	);
-}
-
-// Helper exposed for other bindings: get observed outcome indices from PanelHolder
-apm::ObservedOutcomeIndices observed_outcome_indices_from_panel_holder(SEXP panel_holder_xptr) {
-    Rcpp::XPtr<PanelHolder> ph(panel_holder_xptr);
-    return ph->panel.observed_outcome_indices();
 }
 
 // [[Rcpp::export]]
@@ -307,4 +233,3 @@ Rcpp::List est_cohort_specific_params_from_panel_cpp(SEXP panel_holder_xptr,
 
     return build_return_list(std::move(ests));
 }
-

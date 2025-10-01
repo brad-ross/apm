@@ -16,31 +16,6 @@
 namespace apm {
 
 /**
- * @brief Aggregate cohort-specific parameter estimates including bootstrap replicates.
- *
- * Aggregates point estimates and each bootstrap replicate independently using
- * optional weights (and optional per-bootstrap weights), returning a
- * FactorModelEstimates containing aggregated point estimates and aggregated
- * bootstrap replicates.
- */
-FactorModelEstimates aggregate_cohort_specific_factor_model_params(
-    const std::vector<FactorModelEstimates>& cohort_specific_factor_model_param_ests,
-    const ObservedOutcomeIndices& observed_outcome_indices,
-    const CohortWeightEstimates& cohort_weight_estimates = CohortWeightEstimates());
-
-/**
- * @brief Aggregate factor model estimates per estimator specification.
- *
- * Validates keys across maps (symmetric presence) and aggregates per spec by
- * dispatching to the vector-based overload of
- * `aggregate_cohort_specific_factor_model_params`.
- */
-std::unordered_map<std::string, FactorModelEstimates> aggregate_cohort_specific_factor_model_params(
-    const std::unordered_map<std::string, std::vector<FactorModelEstimates>>& cohort_specific_factor_ests,
-    const ObservedOutcomeIndices& observed_outcome_indices,
-    const std::unordered_map<std::string, CohortWeightEstimates>& cohort_weights);
-
-/**
  * @brief Container for cohort mean outcome estimates with optional bootstrap replicates.
  */
 struct OutcomeMeansEstimates {
@@ -83,13 +58,6 @@ std::unordered_map<std::string, OutcomeMeansEstimates> estimate_outcome_means_ac
     const std::unordered_map<std::string, FactorModelEstimates>& factor_model_estimates_map,
     const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<OutcomeMeanSuffStatEstimates>& suff_stat_estimates_vec);
-
-/**
- * @brief Return the default number of threads available to C++ parallel runtime.
- *
- * Uses oneTBB when available; otherwise returns 1.
- */
-std::size_t get_cpp_default_concurrency();
 
 } // namespace apm
 

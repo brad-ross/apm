@@ -124,7 +124,7 @@ ResolvedImputationArgs resolve_imputation_args(
     const bool has_a  = params.has_covariate_coefs();
     const bool has_X  = stats.has_covar_means();
     if (has_a != has_X) {
-        throw std::invalid_argument("impute_outcomes: covariate information mismatch between parameters and sufficient statistics.");
+        throw std::invalid_argument("impute_outcomes_from_obs_outcomes: covariate information mismatch between parameters and sufficient statistics.");
     }
 
     const arma::vec* g0_ptr = nullptr;
@@ -164,6 +164,21 @@ void validate_X_c(const arma::mat& X_c, arma::uword T, arma::uword q) {
     }
     if (X_c.n_cols != q) {
         throw std::invalid_argument("The number of columns in X_c must match the number of elements in a.");
+    }
+}
+
+void validate_G_and_L(const arma::mat& G, const arma::mat& L) {
+    if (G.n_cols != L.n_cols) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: number of columns in G must match number of columns in L.");
+    }
+}
+
+void validate_X_vec(const std::vector<arma::mat>& X_vec, arma::uword C, arma::uword T, arma::uword q) {
+    if (X_vec.size() != C) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: number of X matrices must equal number of cohorts.");
+    }
+    for (arma::uword c = 0; c < C; ++c) {
+        validate_X_c(X_vec[c], T, q);
     }
 }
 
@@ -406,7 +421,7 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
 // Outcome Imputation
 //==============================================================================
 
-arma::vec impute_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::vec& a,
@@ -421,7 +436,7 @@ arma::vec impute_outcomes(
     return B_c * (m_c - g_0_obs - X_c_obs * a) + g_0 + X_c * a;
 }
 
-arma::vec impute_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::uvec& T_c,
@@ -432,7 +447,7 @@ arma::vec impute_outcomes(
     return B_c * (m_c - g_0_obs) + g_0;
 }
 
-arma::vec impute_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& a,
     const arma::uvec& T_c,
@@ -444,7 +459,7 @@ arma::vec impute_outcomes(
     return B_c * (m_c - X_c_obs * a) + X_c * a;
 }
 
-arma::vec impute_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const arma::mat& G,
     const arma::uvec& T_c,
     const arma::vec& m_c) {
@@ -453,7 +468,7 @@ arma::vec impute_outcomes(
     return B_c * m_c;
 }
 
-arma::vec impute_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const FactorModelParameters& factor_model_parameters,
     const arma::uvec& T_c,
     const OutcomeMeanSufficientStatistics& outcome_mean_suff_stats) {
@@ -461,22 +476,162 @@ arma::vec impute_outcomes(
     const ResolvedImputationArgs args = resolve_imputation_args(factor_model_parameters, T_c, outcome_mean_suff_stats);
 
     if (args.g0 && args.a) {
-        return impute_outcomes(args.G, *args.g0, *args.a, args.T_c, args.m_c, *args.X);
+        return impute_outcomes_from_obs_outcomes(args.G, *args.g0, *args.a, args.T_c, args.m_c, *args.X);
     }
     if (args.g0 && !args.a) {
-        return impute_outcomes(args.G, *args.g0, args.T_c, args.m_c);
+        return impute_outcomes_from_obs_outcomes(args.G, *args.g0, args.T_c, args.m_c);
     }
     if (!args.g0 && args.a) {
-        return impute_outcomes(args.G, *args.a, args.T_c, args.m_c, *args.X);
+        return impute_outcomes_from_obs_outcomes(args.G, *args.a, args.T_c, args.m_c, *args.X);
     }
-    return impute_outcomes(args.G, args.T_c, args.m_c);
+    return impute_outcomes_from_obs_outcomes(args.G, args.T_c, args.m_c);
 }
 
-//==============================================================================
-// Outcome Mean Estimation Across Cohorts
-//==============================================================================
+// Single-cohort imputation from loadings (lambda)
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& lambda) {
+    return G * lambda;
+}
 
-arma::mat estimate_outcome_means_across_cohorts(
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& lambda) {
+    return G * lambda + g_0;
+}
+
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& a,
+    const arma::mat& X_c,
+    const arma::vec& lambda) {
+    return G * lambda + X_c * a;
+}
+
+arma::vec impute_outcomes(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& a,
+    const arma::mat& X_c,
+    const arma::vec& lambda) {
+    return G * lambda + g_0 + X_c * a;
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::mat& L) {
+    validate_G_and_L(G, L);
+    const arma::uword C = L.n_rows;
+    arma::mat M(C, G.n_rows);
+    for (arma::uword c = 0; c < C; ++c) {
+        arma::vec lambda = L.row(c).t();
+        M.row(c) = impute_outcomes(G, lambda).t();
+    }
+    return M;
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::mat& L) {
+    const arma::uword T = G.n_rows;
+    validate_G_and_L(G, L);
+    if (g_0.n_elem != T) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: length of g_0 must match number of rows of G.");
+    }
+    const arma::uword C = L.n_rows;
+    arma::mat M(C, T);
+    for (arma::uword c = 0; c < C; ++c) {
+        arma::vec lambda = L.row(c).t();
+        M.row(c) = impute_outcomes(G, g_0, lambda).t();
+    }
+    return M;
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& a,
+    const std::vector<arma::mat>& X,
+    const arma::mat& L) {
+    const arma::uword T = G.n_rows;
+    const arma::uword C = L.n_rows;
+    validate_G_and_L(G, L);
+    validate_X_vec(X, C, T, a.n_elem);
+    arma::mat M(C, T);
+    for (arma::uword c = 0; c < C; ++c) {
+        arma::vec lambda = L.row(c).t();
+        M.row(c) = impute_outcomes(G, a, X[c], lambda).t();
+    }
+    return M;
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::vec& g_0,
+    const arma::vec& a,
+    const std::vector<arma::mat>& X,
+    const arma::mat& L) {
+    const arma::uword T = G.n_rows;
+    const arma::uword C = L.n_rows;
+    validate_G_and_L(G, L);
+    validate_g0_length(g_0, T);
+    validate_X_vec(X, C, T, a.n_elem);
+    arma::mat M(C, T);
+    for (arma::uword c = 0; c < C; ++c) {
+        arma::vec lambda = L.row(c).t();
+        M.row(c) = impute_outcomes(G, g_0, a, X[c], lambda).t();
+    }
+    return M;
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const FactorModelParameters& params) {
+    if (!params.L) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: L is not provided in FactorModelParameters.");
+    }
+    const arma::mat& G = params.G;
+    const arma::mat& L = *params.L;
+    validate_G_and_L(G, L);
+
+    if (params.has_covariate_coefs()) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: X_c is required when covariate coefficients a are present.");
+    }
+    if (params.has_fixed_effects()) {
+        return impute_outcomes_across_cohorts(G, *params.g_0, L);
+    }
+    return impute_outcomes_across_cohorts(G, L);
+}
+
+arma::mat impute_outcomes_across_cohorts(
+    const FactorModelParameters& params,
+    const std::vector<arma::mat>& X) {
+    if (!params.L) {
+        throw std::invalid_argument("impute_outcomes_across_cohorts: L is not provided in FactorModelParameters.");
+    }
+    const arma::mat& G = params.G;
+    const arma::mat& L = *params.L;
+    validate_G_and_L(G, L);
+    const arma::uword T = G.n_rows;
+    const arma::uword C = L.n_rows;
+
+    if (params.has_fixed_effects() && params.has_covariate_coefs()) {
+        validate_g0_length(*params.g_0, T);
+        validate_X_vec(X, C, T, static_cast<arma::uword>(params.a->n_elem));
+        return impute_outcomes_across_cohorts(G, *params.g_0, *params.a, X, L);
+    }
+    if (params.has_fixed_effects() && !params.has_covariate_coefs()) {
+        validate_g0_length(*params.g_0, T);
+        return impute_outcomes_across_cohorts(G, *params.g_0, L);
+    }
+    if (!params.has_fixed_effects() && params.has_covariate_coefs()) {
+        validate_X_vec(X, C, T, static_cast<arma::uword>(params.a->n_elem));
+        return impute_outcomes_across_cohorts(G, *params.a, X, L);
+    }
+    return impute_outcomes_across_cohorts(G, L);
+}
+
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::vec& a,
@@ -496,12 +651,12 @@ arma::mat estimate_outcome_means_across_cohorts(
         const arma::uvec& T_c = observed_outcome_indices[c];
         validate_m_c(m_c_vec[c], T_c);
         validate_X_c(X_c_vec[c], T, a.n_elem);
-        m.row(c) = impute_outcomes(G, g_0, a, T_c, m_c_vec[c], X_c_vec[c]).t();
+        m.row(c) = impute_outcomes_from_obs_outcomes(G, g_0, a, T_c, m_c_vec[c], X_c_vec[c]).t();
     }
     return m;
 }
 
-arma::mat estimate_outcome_means_across_cohorts(
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& g_0,
     const ObservedOutcomeIndices& observed_outcome_indices,
@@ -518,12 +673,12 @@ arma::mat estimate_outcome_means_across_cohorts(
     for (arma::uword c = 0; c < C; ++c) {
         const arma::uvec& T_c = observed_outcome_indices[c];
         validate_m_c(m_c_vec[c], T_c);
-        m.row(c) = impute_outcomes(G, g_0, T_c, m_c_vec[c]).t();
+        m.row(c) = impute_outcomes_from_obs_outcomes(G, g_0, T_c, m_c_vec[c]).t();
     }
     return m;
 }
 
-arma::mat estimate_outcome_means_across_cohorts(
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     const arma::vec& a,
     const ObservedOutcomeIndices& observed_outcome_indices,
@@ -541,12 +696,12 @@ arma::mat estimate_outcome_means_across_cohorts(
         const arma::uvec& T_c = observed_outcome_indices[c];
         validate_m_c(m_c_vec[c], T_c);
         validate_X_c(X_c_vec[c], T, a.n_elem);
-        m.row(c) = impute_outcomes(G, a, T_c, m_c_vec[c], X_c_vec[c]).t();
+        m.row(c) = impute_outcomes_from_obs_outcomes(G, a, T_c, m_c_vec[c], X_c_vec[c]).t();
     }
     return m;
 }
 
-arma::mat estimate_outcome_means_across_cohorts(
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<arma::vec>& m_c_vec) {
@@ -561,12 +716,12 @@ arma::mat estimate_outcome_means_across_cohorts(
     for (arma::uword c = 0; c < C; ++c) {
         const arma::uvec& T_c = observed_outcome_indices[c];
         validate_m_c(m_c_vec[c], T_c);
-        m.row(c) = impute_outcomes(G, T_c, m_c_vec[c]).t();
+        m.row(c) = impute_outcomes_from_obs_outcomes(G, T_c, m_c_vec[c]).t();
     }
     return m;
 }
 
-arma::mat estimate_outcome_means_across_cohorts(
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const FactorModelParameters& factor_model_parameters,
     const ObservedOutcomeIndices& observed_outcome_indices,
     const std::vector<OutcomeMeanSufficientStatistics>& suff_stats_vec) {
@@ -577,14 +732,19 @@ arma::mat estimate_outcome_means_across_cohorts(
         throw std::invalid_argument("Input vectors must have a size equal to the number of cohorts.");
     }
 
-    const arma::uword T = G.n_rows;
-    if (factor_model_parameters.has_fixed_effects()) {
-        validate_g0_length(*(factor_model_parameters.g_0), T);
+    const bool has_g0 = factor_model_parameters.has_fixed_effects();
+    const bool has_a  = factor_model_parameters.has_covariate_coefs();
+
+    // Build observed outcome means per cohort
+    std::vector<arma::vec> m_c_vec;
+    m_c_vec.reserve(C);
+
+    // Conditionally build covariate means per cohort
+    std::vector<arma::mat> X_c_vec;
+    if (has_a) {
+        X_c_vec.reserve(C);
     }
 
-    const bool has_a = factor_model_parameters.has_covariate_coefs();
-
-    arma::mat m(C, T, arma::fill::zeros);
     for (arma::uword c = 0; c < C; ++c) {
         const arma::uvec& T_c = observed_outcome_indices[c];
         const auto& stats = suff_stats_vec[c];
@@ -592,13 +752,78 @@ arma::mat estimate_outcome_means_across_cohorts(
         if (has_a != stats.has_covar_means()) {
             throw std::invalid_argument("Covariate presence mismatch between parameters and sufficient statistics.");
         }
+        m_c_vec.push_back(stats.observed_outcome_means);
         if (has_a) {
-            validate_X_c(*(stats.covar_means), T, static_cast<arma::uword>(factor_model_parameters.a->n_elem));
+            X_c_vec.push_back(*(stats.covar_means));
         }
-        m.row(c) = impute_outcomes(factor_model_parameters, T_c, stats).t();
     }
 
-    return m;
+    if (has_g0 && has_a) {
+        return impute_outcomes_across_cohorts_from_obs_outcomes(
+            G,
+            *(factor_model_parameters.g_0),
+            *(factor_model_parameters.a),
+            observed_outcome_indices,
+            m_c_vec,
+            X_c_vec);
+    }
+    if (has_g0 && !has_a) {
+        return impute_outcomes_across_cohorts_from_obs_outcomes(
+            G,
+            *(factor_model_parameters.g_0),
+            observed_outcome_indices,
+            m_c_vec);
+    }
+    if (!has_g0 && has_a) {
+        return impute_outcomes_across_cohorts_from_obs_outcomes(
+            G,
+            *(factor_model_parameters.a),
+            observed_outcome_indices,
+            m_c_vec,
+            X_c_vec);
+    }
+    return impute_outcomes_across_cohorts_from_obs_outcomes(
+        G,
+        observed_outcome_indices,
+        m_c_vec);
+}
+
+// Convenience dispatcher: use L when available, otherwise impute from observed outcomes
+arma::mat estimate_outcome_means_across_cohorts(
+    const FactorModelParameters& factor_model_parameters,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const std::vector<OutcomeMeanSufficientStatistics>& suff_stats_vec) {
+
+    if (factor_model_parameters.L) {
+        const arma::uword C = observed_outcome_indices.size();
+        if (suff_stats_vec.size() != C) {
+            throw std::invalid_argument("Input vectors must have a size equal to the number of cohorts.");
+        }
+
+        // With L present, dispatch to impute_outcomes_across_cohorts. If covariates are present, build X.
+        if (factor_model_parameters.has_covariate_coefs()) {
+            const arma::mat& G = factor_model_parameters.G;
+            const arma::uword T = G.n_rows;
+            std::vector<arma::mat> X;
+            X.reserve(C);
+            for (arma::uword c = 0; c < C; ++c) {
+                const auto& stats = suff_stats_vec[c];
+                if (!stats.has_covar_means()) {
+                    throw std::invalid_argument("Covariate presence mismatch between parameters and sufficient statistics.");
+                }
+                validate_X_c(*(stats.covar_means), T, static_cast<arma::uword>(factor_model_parameters.a->n_elem));
+                X.push_back(*(stats.covar_means));
+            }
+            return impute_outcomes_across_cohorts(factor_model_parameters, X);
+        }
+        return impute_outcomes_across_cohorts(factor_model_parameters);
+    }
+
+    // Fall back to imputing from observed outcomes when L is not provided
+    return impute_outcomes_across_cohorts_from_obs_outcomes(
+        factor_model_parameters,
+        observed_outcome_indices,
+        suff_stats_vec);
 }
 
 //==============================================================================

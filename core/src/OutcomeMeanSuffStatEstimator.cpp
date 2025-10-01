@@ -1,4 +1,5 @@
 #include "OutcomeMeanSuffStatEstimator.h"
+#include <limits>
 
 namespace apm {
 
@@ -80,13 +81,15 @@ void OutcomeMeanSuffStatEstimator::add_datum(std::size_t unit_idx,
     add_data(unit_idxs, Y_batch, X_batch);
 }
 
-OutcomeMeanSuffStatEstimates OutcomeMeanSuffStatEstimator::estimate() const
+OutcomeMeanSuffStatEstimates OutcomeMeanSuffStatEstimator::estimate(std::size_t total_units) const
 {
     std::optional<arma::mat> covars_opt = std::nullopt;
     if (q_ > 0) {
         covars_opt = covar_means_;
     }
     OutcomeMeanSufficientStatistics point(outcome_means_, covars_opt);
+    const double denom = static_cast<double>(total_units);
+    point.cohort_pop_share = (denom > 0.0) ? (total_weight_ / denom) : std::numeric_limits<double>::quiet_NaN();
 
     std::vector<OutcomeMeanSufficientStatistics> boot_reps;
     const std::size_t B = num_bootstraps();
@@ -98,7 +101,9 @@ OutcomeMeanSuffStatEstimates OutcomeMeanSuffStatEstimator::estimate() const
             if (q_ > 0) {
                 covars_b = boot_covar_means_.slice(bu);
             }
-            boot_reps.emplace_back(boot_outcome_means_.col(bu), covars_b);
+            OutcomeMeanSufficientStatistics rep(boot_outcome_means_.col(bu), covars_b);
+            rep.cohort_pop_share = total_boot_weights_(bu);
+            boot_reps.emplace_back(std::move(rep));
         }
     }
     return OutcomeMeanSuffStatEstimates(std::move(point), std::move(boot_reps));

@@ -75,7 +75,8 @@ InMemoryUnbalancedPanel::InMemoryUnbalancedPanel(
     const std::vector<const double*>& auxiliary_cols,
     std::size_t n_rows,
     ObservedOutcomeIndices observed_outcome_indices,
-    bool one_indexed)
+    bool one_indexed,
+    std::optional<std::size_t> num_units)
     : unit_idx_(unit_idx)
     , cohort_id_(cohort_id)
     , outcome_idx_(outcome_idx)
@@ -90,6 +91,16 @@ InMemoryUnbalancedPanel::InMemoryUnbalancedPanel(
     pos_T_idx_by_cohort_.resize(observed_outcome_indices_.size());
     for (std::size_t c = 0; c < observed_outcome_indices_.size(); ++c) {
         pos_T_idx_by_cohort_[c] = make_pos_map(observed_outcome_indices_[c]);
+    }
+
+    if (num_units.has_value()) {
+        num_units_ = *num_units;
+    } else {
+        std::size_t total = 0;
+        for (const auto& blk : cohort_blocks_) {
+            total += blk.unit_runs.size();
+        }
+        num_units_ = total;
     }
 }
 
@@ -117,29 +128,72 @@ void InMemoryUnbalancedPanel::assemble_X_for_unit(
     const UnitRun& ur,
     std::size_t T,
     const arma::uvec& T_idxs_for_cohort,
-    arma::mat& X_full,
-    arma::mat& X_obs) const
+    arma::mat* X_full,
+    arma::mat* X_obs,
+    std::optional<std::size_t> covariate_index) const
 {
     const std::size_t q = covar_cols_.size();
-    if (q == 0) { X_full.reset(); X_obs.reset(); return; }
+    if (q == 0) {
+        if (X_full) X_full->reset();
+        if (X_obs) X_obs->reset();
+        return;
+    }
 
-    X_full.set_size(static_cast<arma::uword>(T), static_cast<arma::uword>(q));
-    X_full.fill(std::numeric_limits<double>::quiet_NaN());
-    for (std::size_t r = ur.start; r < ur.end; ++r) {
-        const int base = one_indexed_ ? 1 : 0;
-        const int o = outcome_idx_[r] - base;
-        if (o < 0 || static_cast<std::size_t>(o) >= T) continue;
-        const arma::uword row = static_cast<arma::uword>(o);
-        for (std::size_t j = 0; j < q; ++j) {
-            X_full(row, static_cast<arma::uword>(j)) = covar_cols_[j][r];
+    const bool select_one = covariate_index.has_value();
+    const std::size_t q_eff = select_one ? 1 : q;
+
+    // Optionally build X_full
+    if (X_full) {
+        X_full->set_size(static_cast<arma::uword>(T), static_cast<arma::uword>(q_eff));
+        X_full->fill(std::numeric_limits<double>::quiet_NaN());
+        for (std::size_t r = ur.start; r < ur.end; ++r) {
+            const int base = one_indexed_ ? 1 : 0;
+            const int o = outcome_idx_[r] - base;
+            if (o < 0 || static_cast<std::size_t>(o) >= T) continue;
+            const arma::uword row = static_cast<arma::uword>(o);
+            if (select_one) {
+                const std::size_t j = *covariate_index;
+                if (j < q) {
+                    (*X_full)(row, 0) = covar_cols_[j][r];
+                }
+            } else {
+                for (std::size_t j = 0; j < q; ++j) {
+                    (*X_full)(row, static_cast<arma::uword>(j)) = covar_cols_[j][r];
+                }
+            }
         }
     }
 
     const std::size_t T_c = static_cast<std::size_t>(T_idxs_for_cohort.n_elem);
-    X_obs.set_size(static_cast<arma::uword>(T_c), static_cast<arma::uword>(q));
-    for (std::size_t k = 0; k < T_c; ++k) {
-        const arma::uword row_full = static_cast<arma::uword>(T_idxs_for_cohort[k]);
-        X_obs.row(static_cast<arma::uword>(k)) = X_full.row(row_full);
+    if (X_obs) {
+        X_obs->set_size(static_cast<arma::uword>(T_c), static_cast<arma::uword>(q_eff));
+        if (X_full) {
+            for (std::size_t k = 0; k < T_c; ++k) {
+                const arma::uword row_full = static_cast<arma::uword>(T_idxs_for_cohort[k]);
+                X_obs->row(static_cast<arma::uword>(k)) = X_full->row(row_full);
+            }
+        } else {
+            // Fill directly using unit rows and a position map
+            X_obs->fill(std::numeric_limits<double>::quiet_NaN());
+            auto pos_map = make_pos_map(T_idxs_for_cohort);
+            for (std::size_t r = ur.start; r < ur.end; ++r) {
+                const int base = one_indexed_ ? 1 : 0;
+                const int o = outcome_idx_[r] - base;
+                auto it = pos_map.find(o);
+                if (it == pos_map.end()) continue;
+                const arma::uword row_obs = static_cast<arma::uword>(it->second);
+                if (select_one) {
+                    const std::size_t j = *covariate_index;
+                    if (j < q) {
+                        (*X_obs)(row_obs, 0) = covar_cols_[j][r];
+                    }
+                } else {
+                    for (std::size_t j = 0; j < q; ++j) {
+                        (*X_obs)(row_obs, static_cast<arma::uword>(j)) = covar_cols_[j][r];
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -154,7 +208,7 @@ void InMemoryUnbalancedPanel::assemble_YX_for_unit(
 {
     assemble_Y_for_unit(ur, T_idxs_for_cohort, pos_T_idx_for_cohort, Y);
     if (!covar_cols_.empty()) {
-        assemble_X_for_unit(ur, T, T_idxs_for_cohort, X_full, X_obs);
+        assemble_X_for_unit(ur, T, T_idxs_for_cohort, &X_full, &X_obs, std::nullopt);
     } else {
         X_full.reset();
         X_obs.reset();

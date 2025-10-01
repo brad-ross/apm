@@ -79,7 +79,13 @@ std::size_t omsse_B_cpp(SEXP xp) {
 // [[Rcpp::export]]
 SEXP omsse_estimate_cpp(SEXP xp) {
     Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimator> est(xp);
-    apm::OutcomeMeanSuffStatEstimates out = est->estimate();
+    Rcpp::stop("omsse_estimate_cpp now requires total_units; use omsse_estimate_with_total_cpp");
+}
+
+// [[Rcpp::export]]
+SEXP omsse_estimate_with_total_cpp(SEXP xp, std::size_t total_units) {
+    Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimator> est(xp);
+    apm::OutcomeMeanSuffStatEstimates out = est->estimate(total_units);
     auto* heap = new apm::OutcomeMeanSuffStatEstimates(std::move(out));
     return Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates>(heap, true);
 }
@@ -131,6 +137,19 @@ arma::mat omsse_point_covar_means_cpp(SEXP xp) {
     Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates> p(xp);
     if (!p->suff_stat_estimates.covar_means) Rcpp::stop("covar_means not present");
     return *(p->suff_stat_estimates.covar_means);
+}
+
+// [[Rcpp::export]]
+double omsse_point_cohort_pop_share_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates> p(xp);
+    return p->suff_stat_estimates.cohort_pop_share;
+}
+
+// [[Rcpp::export]]
+double omsse_boot_cohort_pop_share_cpp(SEXP xp, std::size_t b) {
+    Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates> p(xp);
+    if (b < 1 || b > p->n_bootstrap_replicates()) Rcpp::stop("bootstrap index out of range");
+    return p->bootstrap_replicates[b - 1].cohort_pop_share;
 }
 
 // Bootstrap replicate accessors (1-based b)

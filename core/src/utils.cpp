@@ -1,5 +1,9 @@
 #include "utils.h"
 #include <unordered_set>
+#ifdef APM_HAS_TBB
+#include <oneapi/tbb/global_control.h>
+#include <oneapi/tbb/info.h>
+#endif
 
 namespace apm {
 
@@ -39,6 +43,29 @@ ObservedOutcomeIndices get_masked_observed_outcome_indices(
         ooi_effective[static_cast<std::size_t>(c)] = arma::uvec(kept);
     }
     return ooi_effective;
+}
+
+ParallelismScope::ParallelismScope(std::optional<std::size_t> num_threads)
+{
+#ifdef APM_HAS_TBB
+	nt = num_threads.has_value() ? *num_threads : oneapi::tbb::info::default_concurrency();
+	if (nt > 1) {
+		gc_ = std::make_unique<oneapi::tbb::global_control>(
+			oneapi::tbb::global_control::max_allowed_parallelism,
+			static_cast<std::size_t>(nt)
+		);
+	}
+#else
+	nt = num_threads.has_value() ? *num_threads : 1;
+#endif
+}
+
+std::size_t get_cpp_default_concurrency() {
+#ifdef APM_HAS_TBB
+	return oneapi::tbb::info::default_concurrency();
+#else
+	return static_cast<std::size_t>(1);
+#endif
 }
 
 } // namespace apm

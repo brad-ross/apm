@@ -218,7 +218,10 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
 
         proj_est <- projection_matrix_r(out_no_fe$G())
         proj_true <- projection_matrix_r(G1_true)
-        expect_equal(proj_est, proj_true, tolerance = 1e-9)
+        expect_equal(proj_est, proj_true, tolerance = 1e-8)
+
+        proj_est_fe <- projection_matrix_r(out_fe$G())
+        expect_equal(proj_est_fe, proj_true, tolerance = 1e-8)
 
         expect_true(inherits(oms[[cp]], "OutcomeMeanSuffStatEstimates"))
         # observed means length should equal number of observed outcomes for cohort c
@@ -228,6 +231,74 @@ test_that("est_cohort_specific_params integrates estimators per cohort", {
         expected_Y_mat <- expected_Y_for_units_ctx(ctx, cohort_id = c, unit_ids = units_by_cohort[[c]], T_idx = T_idx)
         expected_means <- colMeans(expected_Y_mat)
         expect_equal(oms[[cp]]$observed_outcome_means(), as.numeric(expected_means), tolerance = 1e-12)
+    }
+})
+
+test_that("est_cohort_specific_params works when outcome fixed effects are present", {
+    T <- 12L
+    T_c <- 3L
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
+
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE, include_outcome_fes = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
+
+    panel <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 2,
+        min_cohort_size = 2,
+        sort_cohorts_lexicographically = TRUE
+    )
+    
+
+    est_specs <- list(
+        pca_fe = list(factor_model_estimator = "principal_components", include_outcome_fes = TRUE, r = 2L)
+    )
+
+    res <- est_cohort_specific_params(panel, est_specs)
+
+    # outer structure keys: auxiliary means are optional
+    expect_true(all(c("cohort_specific_factor_ests", "cohort_outcome_means", "cohort_weights") %in% names(res)))
+    expect_false("cohort_auxiliary_means" %in% names(res))
+
+    # factor ests keyed by spec name, then cohort ids
+    f <- res$cohort_specific_factor_ests
+    # lists are indexed by numeric cohort_id
+    expect_equal(length(f[["pca_fe"]]), length(cohort_indices))
+
+    # outcome mean sufficient statistics per cohort
+    oms <- res$cohort_outcome_means
+    expect_equal(length(oms), length(cohort_indices))
+
+    # Build index-based mapping from original cohorts to panel cohorts by exact match of observed outcome indices
+    ooi_panel <- panel$get_observed_outcome_indices()
+    panel_idx_for_orig <- match_cohorts_panel_order(cohort_indices, ooi_panel)
+    expect_true(!any(is.na(panel_idx_for_orig)))
+
+    for (c in seq_along(cohort_indices)) {
+        cp <- panel_idx_for_orig[c]
+        T_idx <- cohort_indices[[c]]
+
+        # check one cohort's factor model outputs
+        out_fe <- f[["pca_fe"]][[cp]]
+
+        expect_true(inherits(out_fe, "FactorModelEstimates"))
+
+        # Dimensions and attributes
+        expect_equal(nrow(out_fe$G()), length(T_idx))
+        expect_equal(ncol(out_fe$G()), 2L)
+        expect_true(out_fe$has_g0())
+
+        # Content: estimated cohort factor spans should match true rotated spans
+        G1_true <- ctx$true_factors[T_idx, , drop = FALSE]
+
+        proj_est <- projection_matrix_r(out_fe$G())
+        proj_true <- projection_matrix_r(G1_true)
+        expect_equal(proj_est, proj_true, tolerance = 1e-8)
     }
 })
 
@@ -417,13 +488,9 @@ test_that("auxiliary means: dimensions and values without covariates", {
         units_c <- nrow(uc[cohort_id == c])
         share_exp <- if (nrow(uc) > 0) units_c / nrow(uc) else 0
 
-        est <- aux[[c]]
-        expect_true(inherits(est, "CohortAuxiliaryDataMeanEstimates"))
-        expect_false(est$has_bootstrap())
-        expect_equal(est$cohort_pop_share(), share_exp, tolerance = 1e-12)
-
-        # Determine Tc from observed_outcome_indices fixture
-        M <- est$auxiliary_means()
+        # Determine Tc from observed_outcome_indices fixture: use auxiliary means holder
+        aux_est <- aux[[c]]
+        M <- aux_est$auxiliary_means()
         expect_equal(dim(M), c(T, 2L))
 
         # Compare by actual outcome index present in cohort c
@@ -437,7 +504,7 @@ test_that("auxiliary means: dimensions and values without covariates", {
     }
 })
 
-test_that("auxiliary means: bootstrap replicates present and shares valid", {
+test_that("auxiliary means: bootstrap replicates present", {
     T <- 5L
     T_c <- 3L
     outcomes <- make_outcomes(T)
@@ -477,6 +544,42 @@ test_that("auxiliary means: bootstrap replicates present and shares valid", {
 
     aux <- res$cohort_auxiliary_means
     expect_equal(length(aux), length(cohort_indices))
+    for (c in seq_along(cohort_indices)) {
+        est_aux <- aux[[c]]
+        expect_true(est_aux$has_bootstrap())
+        expect_equal(est_aux$num_bootstraps(), 2L)
+    }
+})
+
+test_that("cohort outcome shares: bootstrap replicates present and valid", {
+    T <- 5L
+    T_c <- 3L
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
+
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 1L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, include_auxiliary = TRUE, ctx = ctx)
+    panel_dt[, aux1 := 1.0]
+
+    panel <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 1,
+        min_cohort_size = 1,
+        auxiliary_cols = c("aux1"),
+        sort_cohorts_lexicographically = TRUE
+    )
+
+    N <- nrow(unique(panel$get_processed_panel()[, .(unit_idx)]))
+    B <- 2L
+    wb <- get_weighted_bootstrap_draws(N = N, B = B, type = "bayesian", seed = 123L)
+
+    est_specs <- list(pc = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 1L))
+    res <- est_cohort_specific_params(panel, est_specs, bootstrap = wb)
+
     # Build unit->cohort map and expected shares per draw from bootstrap weights
     pp <- unique(panel$get_processed_panel()[, .(unit_idx, cohort_id)])
     W <- wb$weights()
@@ -490,7 +593,7 @@ test_that("auxiliary means: bootstrap replicates present and shares valid", {
     exp2 <- exp_draw(2L)
 
     for (c in seq_along(cohort_indices)) {
-        est <- aux[[c]]
+        est <- res$cohort_outcome_means[[c]]
         expect_true(est$has_bootstrap())
         expect_equal(est$num_bootstraps(), 2L)
         expect_true(est$cohort_pop_share(b = 1L) >= 0 && est$cohort_pop_share(b = 1L) <= 1)

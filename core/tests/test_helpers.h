@@ -12,6 +12,7 @@
 
 #include "apm_core.h"
 #include "est_outcome_means.h"
+#include "bootstrap.h"
 
 // -------- Utilities and assertions --------
 
@@ -91,6 +92,7 @@ struct StaircasePanelContext {
     arma::vec g0_true; // length T
     arma::vec a_true; // length q
     std::vector<arma::vec> l_unit; // length C*units_per, each length r
+    bool include_g0 = false; // whether to add g0_true in generated Y
 };
 
 // Create a simple increasing factor structure and unit loadings matching earlier tests
@@ -99,7 +101,9 @@ StaircasePanelContext make_staircase_panel_context(
     arma::uword r,
     arma::uword T_c,
     arma::uword units_per = 0,
-    arma::uword q = 2);
+    arma::uword q = 2,
+    bool with_covariates = false,
+    bool with_fixed_effects = false);
 
 struct RawPanelData {
     std::vector<int> unit_idx, cohort_id, outcome_idx;
@@ -111,8 +115,15 @@ struct RawPanelData {
 // If with_covariates or with_auxiliary are true, expand to full T per unit with NaN y for unobserved.
 RawPanelData make_raw_panel(
     const StaircasePanelContext& ctx,
-    bool with_covariates,
     bool with_auxiliary = false);
+
+// -------- Test bootstrap helpers --------
+
+// Lightweight derived bootstrap to inject deterministic weights in tests
+class TestBootstrap : public apm::WeightedBootstrap {
+public:
+    explicit TestBootstrap(const arma::mat& W) : apm::WeightedBootstrap(W) {}
+};
 
 #endif // APM_TEST_HELPERS_H
 

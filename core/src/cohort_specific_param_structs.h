@@ -2,6 +2,7 @@
 #define APM_FACTOR_MODEL_PARAMETERS_H
 
 #include <optional>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 #include <utility>
@@ -28,6 +29,7 @@ struct FactorModelParameters {
     arma::mat G;                           // T_c x r
     std::optional<arma::vec> g_0;          // length T_c (if present)
     std::optional<arma::vec> a;            // length q (if present)
+    std::optional<arma::mat> L;            // optional N x r matrix of unit factor scores
 
     // Constructors
     FactorModelParameters() = default;
@@ -35,7 +37,7 @@ struct FactorModelParameters {
     FactorModelParameters(arma::mat G_in,
                           std::optional<arma::vec> g0_in = std::nullopt,
                           std::optional<arma::vec> a_in = std::nullopt)
-        : G(std::move(G_in)), g_0(std::move(g0_in)), a(std::move(a_in)) {
+        : G(std::move(G_in)), g_0(std::move(g0_in)), a(std::move(a_in)), L(std::nullopt) {
         if (g_0 && g_0->n_elem != G.n_rows) {
             throw std::invalid_argument("FactorModelParameters: g_0 length must equal number of ows in G (T_c).");
         }
@@ -115,6 +117,7 @@ struct FactorModelEstimates {
 struct OutcomeMeanSufficientStatistics {
     arma::vec observed_outcome_means;                   // length T_c
     std::optional<arma::mat> covar_means;               // T x q (if present)
+    double cohort_pop_share;                            // proportion of all rows belonging to this cohort
 
     // Constructors
     OutcomeMeanSufficientStatistics() = default;
@@ -122,7 +125,8 @@ struct OutcomeMeanSufficientStatistics {
     OutcomeMeanSufficientStatistics(arma::vec observed_means_in,
                                     std::optional<arma::mat> covar_means_in = std::nullopt)
         : observed_outcome_means(std::move(observed_means_in)),
-          covar_means(std::move(covar_means_in)) {}
+          covar_means(std::move(covar_means_in)),
+          cohort_pop_share(std::numeric_limits<double>::quiet_NaN()) {}
 
     // Presence checks
     /**
@@ -190,20 +194,18 @@ struct CohortWeightEstimates {
 };
 
 /**
- * @brief Cohort-level auxiliary data means and population share.
+ * @brief Cohort-level auxiliary data means.
  *
  * Fields:
- *  - cohort_pop_share: proportion of all rows belonging to this cohort
- *  - auxiliary_means:  length-d vector of means over auxiliary columns
+ *  - auxiliary_means:  T x d matrix of means over auxiliary columns
  */
 struct CohortAuxiliaryDataMeans {
-    double cohort_pop_share;   // proportion of all rows in the dataset belonging to this cohort
     arma::mat auxiliary_means; // T x d matrix of means across outcomes and aux columns
 
     CohortAuxiliaryDataMeans() = default;
 
-    CohortAuxiliaryDataMeans(double pop_share_in, arma::mat aux_means_in)
-        : cohort_pop_share(pop_share_in), auxiliary_means(std::move(aux_means_in)) {}
+    explicit CohortAuxiliaryDataMeans(arma::mat aux_means_in)
+        : auxiliary_means(std::move(aux_means_in)) {}
 
     std::size_t T() const noexcept { return static_cast<std::size_t>(auxiliary_means.n_rows); }
     std::size_t d() const noexcept { return static_cast<std::size_t>(auxiliary_means.n_cols); }

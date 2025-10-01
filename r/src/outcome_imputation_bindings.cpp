@@ -1,0 +1,148 @@
+#include <RcppArmadillo.h>
+#include <unordered_map>
+#include <string>
+#include "r_utils.h"
+#include "cohort_specific_estimates_helpers.h"
+#include "../../core/src/outcome_imputation.h"
+#include "../../core/src/cohort_specific_param_structs.h"
+#include "../../core/src/bootstrap.h"
+
+using apm::r_utils::make_xptr;
+
+// [[Rcpp::depends(RcppArmadillo)]]
+
+// -----------------------------------------------------------------------------
+// Compute imputation components (point + bootstrap) for one estimator spec.
+// -----------------------------------------------------------------------------
+// [[Rcpp::export]]
+SEXP comp_imputation_components_cpp(
+    SEXP panel_holder_xptr,
+    SEXP factor_model_estimates_xptr,
+    Rcpp::Nullable<Rcpp::List> cohort_outcome_mean_suff_stat_ests = R_NilValue,
+    SEXP weighted_bootstrap_xptr = R_NilValue,
+    Rcpp::Nullable<Rcpp::List> effective_observed_outcome_indices = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> tol_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> max_iters_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::String> fixed_point_method_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue)
+{
+    const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
+    Rcpp::XPtr<apm::FactorModelEstimates> fptr(factor_model_estimates_xptr);
+
+    // Optional weighted bootstrap
+    std::shared_ptr<const apm::WeightedBootstrap> wb;
+    if (weighted_bootstrap_xptr != R_NilValue) {
+        Rcpp::XPtr<std::shared_ptr<apm::WeightedBootstrap>> wb_xp(weighted_bootstrap_xptr);
+        wb = *wb_xp;
+    }
+
+    std::optional<apm::ObservedOutcomeIndices> eff_ooi_opt = std::nullopt;
+    if (effective_observed_outcome_indices.isNotNull()) {
+        apm::ObservedOutcomeIndices ooi0b = apm::r_utils::to_cpp_observed_outcome_indices(Rcpp::List(effective_observed_outcome_indices));
+        eff_ooi_opt = std::move(ooi0b);
+    }
+
+    auto stats_vec = apm::r_utils::list_to_stats_vec(cohort_outcome_mean_suff_stat_ests);
+
+    // Resolve num_threads
+    std::optional<std::size_t> nt_opt = std::nullopt; {
+        auto p = apm::r_utils::resolve_num_threads(num_threads_in);
+        if (p.first) nt_opt = p.second;
+    }
+
+    // Resolve defaults for algorithm controls if not provided from R
+    double tol = tol_in.isNotNull() ? Rcpp::as<double>(tol_in.get()) : apm::DEFAULT_TOL;
+    std::size_t max_iters = max_iters_in.isNotNull() ? static_cast<std::size_t>(Rcpp::as<int>(max_iters_in.get())) : apm::DEFAULT_MAX_ITERS;
+    std::string fixed_point_method = fixed_point_method_in.isNotNull() ? Rcpp::as<std::string>(fixed_point_method_in.get()) : std::string(apm::DEFAULT_FP_METHOD);
+
+    apm::FactorModelEstimates out = apm::comp_imputation_components(
+        panel,
+        *fptr,
+        stats_vec,
+        wb,
+        eff_ooi_opt,
+        tol,
+        max_iters,
+        fixed_point_method,
+        nt_opt);
+
+    return make_xptr(std::move(out));
+}
+
+// -----------------------------------------------------------------------------
+// Named-list variant: factor_model_estimates_by_spec is named list of XPtr<FactorModelEstimates>.
+// -----------------------------------------------------------------------------
+// [[Rcpp::export]]
+Rcpp::List comp_imputation_components_by_spec_cpp(
+    SEXP panel_holder_xptr,
+    Rcpp::List factor_model_estimates_by_spec,
+    Rcpp::Nullable<Rcpp::List> cohort_outcome_mean_suff_stat_ests = R_NilValue,
+    SEXP weighted_bootstrap_xptr = R_NilValue,
+    Rcpp::Nullable<Rcpp::List> effective_observed_outcome_indices = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> tol_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> max_iters_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::String> fixed_point_method_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue)
+{
+    const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
+
+    std::unordered_map<std::string, apm::FactorModelEstimates> fmap;
+    {
+        Rcpp::CharacterVector nms = factor_model_estimates_by_spec.names();
+        for (int i = 0; i < factor_model_estimates_by_spec.size(); ++i) {
+            std::string key = Rcpp::as<std::string>(nms[i]);
+            Rcpp::XPtr<apm::FactorModelEstimates> xp(factor_model_estimates_by_spec[i]);
+            fmap.emplace(std::move(key), *xp);
+        }
+    }
+
+    // Optional weighted bootstrap
+    std::shared_ptr<const apm::WeightedBootstrap> wb;
+    if (weighted_bootstrap_xptr != R_NilValue) {
+        Rcpp::XPtr<std::shared_ptr<apm::WeightedBootstrap>> wb_xp(weighted_bootstrap_xptr);
+        wb = *wb_xp;
+    }
+
+    std::optional<apm::ObservedOutcomeIndices> eff_ooi_opt = std::nullopt;
+    if (effective_observed_outcome_indices.isNotNull()) {
+        apm::ObservedOutcomeIndices ooi0b = apm::r_utils::to_cpp_observed_outcome_indices(Rcpp::List(effective_observed_outcome_indices));
+        eff_ooi_opt = std::move(ooi0b);
+    }
+
+    auto stats_vec = apm::r_utils::list_to_stats_vec(cohort_outcome_mean_suff_stat_ests);
+
+    // Resolve num_threads
+    std::optional<std::size_t> nt_opt = std::nullopt; {
+        auto p = apm::r_utils::resolve_num_threads(num_threads_in);
+        if (p.first) nt_opt = p.second;
+    }
+
+    // Resolve defaults for algorithm controls if not provided from R
+    double tol = tol_in.isNotNull() ? Rcpp::as<double>(tol_in.get()) : apm::DEFAULT_TOL;
+    std::size_t max_iters = max_iters_in.isNotNull() ? static_cast<std::size_t>(Rcpp::as<int>(max_iters_in.get())) : apm::DEFAULT_MAX_ITERS;
+    std::string fixed_point_method = fixed_point_method_in.isNotNull() ? Rcpp::as<std::string>(fixed_point_method_in.get()) : std::string(apm::DEFAULT_FP_METHOD);
+
+    auto out_map = apm::comp_imputation_components(
+        panel,
+        fmap,
+        stats_vec,
+        wb,
+        eff_ooi_opt,
+        tol,
+        max_iters,
+        fixed_point_method,
+        nt_opt);
+
+    Rcpp::List out(static_cast<int>(out_map.size()));
+    Rcpp::CharacterVector names(static_cast<int>(out_map.size()));
+    int k = 0;
+    for (auto& kv : out_map) {
+        names[k] = kv.first;
+        out[k] = make_xptr(std::move(kv.second));
+        ++k;
+    }
+    out.attr("names") = names;
+    return out;
+}
+
+

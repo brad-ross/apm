@@ -87,7 +87,11 @@ public:
      * @brief Finalize and return sufficient statistics and optional bootstrap replicates.
      * @return Aggregated outcome mean sufficient statistics and, when available, bootstrap replicates.
      */
-    OutcomeMeanSuffStatEstimates estimate() const;
+    /**
+     * @brief Finalize estimates using the total number of unique units across all cohorts.
+     * @param total_units Total number of unique units across all cohorts.
+     */
+    OutcomeMeanSuffStatEstimates estimate(std::size_t total_units) const;
 
 private:
     /**

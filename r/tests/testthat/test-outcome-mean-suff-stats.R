@@ -18,7 +18,7 @@ test_that("OutcomeMeans: SingleBatch_NoBootstrap", {
 
   est <- OutcomeMeanSuffStatEstimator$new(T_c)
   est$add_data(unit_idxs, Y)
-  out <- est$estimate()
+  out <- est$estimate(total_units = nrow(Y))
 
   expect_false(out$has_bootstrap())
   expect_equal(out$num_bootstraps(), 0L)
@@ -29,6 +29,8 @@ test_that("OutcomeMeans: SingleBatch_NoBootstrap", {
   expected_means <- colMeans(Y)
   expect_equal(out$observed_outcome_means(), expected_means, tolerance = 1e-12)
   expect_null(out$covar_means())
+  # Population share equals N / total_units = 1
+  expect_equal(out$cohort_pop_share(), 1, tolerance = 1e-12)
 })
 
 test_that("OutcomeMeans: SplitBatch_Invariance", {
@@ -43,13 +45,16 @@ test_that("OutcomeMeans: SplitBatch_Invariance", {
   est1 <- OutcomeMeanSuffStatEstimator$new(T_c)
   est1$add_data(1:2, Y[1:2, , drop = FALSE])
   est1$add_data(3:4, Y[3:4, , drop = FALSE])
-  out1 <- est1$estimate()
+  out1 <- est1$estimate(total_units = nrow(Y))
 
   est2 <- OutcomeMeanSuffStatEstimator$new(T_c)
   est2$add_data(1:4, Y)
-  out2 <- est2$estimate()
+  out2 <- est2$estimate(total_units = nrow(Y))
 
   expect_equal(out1$observed_outcome_means(), out2$observed_outcome_means(), tolerance = 1e-12)
+  # Shares equal and equal to 1
+  expect_equal(out1$cohort_pop_share(), 1, tolerance = 1e-12)
+  expect_equal(out2$cohort_pop_share(), 1, tolerance = 1e-12)
 })
 
 test_that("OutcomeMeans: AddDatum_Equivalence", {
@@ -63,13 +68,15 @@ test_that("OutcomeMeans: AddDatum_Equivalence", {
 
   est1 <- OutcomeMeanSuffStatEstimator$new(T_c)
   est1$add_data(1:4, Y)
-  out1 <- est1$estimate()
+  out1 <- est1$estimate(total_units = nrow(Y))
 
   est2 <- OutcomeMeanSuffStatEstimator$new(T_c)
   for (i in 1:nrow(Y)) est2$add_datum(i, Y[i, ])
-  out2 <- est2$estimate()
+  out2 <- est2$estimate(total_units = nrow(Y))
 
   expect_equal(out1$observed_outcome_means(), out2$observed_outcome_means(), tolerance = 1e-12)
+  expect_equal(out1$cohort_pop_share(), 1, tolerance = 1e-12)
+  expect_equal(out2$cohort_pop_share(), 1, tolerance = 1e-12)
 })
 
 #==============================================================================
@@ -93,11 +100,11 @@ test_that("OutcomeMeans: Bootstrap_ReproducibleWithSeed_AndSizes", {
 
   est1 <- OutcomeMeanSuffStatEstimator$new(T_c, bootstrap = wb1)
   est1$add_data(unit_idxs, Y)
-  out1 <- est1$estimate()
+  out1 <- est1$estimate(total_units = nrow(Y))
 
   est2 <- OutcomeMeanSuffStatEstimator$new(T_c, bootstrap = wb2)
   est2$add_data(unit_idxs, Y)
-  out2 <- est2$estimate()
+  out2 <- est2$estimate(total_units = nrow(Y))
 
   expect_true(out1$has_bootstrap())
   expect_equal(out1$num_bootstraps(), B)
@@ -108,6 +115,9 @@ test_that("OutcomeMeans: Bootstrap_ReproducibleWithSeed_AndSizes", {
   # Replicate agreement across runs with same seed
   for (b in 1:B) {
     expect_equal(out1$observed_outcome_means(b), out2$observed_outcome_means(b), tolerance = 1e-12)
+    # Bootstrap shares should be 1 when all units are included
+    expect_equal(out1$cohort_pop_share(b), 1, tolerance = 1e-12)
+    expect_equal(out2$cohort_pop_share(b), 1, tolerance = 1e-12)
   }
 })
 
@@ -123,10 +133,11 @@ test_that("OutcomeMeans: Covariates_Means_NoBootstrap", {
 
   est <- OutcomeMeanSuffStatEstimator$new(T_c, T = T_c, q = q)
   est$add_data(1:N, Y, X)
-  out <- est$estimate()
+  out <- est$estimate(total_units = N)
 
   expect_equal(out$T(), T_c)
   expect_equal(out$q(), q)
+  expect_equal(out$cohort_pop_share(), 1, tolerance = 1e-12)
 
   expected_Xbar <- do.call(cbind, lapply(1:q, function(k) colMeans(X[, , k])))
   expect_equal(out$covar_means(), expected_Xbar, tolerance = 1e-12)
@@ -145,10 +156,12 @@ test_that("OutcomeMeans: Covariates_WithBootstrap_AndUnitSelection", {
 
   est <- OutcomeMeanSuffStatEstimator$new(T_c, T = T_c, q = q, bootstrap = wb)
   est$add_data(unit_idxs, Y[unit_idxs, , drop = FALSE], X[unit_idxs, , , drop = FALSE])
-  out <- est$estimate()
+  out <- est$estimate(total_units = length(unit_idxs))
 
   expect_true(out$has_bootstrap())
   expect_equal(out$num_bootstraps(), B)
+  # Point share remains 1 when total_units equals number of provided units
+  expect_equal(out$cohort_pop_share(), 1, tolerance = 1e-12)
 
   # Manual expected means for a chosen replicate
   W_rows <- wb$obs_rows(unit_idxs) # length(unit_idxs) x B
@@ -164,5 +177,7 @@ test_that("OutcomeMeans: Covariates_WithBootstrap_AndUnitSelection", {
       as.vector(t(Xk) %*% w)
     }))
     expect_equal(out$covar_means(b), expected_Xbar_b, tolerance = 1e-12)
+    # Bootstrap share equals unnormalized column sum over the provided units
+    expect_equal(out$cohort_pop_share(b), sum(W_rows[, b]), tolerance = 1e-12)
   }
 })

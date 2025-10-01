@@ -27,6 +27,13 @@ FactorModelEstimates <- R6::R6Class(
       } else {
         fme_boot_a_cpp(private$xp, as.integer(b))
       }
+    },
+    L = function(b = NULL) {
+      if (is.null(b)) {
+        fme_point_L_cpp(private$xp)
+      } else {
+        fme_boot_L_cpp(private$xp, as.integer(b))
+      }
     }
   ),
   private = list(xp = NULL)

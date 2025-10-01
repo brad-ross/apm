@@ -35,7 +35,7 @@ public:
     // Single unit add: eta is T x d for the unit
     void add_datum(std::size_t unit_idx, const arma::mat& eta);
 
-    CohortAuxiliaryDataMeanEstimates estimate(std::size_t total_units) const;
+    CohortAuxiliaryDataMeanEstimates estimate() const;
 
 private:
     static void validate_data_dimensions(const arma::uvec& unit_idxs, const arma::cube& eta, std::size_t T, std::size_t d);

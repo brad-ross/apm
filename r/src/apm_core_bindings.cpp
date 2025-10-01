@@ -114,7 +114,7 @@ arma::vec aggregate_cohort_specific_outcome_fes(
 //' @return A T-dimensional vector containing the estimated outcomes for the representative unit.
 //' @export
 // [[Rcpp::export]]
-arma::vec impute_outcomes(
+arma::vec impute_outcomes_from_obs_outcomes(
     const arma::mat& G,
     const arma::uvec& T_c,
     const arma::vec& m_c,
@@ -138,16 +138,16 @@ arma::vec impute_outcomes(
         arma::vec g_0_cpp = Rcpp::as<arma::vec>(g_0);
         arma::vec a_cpp = Rcpp::as<arma::vec>(a);
         arma::mat X_c_cpp = Rcpp::as<arma::mat>(X_c);
-        return apm::impute_outcomes(G, g_0_cpp, a_cpp, T_c_zero_based, m_c, X_c_cpp);
+        return apm::impute_outcomes_from_obs_outcomes(G, g_0_cpp, a_cpp, T_c_zero_based, m_c, X_c_cpp);
     } else if (has_g0) {
         arma::vec g_0_cpp = Rcpp::as<arma::vec>(g_0);
-        return apm::impute_outcomes(G, g_0_cpp, T_c_zero_based, m_c);
+        return apm::impute_outcomes_from_obs_outcomes(G, g_0_cpp, T_c_zero_based, m_c);
     } else if (has_a) {
         arma::vec a_cpp = Rcpp::as<arma::vec>(a);
         arma::mat X_c_cpp = Rcpp::as<arma::mat>(X_c);
-        return apm::impute_outcomes(G, a_cpp, T_c_zero_based, m_c, X_c_cpp);
+        return apm::impute_outcomes_from_obs_outcomes(G, a_cpp, T_c_zero_based, m_c, X_c_cpp);
     } else {
-        return apm::impute_outcomes(G, T_c_zero_based, m_c);
+        return apm::impute_outcomes_from_obs_outcomes(G, T_c_zero_based, m_c);
     }
 }
 
@@ -166,7 +166,7 @@ arma::vec impute_outcomes(
 //' @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
 //' @export
 // [[Rcpp::export]]
-arma::mat estimate_outcome_means_across_cohorts_raw(
+arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
     const arma::mat& G,
     Rcpp::List observed_outcome_indices,
     Rcpp::List m_c_vec,
@@ -199,10 +199,10 @@ arma::mat estimate_outcome_means_across_cohorts_raw(
         for (SEXP mat : r_X_c_vec) {
             cpp_X_c_vec.push_back(Rcpp::as<arma::mat>(mat));
         }
-        return apm::estimate_outcome_means_across_cohorts(G, g_0_cpp, a_cpp, cpp_observed_outcome_indices, cpp_m_c_vec, cpp_X_c_vec);
+        return apm::impute_outcomes_across_cohorts_from_obs_outcomes(G, g_0_cpp, a_cpp, cpp_observed_outcome_indices, cpp_m_c_vec, cpp_X_c_vec);
     } else if (has_g0) {
         arma::vec g_0_cpp = Rcpp::as<arma::vec>(g_0);
-        return apm::estimate_outcome_means_across_cohorts(G, g_0_cpp, cpp_observed_outcome_indices, cpp_m_c_vec);
+        return apm::impute_outcomes_across_cohorts_from_obs_outcomes(G, g_0_cpp, cpp_observed_outcome_indices, cpp_m_c_vec);
     } else if (has_a) {
         arma::vec a_cpp = Rcpp::as<arma::vec>(a);
         std::vector<arma::mat> cpp_X_c_vec;
@@ -210,11 +210,11 @@ arma::mat estimate_outcome_means_across_cohorts_raw(
         for (SEXP mat : r_X_c_vec) {
             cpp_X_c_vec.push_back(Rcpp::as<arma::mat>(mat));
         }
-        return apm::estimate_outcome_means_across_cohorts(G, a_cpp, cpp_observed_outcome_indices, cpp_m_c_vec, cpp_X_c_vec);
+        return apm::impute_outcomes_across_cohorts_from_obs_outcomes(G, a_cpp, cpp_observed_outcome_indices, cpp_m_c_vec, cpp_X_c_vec);
     } else {
-        return apm::estimate_outcome_means_across_cohorts(G, cpp_observed_outcome_indices, cpp_m_c_vec);
+        return apm::impute_outcomes_across_cohorts_from_obs_outcomes(G, cpp_observed_outcome_indices, cpp_m_c_vec);
     }
-} 
+}
 
 //' Implements the Observed Outcome Overlap (O^3) algorithm to assess factor identification.
 //'
@@ -276,3 +276,59 @@ bool aligned_factors_identified(
 
     return apm::aligned_factors_identified(cpp_observed_outcome_indices, r);
 } 
+
+//' Impute outcomes across cohorts using factors and cohort mean loadings (L)
+//'
+//' Supports optional fixed effects (g_0) and covariates (a, X_c list).
+//'
+//' @param G A T x r matrix of factor scores.
+//' @param L A C x r matrix of cohort mean loadings.
+//' @param g_0 Optional T-vector of outcome fixed effects.
+//' @param a Optional q-vector of covariate coefficients. Requires X_c.
+//' @param X_c Optional list of T x q matrices, one per cohort (required if a is provided).
+//' @return A C x T matrix where row c contains imputed outcomes for cohort c.
+//' @export
+// [[Rcpp::export]]
+arma::mat impute_outcomes_across_cohorts(
+    const arma::mat& G,
+    const arma::mat& L,
+    Rcpp::Nullable<Rcpp::NumericVector> g_0 = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> a = R_NilValue,
+    Rcpp::Nullable<Rcpp::List> X_c = R_NilValue) {
+
+    const bool has_g0 = g_0.isNotNull();
+    const bool has_a  = a.isNotNull();
+
+    if (has_a && !X_c.isNotNull()) {
+        Rcpp::stop("If 'a' is provided, 'X_c' must also be provided.");
+    }
+    if (!has_a && X_c.isNotNull()) {
+        Rcpp::warning("'X_c' is provided but 'a' is not; covariates will be ignored.");
+    }
+
+    if (has_g0 && has_a) {
+        arma::vec g0_cpp = Rcpp::as<arma::vec>(g_0);
+        arma::vec a_cpp  = Rcpp::as<arma::vec>(a);
+        std::vector<arma::mat> X_cpp;
+        Rcpp::List X_list(X_c);
+        X_cpp.reserve(X_list.size());
+        for (SEXP mat : X_list) {
+            X_cpp.push_back(Rcpp::as<arma::mat>(mat));
+        }
+        return apm::impute_outcomes_across_cohorts(G, g0_cpp, a_cpp, X_cpp, L);
+    } else if (has_g0) {
+        arma::vec g0_cpp = Rcpp::as<arma::vec>(g_0);
+        return apm::impute_outcomes_across_cohorts(G, g0_cpp, L);
+    } else if (has_a) {
+        arma::vec a_cpp  = Rcpp::as<arma::vec>(a);
+        std::vector<arma::mat> X_cpp;
+        Rcpp::List X_list(X_c);
+        X_cpp.reserve(X_list.size());
+        for (SEXP mat : X_list) {
+            X_cpp.push_back(Rcpp::as<arma::mat>(mat));
+        }
+        return apm::impute_outcomes_across_cohorts(G, a_cpp, X_cpp, L);
+    }
+
+    return apm::impute_outcomes_across_cohorts(G, L);
+}
