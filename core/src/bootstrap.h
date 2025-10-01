@@ -67,6 +67,36 @@ public:
     explicit BayesianBootstrap(std::size_t N, std::size_t B, std::uint64_t seed = 0);
 };
 
+/**
+ * @brief Results from bootstrap-based simultaneous inference.
+ */
+struct SimultaneousInferenceResults {
+    arma::vec point_ests;
+    arma::vec pointwise_t_stats;
+    arma::vec pointwise_p_vals;
+    double sig_level;
+    arma::vec ci_lb;
+    arma::vec ci_ub;
+    arma::vec cb_lb;
+    arma::vec cb_ub;
+};
+
+/**
+ * @brief Computes per-parameter CIs and a simultaneous confidence band from bootstrap replicates.
+ * 
+ * @param point_ests p-vector of point estimates
+ * @param bootstrap_replicates p x B matrix of bootstrap estimates
+ * @param N sample size used for the estimates
+ * @param sig_level significance level in (0,1)
+ * @return SimultaneousInferenceResults containing point estimates, t-stats, p-values, CIs, and simultaneous bands
+ */
+SimultaneousInferenceResults get_bootstrap_inference(
+    const arma::vec& point_ests,
+    const arma::mat& bootstrap_replicates,
+    std::size_t N,
+    double sig_level
+);
+
 } // namespace apm
 
 #endif // BOOTSTRAP_H
