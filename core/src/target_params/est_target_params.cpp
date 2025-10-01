@@ -15,6 +15,32 @@
 
 namespace apm {
 
+namespace {
+arma::mat pack_bootstrap_columns(const std::vector<arma::vec>& columns, std::size_t expected_p) {
+    const std::size_t B = columns.size();
+    arma::mat out;
+    out.set_size(static_cast<arma::uword>(expected_p), static_cast<arma::uword>(B));
+    for (std::size_t b = 0; b < B; ++b) {
+        if (static_cast<std::size_t>(columns[b].n_elem) != expected_p) {
+            throw std::runtime_error("Target function returned a vector of inconsistent length across bootstrap draws.");
+        }
+        out.col(static_cast<arma::uword>(b)) = columns[b];
+    }
+    return out;
+}
+} // anonymous namespace
+
+TargetParameterEstimates::TargetParameterEstimates(arma::vec point_in, const std::vector<arma::vec>& boots_vec)
+    : point(std::move(point_in))
+{
+    const std::size_t p = static_cast<std::size_t>(point.n_elem);
+    if (boots_vec.empty()) {
+        bootstrap_replicates.set_size(static_cast<arma::uword>(p), arma::uword(0));
+    } else {
+        bootstrap_replicates = pack_bootstrap_columns(boots_vec, p);
+    }
+}
+
 static std::vector<CohortAuxiliaryDataMeans>
 collect_eta_across_cohorts(const std::vector<CohortAuxiliaryDataMeanEstimates>& v,
                            std::optional<std::size_t> b_opt) {
@@ -63,13 +89,17 @@ TargetParameterEstimates est_target_params(
                          collect_stats_across_cohorts(stats_by_cohort, std::nullopt),
                          collect_eta_across_cohorts(eta_by_cohort, std::nullopt));
 
-    std::vector<arma::vec> boots;
-    if (B > 0) {
-        boots.resize(B);
+    arma::mat boots_mat; // p x B (each column a bootstrap draw)
+    const std::size_t p = static_cast<std::size_t>(point.n_elem);
+    if (B == 0) {
+        boots_mat.set_size(static_cast<arma::uword>(p), arma::uword(0));
+    } else {
+        // Compute each bootstrap replicate vector in parallel into a temporary container
+        std::vector<arma::vec> tmp(B);
         auto process_boot = [&](std::size_t b) {
-            boots[b] = fn(ome.bootstrap_replicates[b],
-                          collect_stats_across_cohorts(stats_by_cohort, b),
-                          collect_eta_across_cohorts(eta_by_cohort, b));
+            tmp[b] = fn(ome.bootstrap_replicates[b],
+                        collect_stats_across_cohorts(stats_by_cohort, b),
+                        collect_eta_across_cohorts(eta_by_cohort, b));
         };
 
         {
@@ -83,9 +113,11 @@ TargetParameterEstimates est_target_params(
                 for (std::size_t b = 0; b < B; ++b) process_boot(b);
             }
         }
+
+        boots_mat = pack_bootstrap_columns(tmp, p);
     }
 
-    return TargetParameterEstimates(std::move(point), std::move(boots));
+    return TargetParameterEstimates(std::move(point), std::move(boots_mat));
 }
 
 std::unordered_map<std::string, TargetParameterEstimates> est_target_params(

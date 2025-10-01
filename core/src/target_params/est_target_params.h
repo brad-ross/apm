@@ -25,15 +25,22 @@ namespace apm {
 
 struct TargetParameterEstimates {
     arma::vec point;
-    std::vector<arma::vec> bootstrap_replicates;
+    arma::mat bootstrap_replicates;
 
     TargetParameterEstimates() = default;
 
-    TargetParameterEstimates(arma::vec point_in, std::vector<arma::vec> boots = {})
-        : point(std::move(point_in)), bootstrap_replicates(std::move(boots)) {}
+    TargetParameterEstimates(arma::vec point_in, arma::mat boots = arma::mat())
+        : point(std::move(point_in)), bootstrap_replicates(std::move(boots)) {
+        if (bootstrap_replicates.n_rows == 0 && bootstrap_replicates.n_cols == 0) {
+            bootstrap_replicates.set_size(static_cast<arma::uword>(point.n_elem), arma::uword(0));
+        }
+    }
 
-    bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
-    std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_replicates.size(); }
+    // Convenience: accept a vector of bootstrap vectors and pack into a matrix
+    TargetParameterEstimates(arma::vec point_in, const std::vector<arma::vec>& boots_vec);
+
+    bool has_bootstrap_replicates() const noexcept { return bootstrap_replicates.n_cols > 0; }
+    std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_replicates.n_cols; }
     std::size_t p() const noexcept { return static_cast<std::size_t>(point.n_elem); }
 };
 

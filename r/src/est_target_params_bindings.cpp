@@ -134,9 +134,9 @@ Rcpp::NumericVector tpe_point_params_cpp(SEXP xp_) {
 // [[Rcpp::export]]
 Rcpp::NumericVector tpe_boot_params_cpp(SEXP xp_, int b1) {
     Rcpp::XPtr<TargetParameterEstimates> xp(xp_);
-    int B = static_cast<int>(xp->bootstrap_replicates.size());
+    int B = static_cast<int>(xp->bootstrap_replicates.n_cols);
     if (b1 < 1 || b1 > B) Rcpp::stop("bootstrap index out of range");
-    const arma::vec& v = xp->bootstrap_replicates[static_cast<std::size_t>(b1 - 1)];
+    arma::vec v = xp->bootstrap_replicates.col(static_cast<arma::uword>(b1 - 1));
     Rcpp::NumericVector out(v.n_elem);
     std::copy(v.begin(), v.end(), out.begin());
     return out;
@@ -147,12 +147,11 @@ Rcpp::NumericMatrix tpe_boot_params_matrix_cpp(SEXP xp_) {
     Rcpp::XPtr<TargetParameterEstimates> xp(xp_);
     const std::size_t B = xp->n_bootstrap_replicates();
     const std::size_t p = xp->p();
-    Rcpp::NumericMatrix out(static_cast<int>(p), static_cast<int>(B));
-    for (std::size_t b = 0; b < B; ++b) {
-        const arma::vec& v = xp->bootstrap_replicates[b];
-        if (v.n_elem != p) Rcpp::stop("Inconsistent p across bootstrap replicates.");
-        for (std::size_t i = 0; i < p; ++i) out(static_cast<int>(i), static_cast<int>(b)) = v(i);
-    }
+    // Directly wrap the arma::mat as R matrix
+    const arma::mat& M = xp->bootstrap_replicates;
+    if (static_cast<std::size_t>(M.n_rows) != p) Rcpp::stop("Unexpected bootstrap matrix n_rows vs p.");
+    Rcpp::NumericMatrix out(static_cast<int>(M.n_rows), static_cast<int>(M.n_cols));
+    std::copy(M.begin(), M.end(), out.begin());
     return out;
 }
 
