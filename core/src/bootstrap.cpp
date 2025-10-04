@@ -200,8 +200,8 @@ SimultaneousInferenceResults get_bootstrap_inference(
         return (x > 0.0) ? x : 1.0;
     });
 
-    // Pointwise t-statistics: point_ests / row_sd
-    arma::vec pointwise_t_stats = point_ests / scale;
+    // Pointwise t-statistics: sqrt(N) * point_ests / row_sd
+    arma::vec pointwise_t_stats = (sqrtN * point_ests) / scale;
 
     // |t|-stats per row, per draw
     arma::mat abs_t_stats = arma::abs(z_stats.each_col() / scale);

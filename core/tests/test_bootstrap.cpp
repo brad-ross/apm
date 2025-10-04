@@ -87,4 +87,95 @@ TEST(BootstrapTest, NegativeWeightsValidation) {
     EXPECT_THROW({ FakeBootstrap fb(Wneg); (void)fb; }, std::invalid_argument);
 }
 
+TEST(BootstrapInferenceTest, RepeatedBootstrapCoverageAndPValues) {
+    const std::size_t p = 5;
+    const std::size_t B = 1000;
+    const std::size_t N = 100;
+    const double sig_level = 0.05;
+    const std::size_t n_sims = 10000;
+    
+    arma::arma_rng::set_seed(12345);
 
+    const double sqrtN = std::sqrt(static_cast<double>(N));
+    
+    // Track coverage rates
+    std::size_t simult_coverage_count = 0;  // All p parameters covered simultaneously
+    arma::uvec pointwise_coverage_count = arma::zeros<arma::uvec>(p);  // Each parameter
+    
+    // Store p-values in p x n_sims matrix (each row is a parameter, each column is a simulation)
+    arma::mat p_value_matrix(p, n_sims);
+    
+    for (std::size_t sim = 0; sim < n_sims; ++sim) {
+        // True parameter is zero; point estimates are N(0, 1/sqrt(N))
+        arma::vec point_ests = arma::randn(p) / sqrtN;
+        
+        // Bootstrap replicates: centered at point_ests, each column is one bootstrap
+        // Simulates resampling from data with true variance 1/N
+        arma::mat bootstrap_replicates = arma::randn(p, B) / sqrtN;
+        bootstrap_replicates.each_col() += point_ests;
+        
+        // Run bootstrap inference
+        auto results = get_bootstrap_inference(point_ests, bootstrap_replicates, N, sig_level);
+        
+        // Check simultaneous coverage: do ALL bands contain zero?
+        bool all_covered = true;
+        for (arma::uword i = 0; i < p; ++i) {
+            bool covered = (results.cb_lb(i) <= 0.0) && (0.0 <= results.cb_ub(i));
+            if (!covered) {
+                all_covered = false;
+            }
+            
+            // Check pointwise coverage for each parameter
+            bool pointwise_covered = (results.ci_lb(i) <= 0.0) && (0.0 <= results.ci_ub(i));
+            if (pointwise_covered) {
+                pointwise_coverage_count(i)++;
+            }
+            
+            // Store p-value
+            p_value_matrix(i, sim) = results.pointwise_p_vals(i);
+        }
+        
+        if (all_covered) {
+            simult_coverage_count++;
+        }
+    }
+    
+    // Test 1: Simultaneous band coverage should be around 95%
+    double simult_coverage_rate = static_cast<double>(simult_coverage_count) / n_sims;
+    EXPECT_GT(simult_coverage_rate, 0.94) 
+        << "Simultaneous coverage rate too low: " << simult_coverage_rate;
+    EXPECT_LT(simult_coverage_rate, 0.96) 
+        << "Simultaneous coverage rate too high: " << simult_coverage_rate;
+    
+    // Test 2: Pointwise coverage should be around 95% for each parameter
+    for (arma::uword i = 0; i < p; ++i) {
+        double pointwise_rate = static_cast<double>(pointwise_coverage_count(i)) / n_sims;
+        EXPECT_GT(pointwise_rate, 0.94) 
+            << "Pointwise coverage too low for param " << i << ": " << pointwise_rate;
+        EXPECT_LT(pointwise_rate, 0.96) 
+            << "Pointwise coverage too high for param " << i << ": " << pointwise_rate;
+    }
+    
+    // Test 3: P-values should be uniformly distributed for each parameter
+    // Check empirical CDF shares against theoretical uniform quantiles
+    // Check all interior deciles: 0.1, 0.2, 0.3, ..., 0.9
+    const double tolerance = 0.02;  // Allow 2% deviation
+    
+    for (arma::uword i = 0; i < p; ++i) {
+        // Extract p-values for this parameter across all simulations
+        arma::vec param_pvals = p_value_matrix.row(i).t();  // column vector of length n_sims
+
+        // Precompute deciles and empirical shares below each decile
+        arma::vec deciles = arma::regspace(0.1, 0.1, 0.9); // 0.1, 0.2, ..., 0.9
+        for (arma::uword d = 0; d < deciles.n_elem; ++d) {
+            double q = deciles(d);
+            // empirical share = proportion of p-values < q
+            arma::uvec below = arma::find(param_pvals < q);
+            double share = static_cast<double>(below.n_elem) / static_cast<double>(param_pvals.n_elem);
+
+            EXPECT_NEAR(share, q, tolerance)
+                << "Param " << i << ": empirical CDF at " << q
+                << " should be near " << q << ", got " << share;
+        }
+    }
+}
