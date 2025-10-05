@@ -206,6 +206,21 @@ TargetParamComponents est_target_param_components_from_panel(
     return res;
 }
 
+SimultaneousInferenceResults target_param_inference(
+    const TargetParameterEstimates& ests,
+    const InMemoryUnbalancedPanel& panel,
+    double sig_level)
+{
+    const std::size_t N = panel.num_units();
+    if (N == 0) {
+        throw std::invalid_argument("target_param_inference: panel.num_units() must be > 0.");
+    }
+    if (!ests.has_bootstrap_replicates()) {
+        throw std::invalid_argument("target_param_inference: bootstrap_replicates must have B>0 columns.");
+    }
+    return get_bootstrap_inference(ests.point, ests.bootstrap_replicates, N, sig_level);
+}
+
 } // namespace apm
 
 

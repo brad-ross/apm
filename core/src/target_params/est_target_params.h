@@ -20,6 +20,7 @@
 #include "cohort_specific_param_structs.h"
 #include "est_cohort_specific_params.h"
 #include "../outcome_imputation.h"
+#include "../bootstrap.h"
 
 namespace apm {
 
@@ -86,6 +87,12 @@ TargetParamComponents est_target_param_components_from_panel(
     double imputation_tol = DEFAULT_TOL,
     std::size_t imputation_max_iters = DEFAULT_MAX_ITERS,
     const std::string& imputation_fixed_point_method = DEFAULT_FP_METHOD);
+
+// Bootstrap-based inference for target parameters
+SimultaneousInferenceResults target_param_inference(
+    const TargetParameterEstimates& ests,
+    const InMemoryUnbalancedPanel& panel,
+    double sig_level = 0.05);
 
 } // namespace apm
 
