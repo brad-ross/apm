@@ -94,6 +94,12 @@ SimultaneousInferenceResults target_param_inference(
     const InMemoryUnbalancedPanel& panel,
     double sig_level = 0.05);
 
+    // Overload: inference for multiple specs
+    std::unordered_map<std::string, SimultaneousInferenceResults> target_param_inference(
+        const std::unordered_map<std::string, TargetParameterEstimates>& ests_by_spec,
+        const InMemoryUnbalancedPanel& panel,
+        double sig_level = 0.05);
+
 } // namespace apm
 
 #endif // APM_TARGET_PARAM_ESTIMATES_H

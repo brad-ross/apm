@@ -221,6 +221,24 @@ SimultaneousInferenceResults target_param_inference(
     return get_bootstrap_inference(ests.point, ests.bootstrap_replicates, N, sig_level);
 }
 
+std::unordered_map<std::string, SimultaneousInferenceResults> target_param_inference(
+    const std::unordered_map<std::string, TargetParameterEstimates>& ests_by_spec,
+    const InMemoryUnbalancedPanel& panel,
+    double sig_level)
+{
+    const std::size_t N = panel.num_units();
+    if (N == 0) {
+        throw std::invalid_argument("target_param_inference: panel.num_units() must be > 0.");
+    }
+
+    std::unordered_map<std::string, SimultaneousInferenceResults> out;
+    out.reserve(ests_by_spec.size());
+    for (const auto& kv : ests_by_spec) {
+        out.emplace(kv.first, target_param_inference(kv.second, panel, sig_level));
+    }
+    return out;
+}
+
 } // namespace apm
 
 
