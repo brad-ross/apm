@@ -7,6 +7,7 @@
 #include "r_utils.h"
 #include "../../core/src/target_params/est_target_params.h"
 #include "../../core/src/est_outcome_means.h"
+#include "../../core/src/panels/InMemoryUnbalancedPanel.h"
 #include "../../core/src/cohort_specific_param_structs.h"
 #include "cohort_specific_estimates_helpers.h"
 
@@ -267,4 +268,18 @@ Rcpp::List est_target_param_components_from_panel_cpp(
                         "masked_cohort_outcome_means");
     }
     return final;
+}
+
+//------------------------------------------------------------------------------
+// Inference for target parameters given panel
+//------------------------------------------------------------------------------
+
+// [[Rcpp::export]]
+SEXP target_param_inference_cpp(SEXP tpe_xptr,
+                                SEXP panel_holder_xptr,
+                                double sig_level = 0.05) {
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe(tpe_xptr);
+    const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
+    apm::SimultaneousInferenceResults res = apm::target_param_inference(*tpe, panel, sig_level);
+    return apm::r_utils::make_xptr(std::move(res));
 }

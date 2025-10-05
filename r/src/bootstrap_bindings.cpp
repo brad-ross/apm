@@ -1,5 +1,6 @@
 #include <RcppArmadillo.h>
 #include "../../core/src/bootstrap.h"
+#include "r_utils.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
@@ -89,4 +90,94 @@ arma::mat wb_weights_cpp(SEXP xp) {
 }
 
 
+
+//------------------------------------------------------------------------------
+// Bootstrap-based simultaneous inference bindings
+//------------------------------------------------------------------------------
+
+// [[Rcpp::export]]
+SEXP get_bootstrap_inference_cpp(Rcpp::NumericVector point_ests,
+                                 Rcpp::NumericMatrix bootstrap_replicates,
+                                 std::size_t N,
+                                 double sig_level = 0.05) {
+    arma::vec theta(point_ests.begin(), point_ests.size(), /*copy_aux_mem=*/false);
+    arma::mat boots(bootstrap_replicates.begin(),
+                    bootstrap_replicates.nrow(),
+                    bootstrap_replicates.ncol(),
+                    /*copy_aux_mem=*/false);
+    apm::SimultaneousInferenceResults res =
+        apm::get_bootstrap_inference(theta, boots, N, sig_level);
+    return apm::r_utils::make_xptr(std::move(res));
+}
+
+// Accessors for SimultaneousInferenceResults
+
+// [[Rcpp::export]]
+Rcpp::NumericVector sir_point_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
+    const arma::vec& v = p->point_ests;
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericVector sir_pointwise_t_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
+    const arma::vec& v = p->pointwise_t_stats;
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericVector sir_pointwise_p_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
+    const arma::vec& v = p->pointwise_p_vals;
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
+
+// [[Rcpp::export]]
+double sir_sig_level_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
+    return p->sig_level;
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericVector sir_ci_lb_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
+    const arma::vec& v = p->ci_lb;
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericVector sir_ci_ub_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
+    const arma::vec& v = p->ci_ub;
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericVector sir_cb_lb_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
+    const arma::vec& v = p->cb_lb;
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericVector sir_cb_ub_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
+    const arma::vec& v = p->cb_ub;
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
 

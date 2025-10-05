@@ -99,3 +99,54 @@ get_weighted_bootstrap_draws <- function(N, B, type = c("multinomial", "bayesian
   if (!is.null(seed)) set.seed(as.integer(seed))
   WeightedBootstrap$new(N, B, type, seed)
 }
+
+#' Bootstrap and target-parameter inference results
+#'
+#' R6 wrapper around simultaneous inference results computed from bootstrap replicates.
+#'
+#' @export
+SimultaneousInferenceResults <- R6::R6Class(
+  classname = "SimultaneousInferenceResults",
+  public = list(
+    initialize = function(ptr) {
+      private$xp <- ptr
+    },
+    point = function() sir_point_cpp(private$xp),
+    t_stats = function() sir_pointwise_t_cpp(private$xp),
+    p_vals = function() sir_pointwise_p_cpp(private$xp),
+    sig_level = function() sir_sig_level_cpp(private$xp),
+    ci = function() list(lb = sir_ci_lb_cpp(private$xp),
+                         ub = sir_ci_ub_cpp(private$xp)),
+    cb = function() list(lb = sir_cb_lb_cpp(private$xp),
+                         ub = sir_cb_ub_cpp(private$xp))
+  ),
+  private = list(
+    xp = NULL
+  )
+)
+
+#' Compute bootstrap-based inference from raw inputs
+#' @param point numeric vector of point estimates
+#' @param boot numeric matrix p x B of bootstrap estimates
+#' @param N integer sample size
+#' @param sig_level significance level in (0,1)
+#' @return SimultaneousInferenceResults
+#' @export
+get_bootstrap_inference <- function(point, boot, N, sig_level = 0.05) {
+  xp <- get_bootstrap_inference_cpp(as.numeric(point),
+                                    as.matrix(boot),
+                                    as.integer(N),
+                                    sig_level)
+  SimultaneousInferenceResults$new(xp)
+}
+
+#' Compute target-parameter inference from a panel and TargetParameterEstimates
+#' @param tpe external pointer returned by est_target_params_cpp
+#' @param panel_holder external pointer returned by build_R_panel_holder_cpp
+#' @param sig_level significance level in (0,1)
+#' @return SimultaneousInferenceResults
+#' @export
+target_param_inference <- function(tpe, panel_holder, sig_level = 0.05) {
+  xp <- target_param_inference_cpp(tpe, panel_holder, sig_level)
+  SimultaneousInferenceResults$new(xp)
+}
