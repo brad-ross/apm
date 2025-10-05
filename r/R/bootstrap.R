@@ -118,7 +118,45 @@ SimultaneousInferenceResults <- R6::R6Class(
     ci = function() list(lb = sir_ci_lb_cpp(private$xp),
                          ub = sir_ci_ub_cpp(private$xp)),
     cb = function() list(lb = sir_cb_lb_cpp(private$xp),
-                         ub = sir_cb_ub_cpp(private$xp))
+                         ub = sir_cb_ub_cpp(private$xp)),
+    as_data_frame = function(param_names = NULL) {
+      est <- self$point()
+      t <- self$t_stats()
+      p <- self$p_vals()
+      ci <- self$ci()
+      cb <- self$cb()
+
+      n <- length(est)
+      if (!all(lengths(list(t, p, ci$lb, ci$ub, cb$lb, cb$ub)) == n)) {
+        stop("Inconsistent lengths among inference components.")
+      }
+
+      df <- data.frame(
+        estimate = est,
+        t_stat = t,
+        p_value = p,
+        ci_lb = ci$lb,
+        ci_ub = ci$ub,
+        cb_lb = cb$lb,
+        cb_ub = cb$ub,
+        stringsAsFactors = FALSE
+      )
+
+      if (!is.null(param_names)) {
+        if (length(param_names) != n) stop(paste0("param_names must have length ", n))
+        df <- cbind(parameter = param_names, df)
+      } else {
+        df <- cbind(parameter = seq_len(n), df)
+      }
+      rownames(df) <- NULL
+      df
+    },
+    as.data.frame = function(...) self$as_data_frame(...),
+    print = function(...) {
+      df <- self$as_data_frame()
+      print(df)
+      invisible(self)
+    }
   ),
   private = list(
     xp = NULL
