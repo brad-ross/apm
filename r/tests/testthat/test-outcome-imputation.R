@@ -65,6 +65,28 @@ testthat::test_that("comp_imputation_components recovers alpha with covariates (
   testthat::expect_equal(P_out, P_true, tolerance = 1e-9)
 })
 
+testthat::test_that("comp_imputation_components handles all-ones factors with FE and no covariates", {
+  T <- 6L; r <- 1L; T_c <- 3L; units_per <- 4L
+  outcomes <- make_outcomes(T)
+  cohort_indices <- make_staircase_observed_indices(T, T_c)
+  units_by_cohort <- make_units_by_cohort(length(cohort_indices), units_per)
+  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = FALSE, include_outcome_fes = TRUE)
+  G_true <- matrix(1, nrow = T, ncol = r)
+  # build panel using ctx (which embeds g0)
+  panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort,
+                                              include_covariates = FALSE, include_auxiliary = FALSE,
+                                              r = r, rotate = FALSE, ctx = ctx)
+  panel <- UnbalancedPanel$new(panel_dt, unit_id_col = "unit_id", outcome_id_col = "outcome_id", outcome_value_col = "y", model_rank = r)
+
+  fme <- FactorModelEstimates$new(make_factor_model_estimates_cpp(G_true, g0 = ctx$g0))
+  out <- comp_imputation_components(panel, fme)
+
+  # G is ones, no a, g0 present
+  testthat::expect_equal(out$G(), G_true)
+  testthat::expect_false(out$has_a())
+  testthat::expect_true(out$has_g0())
+})
+
 testthat::test_that("comp_imputation_components handles by-spec map dispatch", {
   T <- 6L; r <- 2L; T_c <- 3L; units_per <- 4L
   outcomes <- make_outcomes(T)
