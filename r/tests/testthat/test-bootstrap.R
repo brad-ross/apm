@@ -100,12 +100,13 @@ test_that("Bootstrap inference coverage and p-values behave under the null", {
   B <- 1000L
   N <- 100L
   sig_level <- 0.05
-  n_sims <- 2000L
+  n_sims <- 5000L
 
   sqrtN <- sqrt(N)
   simult_covered <- logical(n_sims)
   pointwise_counts <- integer(p)
   p_value_matrix <- matrix(NA_real_, nrow = p, ncol = n_sims)
+  fwer_reject_count <- 0L
 
   for (sim in seq_len(n_sims)) {
     point <- rnorm(p) / sqrtN
@@ -124,6 +125,11 @@ test_that("Bootstrap inference coverage and p-values behave under the null", {
     simult_covered[sim] <- covered_simult
 
     p_value_matrix[, sim] <- pvals
+
+    # Family-wise error: any Romano-Wolf adjusted p-value below sig_level
+    if (any(sir$simult_p_vals() < sig_level)) {
+      fwer_reject_count <- fwer_reject_count + 1L
+    }
   }
 
   simult_rate <- mean(simult_covered)
@@ -145,4 +151,9 @@ test_that("Bootstrap inference coverage and p-values behave under the null", {
       expect_lt(abs(share - q), tol)
     }
   }
+
+  # FWER should be controlled at sig_level (allow small tolerance)
+  fwer <- fwer_reject_count / n_sims
+  print(paste0("FWER: ", fwer, " (sig_level=", sig_level, ")"))
+  expect_lt(fwer, sig_level + 0.005)
 })

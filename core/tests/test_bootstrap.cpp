@@ -101,6 +101,7 @@ TEST(BootstrapInferenceTest, RepeatedBootstrapCoverageAndPValues) {
     // Track coverage rates
     std::size_t simult_coverage_count = 0;  // All p parameters covered simultaneously
     arma::uvec pointwise_coverage_count = arma::zeros<arma::uvec>(p);  // Each parameter
+    std::size_t fwer_reject_count = 0;      // At least one false rejection per simulation
     
     // Store p-values in p x n_sims matrix (each row is a parameter, each column is a simulation)
     arma::mat p_value_matrix(p, n_sims);
@@ -138,6 +139,10 @@ TEST(BootstrapInferenceTest, RepeatedBootstrapCoverageAndPValues) {
         if (all_covered) {
             simult_coverage_count++;
         }
+
+        // FWER: any Romano-Wolf adjusted p-value below sig_level triggers a family-wise error
+        bool any_reject = arma::any(results.simult_p_vals < sig_level);
+        if (any_reject) fwer_reject_count++;
     }
     
     // Test 1: Simultaneous band coverage should be around 95%
@@ -178,4 +183,9 @@ TEST(BootstrapInferenceTest, RepeatedBootstrapCoverageAndPValues) {
                 << " should be near " << q << ", got " << share;
         }
     }
+
+    // Test 4: Family-wise error rate should be controlled at sig_level
+    double fwer = static_cast<double>(fwer_reject_count) / n_sims;
+    EXPECT_LT(fwer, sig_level + 0.005)
+        << "FWER too high: " << fwer << " (sig_level=" << sig_level << ")";
 }
