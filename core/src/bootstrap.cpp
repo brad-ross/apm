@@ -39,6 +39,107 @@ inline void validate_bootstrap_inference_args(
     }
 }
 
+// Compute bootstrap pointwise p-values with +1/(B+1) correction.
+// abs_t_stats is p x B with entries |t_i^*,m|; abs_obs is p-vector of |t_i|.
+inline arma::vec bootstrap_pointwise_pvals(const arma::mat& abs_t_stats,
+                                           const arma::vec& abs_obs) {
+    const std::size_t p = abs_t_stats.n_rows;
+    const std::size_t B = abs_t_stats.n_cols;
+    arma::vec pvals(p);
+    for (arma::uword i = 0; i < p; ++i) {
+        double thr = abs_obs(i);
+        double count = 0.0;
+        for (arma::uword b = 0; b < B; ++b) {
+            if (abs_t_stats(i, b) >= thr) {
+                count += 1.0;
+            }
+        }
+        pvals(i) = (count + 1.0) / (static_cast<double>(B) + 1.0);
+    }
+    return pvals;
+}
+
+// Compute Romano–Wolf stepdown adjusted p-values from absolute t-statistics.
+// abs_t_stats is p x B with entries |t_i^*,m|; abs_obs is p-vector of |t_i|.
+// Returns p-vector of adjusted p-values, in the original hypothesis order.
+inline arma::vec romano_wolf_stepdown_pvals(const arma::mat& abs_t_stats,
+                                            const arma::vec& abs_obs) {
+    const std::size_t p = abs_t_stats.n_rows;
+    const std::size_t B = abs_t_stats.n_cols;
+
+    // Order hypotheses by decreasing observed |t|
+    arma::uvec order = arma::sort_index(abs_obs, "descend");
+    arma::vec abs_obs_sorted = abs_obs(order);
+    arma::mat abs_t_ordered = abs_t_stats.rows(order);
+
+    // Suffix maxima across remaining hypotheses for each draw
+    arma::mat suffix_max(p, B, arma::fill::none);
+    suffix_max.row(p - 1) = abs_t_ordered.row(p - 1);
+    for (arma::sword j = static_cast<arma::sword>(p) - 2; j >= 0; --j) {
+        suffix_max.row(j) = arma::max(abs_t_ordered.row(j), suffix_max.row(j + 1));
+    }
+
+    // Initial p-values with +1 / (B + 1) correction, using shared helper (>= threshold)
+    arma::vec p_init = bootstrap_pointwise_pvals(suffix_max, abs_obs_sorted);
+
+    // Monotonicity enforcement
+    arma::vec p_adj = p_init;
+    for (arma::uword j = 1; j < p; ++j) {
+        if (p_adj(j) < p_adj(j - 1)) p_adj(j) = p_adj(j - 1);
+    }
+
+    // Map back to original order
+    arma::vec out(p);
+    for (arma::uword j = 0; j < p; ++j) {
+        out(order(j)) = p_adj(j);
+    }
+    return out;
+}
+
+// Construct confidence intervals given critical values (vector), row scales, and sqrtN.
+// crit_vals can be a p-vector of per-parameter critical values (pointwise) or a
+// repeated scalar expanded by the caller (simultaneous).
+inline void constr_conf_intervals(const arma::vec& point_ests,
+                                  const arma::vec& crit_vals,
+                                  const arma::vec& row_sd,
+                                  double sqrtN,
+                                  arma::vec& lb,
+                                  arma::vec& ub) {
+    arma::vec half = (crit_vals % row_sd) / sqrtN;
+    lb = point_ests - half;
+    ub = point_ests + half;
+}
+
+// Construct pointwise confidence intervals using rowwise quantiles of abs t-stats
+inline void constr_pointwise_conf_band(const arma::mat& abs_t_stats,
+                                       double sqrtN,
+                                       double sig_level,
+                                       const arma::vec& row_sd,
+                                       const arma::vec& point_ests,
+                                       arma::vec& ci_lb,
+                                       arma::vec& ci_ub) {
+    arma::vec ci_crit_vals = arma::quantile(abs_t_stats, arma::vec{1.0 - sig_level}, 1); // dim=1 rowwise
+    constr_conf_intervals(point_ests, ci_crit_vals, row_sd, sqrtN, ci_lb, ci_ub);
+}
+
+// Construct simultaneous confidence band using KS critical value from abs t-stats
+// Inputs: abs_t_stats (p x B), sqrtN, sig_level in (0,1), row_sd (p), point_ests (p)
+// Outputs: cb_lb, cb_ub (both p)
+inline void constr_simult_conf_band(const arma::mat& abs_t_stats,
+                                    double sqrtN,
+                                    double sig_level,
+                                    const arma::vec& row_sd,
+                                    const arma::vec& point_ests,
+                                    arma::vec& cb_lb,
+                                    arma::vec& cb_ub) {
+    // Kolmogorov-Smirnov stats across parameters for each draw (column-wise max over rows)
+    arma::vec ks_stats = arma::max(abs_t_stats, 0).t(); // B x 1, dim=0 for column-wise max
+    // Simultaneous critical value replicated to p-length vector
+    arma::vec simult_crit_val_vec = arma::quantile(ks_stats, arma::vec{1.0 - sig_level});
+    arma::vec crit_vals = arma::repmat(simult_crit_val_vec, point_ests.n_elem, 1);
+    constr_conf_intervals(point_ests, crit_vals, row_sd, sqrtN, cb_lb, cb_ub);
+}
+
 } // anonymous namespace
 
 namespace apm {
@@ -206,36 +307,20 @@ SimultaneousInferenceResults get_bootstrap_inference(
     // |t|-stats per row, per draw
     arma::mat abs_t_stats = arma::abs(z_stats.each_col() / scale);
 
-    // Pointwise p-values: for each parameter, count how many bootstrap |t|'s exceed observed |t|
-    arma::vec pointwise_p_vals(point_ests.n_elem);
+    // Pointwise p-values (bootstrap-based)
     arma::vec abs_pointwise_t = arma::abs(pointwise_t_stats);
-    for (arma::uword i = 0; i < point_ests.n_elem; ++i) {
-        double count = 0.0;
-        for (arma::uword b = 0; b < B; ++b) {
-            if (abs_t_stats(i, b) > abs_pointwise_t(i)) {
-                count += 1.0;
-            }
-        }
-        pointwise_p_vals(i) = (count + 1.0) / (static_cast<double>(B) + 1.0);
-    }
+    arma::vec pointwise_p_vals = bootstrap_pointwise_pvals(abs_t_stats, abs_pointwise_t);
 
-    // Per-parameter critical values: (1 - sig_level) quantile across draws
-    arma::vec ci_crit_vals = arma::quantile(abs_t_stats, arma::vec{1.0 - sig_level}, 1); // dim=1 for rowwise
+    // Pointwise confidence intervals
+    arma::vec ci_lb, ci_ub;
+    constr_pointwise_conf_band(abs_t_stats, sqrtN, sig_level, row_sd, point_ests, ci_lb, ci_ub);
 
-    // Pointwise CI half-widths and bounds
-    arma::vec ci_half = (ci_crit_vals % row_sd) / sqrtN;
-    arma::vec ci_lb = point_ests - ci_half;
-    arma::vec ci_ub = point_ests + ci_half;
+    // Romano–Wolf stepdown adjusted p-values (simultaneous p-values)
+    arma::vec abs_obs = arma::abs(pointwise_t_stats);
+    arma::vec simult_p_vals = romano_wolf_stepdown_pvals(abs_t_stats, abs_obs);
 
-    // Kolmogorov-Smirnov stats across parameters for each draw (column-wise max over rows)
-    arma::vec ks_stats = arma::max(abs_t_stats, 0).t(); // B x 1, dim=0 for column-wise max
-
-    // Simultaneous critical value and band
-    arma::vec simult_crit_val_vec = arma::quantile(ks_stats, arma::vec{1.0 - sig_level});
-    const double simult_crit_val = simult_crit_val_vec(0);
-    arma::vec cb_half = (row_sd * simult_crit_val) / sqrtN;
-    arma::vec cb_lb = point_ests - cb_half;
-    arma::vec cb_ub = point_ests + cb_half;
+    arma::vec cb_lb, cb_ub;
+    constr_simult_conf_band(abs_t_stats, sqrtN, sig_level, row_sd, point_ests, cb_lb, cb_ub);
 
     return SimultaneousInferenceResults{
         point_ests,
@@ -244,11 +329,10 @@ SimultaneousInferenceResults get_bootstrap_inference(
         sig_level,
         ci_lb,
         ci_ub,
+        simult_p_vals,
         cb_lb,
         cb_ub
     };
 }
 
 } // namespace apm
-
-

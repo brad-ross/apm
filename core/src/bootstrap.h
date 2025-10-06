@@ -77,6 +77,7 @@ struct SimultaneousInferenceResults {
     double sig_level;
     arma::vec ci_lb;
     arma::vec ci_ub;
+    arma::vec simult_p_vals; // Romano–Wolf stepdown adjusted p-values
     arma::vec cb_lb;
     arma::vec cb_ub;
 };

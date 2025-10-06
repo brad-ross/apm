@@ -162,6 +162,15 @@ Rcpp::NumericVector sir_ci_ub_cpp(SEXP xp) {
 }
 
 // [[Rcpp::export]]
+Rcpp::NumericVector sir_simult_p_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
+    const arma::vec& v = p->simult_p_vals;
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
+
+// [[Rcpp::export]]
 Rcpp::NumericVector sir_cb_lb_cpp(SEXP xp) {
     Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
     const arma::vec& v = p->cb_lb;
