@@ -99,3 +99,116 @@ get_weighted_bootstrap_draws <- function(N, B, type = c("multinomial", "bayesian
   if (!is.null(seed)) set.seed(as.integer(seed))
   WeightedBootstrap$new(N, B, type, seed)
 }
+
+#' Bootstrap and target-parameter inference results
+#'
+#' R6 wrapper around simultaneous inference results computed from bootstrap replicates.
+#'
+#' @export
+SimultaneousInferenceResults <- R6::R6Class(
+  classname = "SimultaneousInferenceResults",
+  public = list(
+    initialize = function(ptr) {
+      private$xp <- ptr
+    },
+    point = function() sir_point_cpp(private$xp),
+    t_stats = function() sir_pointwise_t_cpp(private$xp),
+    p_vals = function() sir_pointwise_p_cpp(private$xp),
+    fwer_control_p_vals = function() sir_fwer_control_p_cpp(private$xp),
+    sig_level = function() sir_sig_level_cpp(private$xp),
+    ci = function() list(lb = sir_ci_lb_cpp(private$xp),
+                         ub = sir_ci_ub_cpp(private$xp)),
+    cb = function() list(lb = sir_cb_lb_cpp(private$xp),
+                         ub = sir_cb_ub_cpp(private$xp)),
+    as_data_frame = function(param_names = NULL) {
+      est <- self$point()
+      t <- self$t_stats()
+      p <- self$p_vals()
+      ci <- self$ci()
+      cb <- self$cb()
+
+      n <- length(est)
+      if (!all(lengths(list(t, p, ci$lb, ci$ub, cb$lb, cb$ub)) == n)) {
+        stop("Inconsistent lengths among inference components.")
+      }
+
+      df <- data.frame(
+        estimate = est,
+        t_stat = t,
+        p_value = p,
+        ci_lb = ci$lb,
+        ci_ub = ci$ub,
+        cb_lb = cb$lb,
+        cb_ub = cb$ub,
+        stringsAsFactors = FALSE
+      )
+
+      if (!is.null(param_names)) {
+        if (length(param_names) != n) stop(paste0("param_names must have length ", n))
+        df <- cbind(parameter = param_names, df)
+      } else {
+        df <- cbind(parameter = seq_len(n), df)
+      }
+      rownames(df) <- NULL
+      df
+    },
+    as.data.frame = function(...) self$as_data_frame(...),
+    print = function(...) {
+      df <- self$as_data_frame()
+      print(df)
+      invisible(self)
+    }
+  ),
+  private = list(
+    xp = NULL
+  )
+)
+
+#' Compute bootstrap-based inference from raw inputs
+#' @param point numeric vector of point estimates
+#' @param boot numeric matrix p x B of bootstrap estimates
+#' @param N integer sample size
+#' @param sig_level significance level in (0,1)
+#' @return SimultaneousInferenceResults
+#' @export
+get_bootstrap_inference <- function(point, boot, N, sig_level = 0.05) {
+  xp <- get_bootstrap_inference_cpp(as.numeric(point),
+                                    as.matrix(boot),
+                                    as.integer(N),
+                                    sig_level)
+  SimultaneousInferenceResults$new(xp)
+}
+
+#' Combine inference results across specs
+#'
+#' Stacks rows from multiple `SimultaneousInferenceResults` objects into a single
+#' data frame, adding a `spec` column that records the name of the spec for each
+#' row.
+#'
+#' @param results_by_spec named list of `SimultaneousInferenceResults` (one per spec)
+#' @return data.frame with a leading `spec` column followed by inference columns
+#' @export
+combine_inference_results_across_specs <- function(results_by_spec) {
+  if (!is.list(results_by_spec) || length(results_by_spec) == 0L) {
+    stop("results_by_spec must be a non-empty named list of SimultaneousInferenceResults")
+  }
+  if (is.null(names(results_by_spec)) || any(!nzchar(names(results_by_spec)))) {
+    stop("results_by_spec must be a named list (names are spec identifiers)")
+  }
+
+  nms <- names(results_by_spec)
+  dfs <- vector("list", length(results_by_spec))
+  for (i in seq_along(results_by_spec)) {
+    sir <- results_by_spec[[i]]
+    if (!inherits(sir, "SimultaneousInferenceResults")) {
+      stop("All elements of results_by_spec must inherit 'SimultaneousInferenceResults'")
+    }
+    df_i <- as.data.frame(sir)
+    df_i <- cbind(data.frame(spec = nms[[i]], stringsAsFactors = FALSE), df_i)
+    dfs[[i]] <- df_i
+  }
+
+  out <- do.call(rbind, dfs)
+  rownames(out) <- NULL
+  out
+}

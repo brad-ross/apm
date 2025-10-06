@@ -7,6 +7,7 @@
 #include "r_utils.h"
 #include "../../core/src/target_params/est_target_params.h"
 #include "../../core/src/est_outcome_means.h"
+#include "../../core/src/panels/InMemoryUnbalancedPanel.h"
 #include "../../core/src/cohort_specific_param_structs.h"
 #include "cohort_specific_estimates_helpers.h"
 
@@ -134,9 +135,9 @@ Rcpp::NumericVector tpe_point_params_cpp(SEXP xp_) {
 // [[Rcpp::export]]
 Rcpp::NumericVector tpe_boot_params_cpp(SEXP xp_, int b1) {
     Rcpp::XPtr<TargetParameterEstimates> xp(xp_);
-    int B = static_cast<int>(xp->bootstrap_replicates.size());
+    int B = static_cast<int>(xp->bootstrap_replicates.n_cols);
     if (b1 < 1 || b1 > B) Rcpp::stop("bootstrap index out of range");
-    const arma::vec& v = xp->bootstrap_replicates[static_cast<std::size_t>(b1 - 1)];
+    arma::vec v = xp->bootstrap_replicates.col(static_cast<arma::uword>(b1 - 1));
     Rcpp::NumericVector out(v.n_elem);
     std::copy(v.begin(), v.end(), out.begin());
     return out;
@@ -147,12 +148,11 @@ Rcpp::NumericMatrix tpe_boot_params_matrix_cpp(SEXP xp_) {
     Rcpp::XPtr<TargetParameterEstimates> xp(xp_);
     const std::size_t B = xp->n_bootstrap_replicates();
     const std::size_t p = xp->p();
-    Rcpp::NumericMatrix out(static_cast<int>(p), static_cast<int>(B));
-    for (std::size_t b = 0; b < B; ++b) {
-        const arma::vec& v = xp->bootstrap_replicates[b];
-        if (v.n_elem != p) Rcpp::stop("Inconsistent p across bootstrap replicates.");
-        for (std::size_t i = 0; i < p; ++i) out(static_cast<int>(i), static_cast<int>(b)) = v(i);
-    }
+    // Directly wrap the arma::mat as R matrix
+    const arma::mat& M = xp->bootstrap_replicates;
+    if (static_cast<std::size_t>(M.n_rows) != p) Rcpp::stop("Unexpected bootstrap matrix n_rows vs p.");
+    Rcpp::NumericMatrix out(static_cast<int>(M.n_rows), static_cast<int>(M.n_cols));
+    std::copy(M.begin(), M.end(), out.begin());
     return out;
 }
 
@@ -268,4 +268,53 @@ Rcpp::List est_target_param_components_from_panel_cpp(
                         "masked_cohort_outcome_means");
     }
     return final;
+}
+
+//------------------------------------------------------------------------------
+// Inference for target parameters given panel
+//------------------------------------------------------------------------------
+
+// [[Rcpp::export]]
+SEXP target_param_inference_cpp(SEXP tpe_xptr,
+                                SEXP panel_holder_xptr,
+                                double sig_level = 0.05) {
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe(tpe_xptr);
+    const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
+    apm::SimultaneousInferenceResults res = apm::target_param_inference(*tpe, panel, sig_level);
+    return apm::r_utils::make_xptr(std::move(res));
+}
+
+// By-spec inference: named list of XPtr<TargetParameterEstimates> -> named list of XPtr<SimultaneousInferenceResults>
+// [[Rcpp::export]]
+Rcpp::List target_param_inference_by_spec_cpp(Rcpp::List tpe_by_spec,
+                                              SEXP panel_holder_xptr,
+                                              double sig_level = 0.05) {
+    // Build input map<string, TargetParameterEstimates>
+    std::unordered_map<std::string, apm::TargetParameterEstimates> ests_map;
+    {
+        Rcpp::CharacterVector nms = tpe_by_spec.names();
+        for (int i = 0; i < tpe_by_spec.size(); ++i) {
+            std::string key = Rcpp::as<std::string>(nms[i]);
+            Rcpp::XPtr<apm::TargetParameterEstimates> xp(tpe_by_spec[i]);
+            ests_map.emplace(std::move(key), *xp);
+        }
+    }
+
+    // Panel ref
+    const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
+
+    // Delegate to core overload
+    auto res_map = apm::target_param_inference(ests_map, panel, sig_level);
+
+    // Return named list of XPtr<SimultaneousInferenceResults>
+    Rcpp::List out(static_cast<int>(res_map.size()));
+    Rcpp::CharacterVector names(static_cast<int>(res_map.size()));
+    int k = 0;
+    for (auto& kv : res_map) {
+        names[k] = kv.first;
+        out[k] = apm::r_utils::make_xptr(std::move(kv.second));
+        ++k;
+    }
+    out.attr("names") = names;
+    return out;
 }
