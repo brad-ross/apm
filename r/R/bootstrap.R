@@ -177,3 +177,37 @@ get_bootstrap_inference <- function(point, boot, N, sig_level = 0.05) {
                                     sig_level)
   SimultaneousInferenceResults$new(xp)
 }
+
+#' Combine inference results across specs
+#'
+#' Stacks rows from multiple `SimultaneousInferenceResults` objects into a single
+#' data frame, adding a `spec` column that records the name of the spec for each
+#' row.
+#'
+#' @param results_by_spec named list of `SimultaneousInferenceResults` (one per spec)
+#' @return data.frame with a leading `spec` column followed by inference columns
+#' @export
+combine_inference_results_across_specs <- function(results_by_spec) {
+  if (!is.list(results_by_spec) || length(results_by_spec) == 0L) {
+    stop("results_by_spec must be a non-empty named list of SimultaneousInferenceResults")
+  }
+  if (is.null(names(results_by_spec)) || any(!nzchar(names(results_by_spec)))) {
+    stop("results_by_spec must be a named list (names are spec identifiers)")
+  }
+
+  nms <- names(results_by_spec)
+  dfs <- vector("list", length(results_by_spec))
+  for (i in seq_along(results_by_spec)) {
+    sir <- results_by_spec[[i]]
+    if (!inherits(sir, "SimultaneousInferenceResults")) {
+      stop("All elements of results_by_spec must inherit 'SimultaneousInferenceResults'")
+    }
+    df_i <- as.data.frame(sir)
+    df_i <- cbind(data.frame(spec = nms[[i]], stringsAsFactors = FALSE), df_i)
+    dfs[[i]] <- df_i
+  }
+
+  out <- do.call(rbind, dfs)
+  rownames(out) <- NULL
+  out
+}
