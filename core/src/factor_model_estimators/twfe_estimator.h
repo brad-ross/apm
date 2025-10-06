@@ -14,26 +14,26 @@ namespace apm {
  */
 class TWFEEstimator : public FactorModelEstimator {
 public:
-	explicit TWFEEstimator(std::size_t T_c,
-	                      std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
-	                      std::size_t q = 0);
+    explicit TWFEEstimator(std::size_t T_c,
+                           std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
+                           std::size_t q = 0);
 
 	FactorModelEstimates estimate() override;
 
 protected:
-	void add_data_(const arma::uvec& unit_idxs,
-	               const arma::mat& Y,
-	               const arma::cube& X) override;
+    void add_data_(const arma::uvec& unit_idxs,
+                   const arma::mat& Y,
+                   const arma::cube& X) override;
 
 private:
-	// Internal running state
-	std::size_t N_;                 // number of accumulated rows
-	double total_weight_;           // equal to N_ for equal weights
-	arma::vec outcome_means_;       // length T_c_
+    // Internal running state
+    std::size_t N_;                 // number of accumulated rows
+    double total_weight_;           // equal to N_ for equal weights
+    arma::vec outcome_means_;       // length T_c_
 
-	// Bootstrap aggregates (when present)
-	arma::vec total_boot_weights_;  // length B
-	arma::mat boot_outcome_means_;  // T_c_ x B
+    // Bootstrap aggregates (when present)
+    arma::vec total_boot_weights_;  // length B
+    arma::mat boot_outcome_means_;  // T_c_ x B
 };
 
 } // namespace apm

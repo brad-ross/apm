@@ -304,6 +304,49 @@ TEST(OutcomeImputationTest, ImputationComponents_AllOnesFactors_CovarsAndFixedEf
     }
 }
 
+TEST(OutcomeImputationTest, ImputationComponents_AllOnesFactors_FixedEffectsOnly_NoCovars) {
+	// r=1, G all ones; FE present; no covariates
+	arma::uword T = 6, r = 1, T_c = 3, units_per = 4, q = 0;
+	auto ctx = make_staircase_panel_context(T, r, T_c, units_per, q, /*with_covariates=*/false, /*with_fixed_effects=*/true);
+	ctx.G_true = arma::ones<arma::mat>(T, r);
+	auto rp = make_raw_panel(ctx);
+
+	std::vector<const double*> covar_cols;
+	std::vector<const double*> auxiliary_cols;
+	apm::InMemoryUnbalancedPanel panel(
+		rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+		covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+	apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, std::nullopt);
+	apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{}, std::nullopt);
+
+	// G correct, a absent, g0 projected
+	ASSERT_TRUE(arma::approx_equal(out.G, arma::ones<arma::mat>(T, 1), "absdiff", 0.0));
+	EXPECT_FALSE(out.a.has_value());
+	arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+	ASSERT_TRUE(out.g_0.has_value());
+	EXPECT_TRUE(arma::approx_equal(*out.g_0, g0_exp, "absdiff", 1e-6));
+
+	// L[u,0] equals mean of residuals per unit over observed T_c
+	ASSERT_TRUE(out.L.has_value());
+	const arma::mat& L = *out.L;
+	for (arma::uword u = 0; u < L.n_rows; ++u) {
+		std::vector<double> vals;
+		for (std::size_t i = 0; i < rp.y.size(); ++i) {
+			if (static_cast<std::size_t>(rp.unit_idx[i]) == static_cast<std::size_t>(u) && std::isfinite(rp.y[i])) {
+				int t = rp.outcome_idx[i];
+				double resid = rp.y[i];
+				if (out.g_0.has_value()) resid -= (*out.g_0)[static_cast<arma::uword>(t)];
+				vals.push_back(resid);
+			}
+		}
+		double mean_resid = 0.0;
+		for (double v : vals) mean_resid += v;
+		mean_resid = vals.empty() ? 0.0 : (mean_resid / static_cast<double>(vals.size()));
+		EXPECT_NEAR(L(static_cast<arma::uword>(u), 0), mean_resid, 1e-6);
+	}
+}
+
 TEST(OutcomeImputationTest, ImputationComponents_WithCohortSuff_CovarsAndFixedEffects) {
 	// Context with covariates and fixed effects; multiple units per cohort
 	auto ctx = make_staircase_panel_context(/*T=*/8, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true, /*with_fixed_effects=*/true);

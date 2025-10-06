@@ -391,5 +391,3 @@ TEST(PCEstimatorWithFEsTest, RankZero_CornerCase) {
     ASSERT_TRUE(arma::approx_equal(*(out.parameter_estimates.g_0), expected_mu, "absdiff", 1e-12));
     EXPECT_TRUE(out.bootstrap_replicates.empty());
 }
-
-

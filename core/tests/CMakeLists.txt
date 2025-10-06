@@ -13,6 +13,7 @@ add_executable(test_apm
     test_linear_algebra_utils.cpp
     test_bootstrap.cpp
     test_pc_estimators.cpp
+    test_twfe_estimator.cpp
     test_outcome_mean_suff_stat_estimators.cpp
     test_est_cohort_specific_params.cpp
     test_outcome_imputation.cpp
