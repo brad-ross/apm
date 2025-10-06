@@ -59,7 +59,9 @@ inline arma::vec bootstrap_pointwise_pvals(const arma::mat& abs_t_stats,
     return pvals;
 }
 
-// Compute Romano–Wolf stepdown adjusted p-values from absolute t-statistics.
+// Compute Romano–Wolf stepdown adjusted p-values from absolute t-statistics;
+// see "Efficient computation of adjusted p-values for resampling-based stepdown multiple testing" by Romano and Wolf
+// in Statistics & Probability Letters (2016).
 // abs_t_stats is p x B with entries |t_i^*,m|; abs_obs is p-vector of |t_i|.
 // Returns p-vector of adjusted p-values, in the original hypothesis order.
 inline arma::vec romano_wolf_stepdown_pvals(const arma::mat& abs_t_stats,
