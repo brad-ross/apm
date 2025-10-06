@@ -89,8 +89,6 @@ arma::mat wb_weights_cpp(SEXP xp) {
     return (*p)->weights();
 }
 
-
-
 //------------------------------------------------------------------------------
 // Bootstrap-based simultaneous inference bindings
 //------------------------------------------------------------------------------
@@ -180,4 +178,3 @@ Rcpp::NumericVector sir_cb_ub_cpp(SEXP xp) {
     std::copy(v.begin(), v.end(), out.begin());
     return out;
 }
-
