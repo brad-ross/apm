@@ -22,5 +22,3 @@ SEXP pc_fe_estimator_new_cpp(std::size_t r, std::size_t T_c, SEXP wb_xptr = R_Ni
     auto* ptr = new apm::PCEstimatorWithFEs(r, T_c, wb, q);
     return Rcpp::XPtr<apm::PCEstimatorWithFEs>(ptr, true);
 }
-
-

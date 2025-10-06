@@ -8,6 +8,7 @@
 #endif
 #include "factor_model_estimators/FactorModelEstimator.h"
 #include "factor_model_estimators/pc_estimators.h"
+#include "factor_model_estimators/twfe_estimator.h"
 #include "OutcomeMeanSuffStatEstimator.h"
 #include "nuisance_param_estimators.h"
 #include "panels/InMemoryUnbalancedPanel.h"
@@ -43,13 +44,22 @@ make_factor_estimators_for_cohort(
     out.reserve(specs.size());
     for (const auto& kv : specs) {
         const auto& sp = kv.second;
-        if (sp.factor_model_estimator != "principal_components") {
-            throw std::invalid_argument("Only 'principal_components' is supported");
-        }
-        if (sp.include_outcome_fes) {
-            out.emplace(kv.first, std::make_unique<PCEstimatorWithFEs>(sp.r, T_c, bootstrap, q));
+        if (sp.factor_model_estimator == "principal_components") {
+            if (sp.include_outcome_fes) {
+                out.emplace(kv.first, std::make_unique<PCEstimatorWithFEs>(sp.r, T_c, bootstrap, q));
+            } else {
+                out.emplace(kv.first, std::make_unique<PCEstimator>(sp.r, T_c, bootstrap, q));
+            }
+        } else if (sp.factor_model_estimator == "twfe") {
+            if (sp.r != 1) {
+                throw std::invalid_argument("TWFE estimator requires r == 1 (G is a single column of ones).");
+            }
+            if (!sp.include_outcome_fes) {
+                throw std::invalid_argument("TWFE estimator requires include_outcome_fes == true.");
+            }
+            out.emplace(kv.first, std::make_unique<TWFEEstimator>(T_c, bootstrap, q));
         } else {
-            out.emplace(kv.first, std::make_unique<PCEstimator>(sp.r, T_c, bootstrap, q));
+            throw std::invalid_argument("Only 'principal_components' or 'twfe' is supported right now.");
         }
     }
     return out;

@@ -1,6 +1,7 @@
 // Implementation for PC estimators
 
 #include "pc_estimators.h"
+#include "../online_accumulators.h"
 
 namespace apm {
 
@@ -59,23 +60,8 @@ std::pair<arma::mat, double> PCBase::weighted_combine_second_moment_mats(
     const arma::mat& current_second_moment_mat,
     double current_total_weight)
 {
-    // Compute weighted outer product mean for the batch: (Y' * diag(w) * Y) / sum(w)
-    const double batch_weight = arma::accu(row_weights);
-    if (batch_weight == 0.0) {
-        return {current_second_moment_mat, current_total_weight}; // no contribution from empty/zero-weight batch
-    }
-
-    arma::mat WY = Y.each_col() % row_weights; // weight rows
-    arma::mat batch_second_moment = (Y.t() * WY) / batch_weight; // T_c x T_c
-
-    const double total_weight = current_total_weight + batch_weight;
-    if (total_weight == 0.0) {
-        return {current_second_moment_mat, 0.0}; // both zero → unchanged
-    }
-
-    const double rel_batch_weight  = batch_weight / total_weight;
-    arma::mat combined = rel_batch_weight * batch_second_moment + (1 - rel_batch_weight) * current_second_moment_mat;
-    return {std::move(combined), total_weight};
+    return apm::stats::online_weighted_second_moment(
+        Y, row_weights, current_second_moment_mat, current_total_weight);
 }
 
 arma::mat PCBase::top_r_eigenvectors_psd(const arma::mat& S, std::size_t r)
@@ -169,23 +155,8 @@ arma::vec PCEstimatorWithFEs::weighted_combine_means(
     const arma::vec& current_mean,
     double current_total_weight)
 {
-    const double batch_weight = arma::accu(row_weights);
-    if (batch_weight == 0.0) {
-        return current_mean;
-    }
-
-    // Weighted batch mean across rows: sum_i w_i * Y_i / sum(w)
-    arma::rowvec weighted_sum = row_weights.t() * Y; // 1 x T_c
-    arma::vec batch_mean = (weighted_sum / batch_weight).t(); // T_c
-
-    const double total_weight = current_total_weight + batch_weight;
-    if (total_weight == 0.0) {
-        return current_mean;
-    }
-
-    const double rel_batch_weight = batch_weight / total_weight;
-    arma::vec combined = rel_batch_weight * batch_mean + (1 - rel_batch_weight) * current_mean;
-    return combined;
+    auto res = apm::stats::online_weighted_mean(Y, row_weights, current_mean, current_total_weight);
+    return std::move(res.first);
 }
 
 FactorModelEstimates PCEstimatorWithFEs::estimate()

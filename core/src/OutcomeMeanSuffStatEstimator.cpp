@@ -1,4 +1,5 @@
 #include "OutcomeMeanSuffStatEstimator.h"
+#include "online_accumulators.h"
 #include <limits>
 
 namespace apm {
@@ -34,9 +35,10 @@ void OutcomeMeanSuffStatEstimator::add_data(const arma::uvec& unit_idxs,
     validate_data_dimensions(unit_idxs, Y, X);
 
     arma::vec ones_w = arma::ones<arma::vec>(static_cast<arma::uword>(Y.n_rows));
-    auto combined_main = combine_means(Y, ones_w, outcome_means_, total_weight_);
+    auto combined_main = apm::stats::online_weighted_mean(Y, ones_w, outcome_means_, total_weight_);
     if (q_ > 0) {
-        covar_means_ = combine_covar_means(X, ones_w, covar_means_, total_weight_);
+        auto cov_res = apm::stats::online_weighted_means_over_cube(X, ones_w, covar_means_, total_weight_);
+        covar_means_ = std::move(cov_res.first);
     }
     outcome_means_ = std::move(combined_main.first);
     total_weight_ = combined_main.second;
@@ -47,10 +49,10 @@ void OutcomeMeanSuffStatEstimator::add_data(const arma::uvec& unit_idxs,
             const arma::uword bu = static_cast<arma::uword>(b);
             arma::vec w_b = boot_weights_for_indices(unit_idxs, b);
 
-            auto combined_b = combine_means(Y, w_b, boot_outcome_means_.col(bu), total_boot_weights_(bu));
+            auto combined_b = apm::stats::online_weighted_mean(Y, w_b, boot_outcome_means_.col(bu), total_boot_weights_(bu));
             if (q_ > 0) {
-                boot_covar_means_.slice(bu) =
-                    combine_covar_means(X, w_b, boot_covar_means_.slice(bu), total_boot_weights_(bu));
+                auto cov_res_b = apm::stats::online_weighted_means_over_cube(X, w_b, boot_covar_means_.slice(bu), total_boot_weights_(bu));
+                boot_covar_means_.slice(bu) = std::move(cov_res_b.first);
             }
             boot_outcome_means_.col(bu) = std::move(combined_b.first);
             total_boot_weights_(bu) = combined_b.second;
@@ -147,17 +149,7 @@ std::pair<arma::vec, double> OutcomeMeanSuffStatEstimator::combine_means(
     const arma::vec& current_mean,
     double current_total_weight)
 {
-    const double batch_weight = arma::accu(row_weights);
-    if (batch_weight == 0.0) {
-        return {current_mean, current_total_weight};
-    }
-    arma::rowvec weighted_sum = row_weights.t() * Y;
-    arma::vec batch_mean = (weighted_sum / batch_weight).t();
-
-    const double total_weight = current_total_weight + batch_weight;
-    const double rel = batch_weight / total_weight;
-    arma::vec combined = rel * batch_mean + (1.0 - rel) * current_mean;
-    return {std::move(combined), total_weight};
+    return apm::stats::online_weighted_mean(Y, row_weights, current_mean, current_total_weight);
 }
 
 arma::mat OutcomeMeanSuffStatEstimator::combine_covar_means(
@@ -166,22 +158,8 @@ arma::mat OutcomeMeanSuffStatEstimator::combine_covar_means(
     const arma::mat& current_means,
     double current_total_weight)
 {
-    const double batch_weight = arma::accu(row_weights);
-    if (batch_weight == 0.0) {
-        return current_means;
-    }
-    const arma::uword T = X.n_cols;
-    const arma::uword q = X.n_slices;
-
-    arma::mat batch_means(T, q, arma::fill::zeros);
-    for (arma::uword k = 0; k < q; ++k) {
-        arma::rowvec weighted_sum = row_weights.t() * X.slice(k);
-        batch_means.col(k) = (weighted_sum / batch_weight).t();
-    }
-
-    const double total_weight = current_total_weight + batch_weight;
-    const double rel = batch_weight / total_weight;
-    return rel * batch_means + (1.0 - rel) * current_means;
+    auto res = apm::stats::online_weighted_means_over_cube(X, row_weights, current_means, current_total_weight);
+    return std::move(res.first);
 }
 
 } // namespace apm
