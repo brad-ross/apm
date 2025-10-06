@@ -29,6 +29,7 @@ add_library(apm
     src/outcome_imputation_helpers.h
     src/linear_algebra_utils.cpp
     src/bootstrap.cpp
+    src/online_accumulators.cpp
     # factor_model_parameter_structs is header-only now
     src/factor_model_estimators/FactorModelEstimator.cpp
     src/factor_model_estimators/pc_estimators.cpp
