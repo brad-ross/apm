@@ -317,9 +317,9 @@ SimultaneousInferenceResults get_bootstrap_inference(
     arma::vec ci_lb, ci_ub;
     constr_pointwise_conf_band(abs_t_stats, sqrtN, sig_level, row_sd, point_ests, ci_lb, ci_ub);
 
-    // Romano–Wolf stepdown adjusted p-values (simultaneous p-values)
+    // Romano–Wolf stepdown adjusted p-values (FWER-controlling p-values)
     arma::vec abs_obs = arma::abs(pointwise_t_stats);
-    arma::vec simult_p_vals = romano_wolf_stepdown_pvals(abs_t_stats, abs_obs);
+    arma::vec fwer_control_p_vals = romano_wolf_stepdown_pvals(abs_t_stats, abs_obs);
 
     arma::vec cb_lb, cb_ub;
     constr_simult_conf_band(abs_t_stats, sqrtN, sig_level, row_sd, point_ests, cb_lb, cb_ub);
@@ -331,7 +331,7 @@ SimultaneousInferenceResults get_bootstrap_inference(
         sig_level,
         ci_lb,
         ci_ub,
-        simult_p_vals,
+        fwer_control_p_vals,
         cb_lb,
         cb_ub
     };

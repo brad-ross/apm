@@ -127,7 +127,7 @@ test_that("Bootstrap inference coverage and p-values behave under the null", {
     p_value_matrix[, sim] <- pvals
 
     # Family-wise error: any Romano-Wolf adjusted p-value below sig_level
-    if (any(sir$simult_p_vals() < sig_level)) {
+    if (any(sir$fwer_control_p_vals() <= sig_level)) {
       fwer_reject_count <- fwer_reject_count + 1L
     }
   }

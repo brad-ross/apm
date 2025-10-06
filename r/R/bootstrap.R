@@ -114,7 +114,7 @@ SimultaneousInferenceResults <- R6::R6Class(
     point = function() sir_point_cpp(private$xp),
     t_stats = function() sir_pointwise_t_cpp(private$xp),
     p_vals = function() sir_pointwise_p_cpp(private$xp),
-    simult_p_vals = function() sir_simult_p_cpp(private$xp),
+    fwer_control_p_vals = function() sir_fwer_control_p_cpp(private$xp),
     sig_level = function() sir_sig_level_cpp(private$xp),
     ci = function() list(lb = sir_ci_lb_cpp(private$xp),
                          ub = sir_ci_ub_cpp(private$xp)),

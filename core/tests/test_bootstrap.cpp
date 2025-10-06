@@ -141,7 +141,7 @@ TEST(BootstrapInferenceTest, RepeatedBootstrapCoverageAndPValues) {
         }
 
         // FWER: any Romano-Wolf adjusted p-value below sig_level triggers a family-wise error
-        bool any_reject = arma::any(results.simult_p_vals < sig_level);
+        bool any_reject = arma::any(results.fwer_control_p_vals <= sig_level);
         if (any_reject) fwer_reject_count++;
     }
     
