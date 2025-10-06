@@ -154,6 +154,5 @@ test_that("Bootstrap inference coverage and p-values behave under the null", {
 
   # FWER should be controlled at sig_level (allow small tolerance)
   fwer <- fwer_reject_count / n_sims
-  print(paste0("FWER: ", fwer, " (sig_level=", sig_level, ")"))
   expect_lt(fwer, sig_level + 0.005)
 })
