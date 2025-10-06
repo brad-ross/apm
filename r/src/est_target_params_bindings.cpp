@@ -283,3 +283,38 @@ SEXP target_param_inference_cpp(SEXP tpe_xptr,
     apm::SimultaneousInferenceResults res = apm::target_param_inference(*tpe, panel, sig_level);
     return apm::r_utils::make_xptr(std::move(res));
 }
+
+// By-spec inference: named list of XPtr<TargetParameterEstimates> -> named list of XPtr<SimultaneousInferenceResults>
+// [[Rcpp::export]]
+Rcpp::List target_param_inference_by_spec_cpp(Rcpp::List tpe_by_spec,
+                                              SEXP panel_holder_xptr,
+                                              double sig_level = 0.05) {
+    // Build input map<string, TargetParameterEstimates>
+    std::unordered_map<std::string, apm::TargetParameterEstimates> ests_map;
+    {
+        Rcpp::CharacterVector nms = tpe_by_spec.names();
+        for (int i = 0; i < tpe_by_spec.size(); ++i) {
+            std::string key = Rcpp::as<std::string>(nms[i]);
+            Rcpp::XPtr<apm::TargetParameterEstimates> xp(tpe_by_spec[i]);
+            ests_map.emplace(std::move(key), *xp);
+        }
+    }
+
+    // Panel ref
+    const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
+
+    // Delegate to core overload
+    auto res_map = apm::target_param_inference(ests_map, panel, sig_level);
+
+    // Return named list of XPtr<SimultaneousInferenceResults>
+    Rcpp::List out(static_cast<int>(res_map.size()));
+    Rcpp::CharacterVector names(static_cast<int>(res_map.size()));
+    int k = 0;
+    for (auto& kv : res_map) {
+        names[k] = kv.first;
+        out[k] = apm::r_utils::make_xptr(std::move(kv.second));
+        ++k;
+    }
+    out.attr("names") = names;
+    return out;
+}

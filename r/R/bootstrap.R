@@ -178,13 +178,59 @@ get_bootstrap_inference <- function(point, boot, N, sig_level = 0.05) {
   SimultaneousInferenceResults$new(xp)
 }
 
-#' Compute target-parameter inference from a panel and TargetParameterEstimates
-#' @param tpe external pointer returned by est_target_params_cpp
-#' @param panel_holder external pointer returned by build_R_panel_holder_cpp
+#' Target-parameter inference (single or by spec)
+#' @param tpe TargetParameterEstimates or named list of them
+#' @param panel an UnbalancedPanel
 #' @param sig_level significance level in (0,1)
-#' @return SimultaneousInferenceResults
+#' @return SimultaneousInferenceResults or named list (by spec) of them
 #' @export
-target_param_inference <- function(tpe, panel_holder, sig_level = 0.05) {
-  xp <- target_param_inference_cpp(tpe, panel_holder, sig_level)
-  SimultaneousInferenceResults$new(xp)
+target_param_inference <- function(tpe, panel, sig_level = 0.05) {
+  stopifnot(inherits(panel, "UnbalancedPanel"))
+  holder_xp <- panel$get_panel_holder_xptr()
+
+  if (inherits(tpe, "TargetParameterEstimates")) {
+    xp <- target_param_inference_cpp(
+      tpe$.__enclos_env__$private$xp,
+      holder_xp,
+      sig_level
+    )
+    return(SimultaneousInferenceResults$new(xp))
+  }
+
+  if (is.list(tpe)) {
+    .validate_tpe_by_spec(tpe)
+    tpe_xp_by_spec <- lapply(tpe, function(e) {
+      stopifnot(inherits(e, "TargetParameterEstimates"))
+      e$.__enclos_env__$private$xp
+    })
+    res <- target_param_inference_by_spec_cpp(
+      tpe_by_spec = tpe_xp_by_spec,
+      panel_holder_xptr = holder_xp,
+      sig_level = sig_level
+    )
+    return(.wrap_sir_xptr_list(res))
+  }
+
+  stop("Invalid 'tpe': expected a TargetParameterEstimates object or a named list of them.")
+}
+
+.validate_tpe_by_spec <- function(x) {
+  if (!is.list(x) || length(x) == 0L) {
+    stop("When providing by-spec inputs, 'tpe' must be a non-empty named list.")
+  }
+  if (is.null(names(x)) || any(!nzchar(names(x)))) {
+    stop("When providing by-spec inputs, 'tpe' must be a named list.")
+  }
+  ok <- vapply(x, function(e) inherits(e, "TargetParameterEstimates"), logical(1))
+  if (!all(ok)) stop("All elements of 'tpe' must inherit from 'TargetParameterEstimates'.")
+  invisible(TRUE)
+}
+
+.wrap_sir_xptr_list <- function(res_named_xptr_list) {
+  nms <- names(res_named_xptr_list)
+  out <- setNames(vector("list", length(res_named_xptr_list)), nms)
+  for (i in seq_along(res_named_xptr_list)) {
+    out[[i]] <- SimultaneousInferenceResults$new(res_named_xptr_list[[i]])
+  }
+  out
 }
