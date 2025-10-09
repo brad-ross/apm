@@ -138,7 +138,23 @@ construct_cohorts_from_panel <- function(panel_df,
                                          model_rank,
                                          min_cohort_size = 0,
                                          sort_cohorts_lexicographically = FALSE,
-                                         cohort_observed_outcomes_as_df = TRUE) {
+                                         cohort_observed_outcomes_as_df = TRUE,
+                                         verbose = FALSE) {
+    default_datatable_options <- list(
+        datatable.verbose=getOption("datatable.verbose"), 
+        datatable.showProgress=getOption("datatable.showProgress")
+    )
+    if (isTRUE(verbose)) {
+        # TODO: figure out how to set datatable.verbose to TRUE without causing a lot of noise
+        options(datatable.verbose=FALSE, datatable.showProgress=TRUE)
+    } else {
+        options(datatable.verbose=FALSE, datatable.showProgress=FALSE)
+    }
+    on.exit(options(
+        datatable.verbose=default_datatable_options$datatable.verbose, 
+        datatable.showProgress=default_datatable_options$datatable.showProgress
+    ))
+
     panel_dt <- to_data_table(panel_df)
 
     # Validate required columns exist and drop rows with missing outcome values
@@ -223,6 +239,11 @@ construct_cohorts_from_panel <- function(panel_df,
     setorder(cohort_outcomes, cohort_id, outcome_idx)
     cohort_outcomes[, outcome_name := as.character(outcome_ids[outcome_idx])]
 
+    options(
+        datatable.verbose=default_datatable_options$datatable.verbose, 
+        datatable.showProgress=default_datatable_options$datatable.showProgress
+    )
+
     # Prepare return values
     if (isTRUE(cohort_observed_outcomes_as_df)) {
         return(list(
@@ -280,7 +301,23 @@ UnbalancedPanel <- R6Class(
                               min_cohort_size = 0,
                               sort_cohorts_lexicographically = FALSE,
                               covar_cols = character(0),
-                              auxiliary_cols = character(0)) {
+                              auxiliary_cols = character(0),
+                              verbose = FALSE) {
+            default_datatable_options <- list(
+                datatable.verbose=getOption("datatable.verbose"), 
+                datatable.showProgress=getOption("datatable.showProgress")
+            )
+            if (isTRUE(verbose)) {
+                # TODO: figure out how to set datatable.verbose to TRUE without causing a lot of noise
+                options(datatable.verbose=FALSE, datatable.showProgress=TRUE)
+            } else {
+                options(datatable.verbose=FALSE, datatable.showProgress=FALSE)
+            }
+            on.exit(options(
+                datatable.verbose=default_datatable_options$datatable.verbose, 
+                datatable.showProgress=default_datatable_options$datatable.showProgress
+            ))
+            
             private$original_panel <- to_data_table(panel_df)
             private$unit_id_col <- unit_id_col
             private$outcome_id_col <- outcome_id_col
@@ -370,6 +407,11 @@ UnbalancedPanel <- R6Class(
                 covar_cols = private$covar_cols,
                 auxiliary_cols = private$auxiliary_cols,
                 num_units_in = length(private$unit_ids)
+            )
+
+            options(
+                datatable.verbose=default_datatable_options$datatable.verbose, 
+                datatable.showProgress=default_datatable_options$datatable.showProgress
             )
 
             invisible(self)
