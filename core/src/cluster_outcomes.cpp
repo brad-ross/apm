@@ -119,96 +119,37 @@ static arma::uvec assign_outcomes_to_centers(const arma::mat& data, const arma::
     return assignment;
 }
 
-struct LargestSuperCohortStats {
-    std::size_t total_size;
-    std::size_t min_cohort_size;
-};
-
-// Forward declaration: internal combiner used below
-static std::pair<ObservedOutcomeIndices, arma::uvec>
-get_new_cohorts_from_combining_outcomes(
-    const ObservedOutcomeIndices& ooi,
-    const arma::uvec& cohort_sizes,
-    const std::unordered_map<int,int>& old_to_new_outcome);
-
-static LargestSuperCohortStats largest_final_super_cohort_stats(
-    const std::vector<std::set<arma::uword>>& final_level,
-    const arma::uvec& combined_sizes)
-{
-    std::size_t best_total = 0;
-    std::size_t best_min = 0;
-    for (const auto& super_set : final_level) {
-        std::size_t total = 0;
-        std::size_t min_sz = std::numeric_limits<std::size_t>::max();
-        for (arma::uword idx : super_set) {
-            const std::size_t v = static_cast<std::size_t>(combined_sizes(idx));
-            total += v;
-            if (v < min_sz) min_sz = v;
-        }
-        if (total > best_total) {
-            best_total = total;
-            best_min = (min_sz == std::numeric_limits<std::size_t>::max()) ? 0 : min_sz;
-        }
+// Shared validation helpers
+static void validate_grid(std::size_t grid_size) {
+    if (grid_size == 0) {
+        throw std::invalid_argument("grid_size must be > 0");
     }
-    return {best_total, best_min};
 }
 
-static std::pair<arma::uvec, OutcomeClusteringSummary> cluster_outcomes_single_k(
-    const InMemoryUnbalancedPanel& panel,
-    const arma::mat& outcome_val_cdfs,   // T x G
-    const arma::uvec& cohort_sizes,      // length C
-    std::size_t max_model_rank,
-    std::size_t k)
-{
-    const std::size_t T = panel.T();
-    if (k == 0 || k > T) {
-        throw std::invalid_argument("cluster_outcomes_single_k: invalid k");
+static void validate_k_range(std::size_t T, std::size_t min_k, std::size_t max_k) {
+    if (min_k == 0) {
+        throw std::invalid_argument("min_k must be > 0");
     }
+    if (min_k > max_k) {
+        throw std::invalid_argument("min_k > max_k");
+    }
+    if (max_k > T) {
+        throw std::invalid_argument("max_k cannot exceed T");
+    }
+}
 
-    // Prepare data (columns are outcomes) and run k-means
+// Shared single-k mapping helper
+static arma::uvec compute_single_k_mapping(const arma::mat& outcome_val_cdfs, std::size_t k) {
+    const arma::uword T = outcome_val_cdfs.n_rows;
+    if (k == 0 || k > T) {
+        throw std::invalid_argument("compute_single_k_mapping: invalid k");
+    }
     arma::mat data = outcome_val_cdfs.t(); // G x T
     arma::mat centers;
-    if (!arma::kmeans(
-            centers,
-            data,
-            static_cast<arma::uword>(k),
-            arma::static_subset,
-            static_cast<arma::uword>(25),
-            false))
-    {
-        throw std::runtime_error("cluster_outcomes_single_k: kmeans failed");
+    if (!arma::kmeans(centers, data, static_cast<arma::uword>(k), arma::static_subset, static_cast<arma::uword>(25), false)) {
+        throw std::runtime_error("compute_single_k_mapping: kmeans failed");
     }
-
-    // Assign outcomes to nearest center
-    arma::uvec outcome_to_cluster = assign_outcomes_to_centers(data, centers);
-
-    // Build mapping outcome -> cluster id for combining
-    std::unordered_map<int,int> old_to_new_outcome;
-    old_to_new_outcome.reserve(T);
-    for (std::size_t t = 0; t < T; ++t) {
-        old_to_new_outcome.emplace(
-            static_cast<int>(t),
-            static_cast<int>(outcome_to_cluster(static_cast<arma::uword>(t))));
-    }
-
-    auto combined = get_new_cohorts_from_combining_outcomes(
-        panel.observed_outcome_indices(),
-        cohort_sizes,
-        old_to_new_outcome);
-    const ObservedOutcomeIndices& combined_ooi = combined.first;
-    const arma::uvec& combined_sizes = combined.second;
-
-    auto super_cohort_iterates = o3_algorithm(combined_ooi, static_cast<unsigned int>(max_model_rank));
-    const auto& final_level = super_cohort_iterates.back();
-
-    auto stats = largest_final_super_cohort_stats(final_level, combined_sizes);
-    const double share = (panel.num_units() == 0)
-        ? 0.0
-        : static_cast<double>(stats.total_size) / static_cast<double>(panel.num_units());
-    const std::size_t num_o3_iterations = super_cohort_iterates.size();
-
-    OutcomeClusteringSummary summary{stats.total_size, share, stats.min_cohort_size, num_o3_iterations};
-    return {std::move(outcome_to_cluster), summary};
+    return assign_outcomes_to_centers(data, centers);
 }
 
 static std::pair<ObservedOutcomeIndices, arma::uvec>
@@ -265,70 +206,37 @@ get_new_cohorts_from_combining_outcomes(
 
 } // anonymous namespace
 
-std::pair<std::vector<arma::uvec>, std::vector<OutcomeClusteringSummary>>
+std::vector<arma::uvec>
 comp_outcome_clusterings(
     const InMemoryUnbalancedPanel& panel,
     std::size_t grid_size,
-    std::size_t max_model_rank,
     std::size_t min_k,
     std::size_t max_k)
 {
-    if (grid_size == 0) {
-        throw std::invalid_argument("comp_outcome_clusterings: G must be > 0");
-    }
-    if (min_k == 0) {
-        throw std::invalid_argument("comp_outcome_clusterings: min_k must be > 0");
-    }
-    if (min_k > max_k) {
-        throw std::invalid_argument("comp_outcome_clusterings: min_k > max_k");
-    }
-    const std::size_t T = panel.T();
-    if (max_k > T) {
-        throw std::invalid_argument("comp_outcome_clusterings: max_k cannot exceed T");
-    }
+    validate_grid(grid_size);
+    validate_k_range(panel.T(), min_k, max_k);
 
-    // Get empirical CDFs of outcomes
-    auto dists = comp_outcome_dists(panel, grid_size);
-    arma::mat outcome_val_cdfs = std::move(dists.first);  // T x G
-    // arma::uvec outcome_counts = std::move(dists.second); // currently unused
-
-    // Precompute cohort sizes
-    arma::uvec cohort_sizes = panel.get_cohort_sizes();
-
-    std::vector<arma::uvec> mappings;
-    std::vector<OutcomeClusteringSummary> summaries;
-    mappings.reserve(max_k - min_k + 1);
-    summaries.reserve(max_k - min_k + 1);
-
-    for (std::size_t k = min_k; k <= max_k; ++k) {
-        auto result = cluster_outcomes_single_k(panel, outcome_val_cdfs, cohort_sizes, max_model_rank, k);
-        mappings.push_back(std::move(result.first));
-        summaries.push_back(std::move(result.second));
-    }
-
-    return {std::move(mappings), std::move(summaries)};
-}
-
-std::pair<arma::uvec, OutcomeClusteringSummary>
-comp_outcome_clusterings(
-    const InMemoryUnbalancedPanel& panel,
-    std::size_t grid_size,
-    std::size_t max_model_rank,
-    std::size_t k)
-{
-    if (grid_size == 0) {
-        throw std::invalid_argument("comp_outcome_clusterings: grid_size must be > 0");
-    }
-
-    // Compute empirical CDFs
     auto dists = comp_outcome_dists(panel, grid_size);
     const arma::mat& outcome_val_cdfs = dists.first;  // T x grid_size
 
-    // Cohort sizes once
-    arma::uvec cohort_sizes = panel.get_cohort_sizes();
+    std::vector<arma::uvec> mappings;
+    mappings.reserve(max_k - min_k + 1);
+    for (std::size_t k = min_k; k <= max_k; ++k) {
+        mappings.push_back(compute_single_k_mapping(outcome_val_cdfs, k));
+    }
+    return mappings;
+}
 
-    // Single-k driver returns mapping and summary
-    return cluster_outcomes_single_k(panel, outcome_val_cdfs, cohort_sizes, max_model_rank, k);
+arma::uvec
+comp_outcome_clusterings(
+    const InMemoryUnbalancedPanel& panel,
+    std::size_t grid_size,
+    std::size_t k)
+{
+    validate_grid(grid_size);
+    auto dists = comp_outcome_dists(panel, grid_size);
+    const arma::mat& outcome_val_cdfs = dists.first;
+    return compute_single_k_mapping(outcome_val_cdfs, k);
 }
 
 } // namespace apm
