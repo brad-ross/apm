@@ -144,71 +144,31 @@ void validate_k_range(std::size_t T, std::size_t min_k, std::size_t max_k) {
     }
 }
 
-// (no single-k mapping helper; we use mlpack KMeans with weighted Lloyd step)
+// Shared inputs container for clustering
+struct ClusteringInputs {
+    arma::mat data;    // G x T
+    arma::vec weights; // length T
+};
 
-} // anonymous namespace
-
-std::vector<arma::uvec>
-comp_outcome_clusterings(
-    const InMemoryUnbalancedPanel& panel,
-    std::size_t grid_size,
-    std::size_t min_k,
-    std::size_t max_k,
-    std::optional<uint64_t> seed)
-{
+ClusteringInputs build_clustering_inputs(const InMemoryUnbalancedPanel& panel, std::size_t grid_size) {
     validate_grid(grid_size);
-    validate_k_range(panel.T(), min_k, max_k);
-
     auto dists = comp_outcome_dists(panel, grid_size);
-    const arma::mat& outcome_val_cdfs = dists.first;  // T x grid_size
+    const arma::mat& outcome_val_cdfs = dists.first;  // T x G
     const arma::uvec& outcome_counts = dists.second;  // T
 
-    arma::mat data = outcome_val_cdfs.t(); // G x T
-    arma::vec weights = arma::conv_to<arma::vec>::from(outcome_counts);
-
-    using Distance = mlpack::EuclideanDistance;
-    using InitPolicy = mlpack::KMeansPlusPlusInitialization;
-    using EmptyPolicy = mlpack::AllowEmptyClusters;
-    mlpack::KMeans<Distance, InitPolicy, EmptyPolicy, apm::clustering::WeightedNaiveKMeans, arma::mat> kmeans;
-
-    std::vector<arma::uvec> mappings;
-    mappings.reserve(max_k - min_k + 1);
-
-    struct LloydWeightsGuard {
-        LloydWeightsGuard(const arma::vec& w) { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = &w; }
-        ~LloydWeightsGuard() { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = nullptr; }
-    } guard(weights);
-
-    for (std::size_t k = min_k; k <= max_k; ++k) {
-        seed_rng_if_requested(seed);
-        arma::Row<size_t> assignments;
-        arma::mat centers;
-        kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);
-
-        arma::uvec mapping(assignments.n_elem);
-        for (arma::uword i = 0; i < assignments.n_elem; ++i) {
-            mapping(i) = static_cast<arma::uword>(assignments(i));
-        }
-        mappings.push_back(std::move(mapping));
-    }
-    return mappings;
+    ClusteringInputs out;
+    out.data = outcome_val_cdfs.t();                  // G x T
+    out.weights = arma::conv_to<arma::vec>::from(outcome_counts);
+    return out;
 }
 
-arma::uvec
-comp_outcome_clusterings(
-    const InMemoryUnbalancedPanel& panel,
-    std::size_t grid_size,
+// Single-k weighted KMeans that returns 0-based cluster IDs (length T)
+arma::uvec cluster_single_k_mapping(
+    const arma::mat& data,
+    const arma::vec& weights,
     std::size_t k,
     std::optional<uint64_t> seed)
 {
-    validate_grid(grid_size);
-    auto dists = comp_outcome_dists(panel, grid_size);
-    const arma::mat& outcome_val_cdfs = dists.first;
-    const arma::uvec& outcome_counts = dists.second;
-
-    arma::mat data = outcome_val_cdfs.t();
-    arma::vec weights = arma::conv_to<arma::vec>::from(outcome_counts);
-
     using Distance = mlpack::EuclideanDistance;
     using InitPolicy = mlpack::KMeansPlusPlusInitialization;
     using EmptyPolicy = mlpack::AllowEmptyClusters;
@@ -229,6 +189,39 @@ comp_outcome_clusterings(
         mapping(i) = static_cast<arma::uword>(assignments(i));
     }
     return mapping;
+}
+
+} // anonymous namespace
+
+std::vector<arma::uvec>
+comp_outcome_clusterings(
+    const InMemoryUnbalancedPanel& panel,
+    std::size_t grid_size,
+    std::size_t min_k,
+    std::size_t max_k,
+    std::optional<uint64_t> seed)
+{
+    validate_k_range(panel.T(), min_k, max_k);
+
+    const ClusteringInputs inputs = build_clustering_inputs(panel, grid_size);
+
+    std::vector<arma::uvec> mappings;
+    mappings.reserve(max_k - min_k + 1);
+    for (std::size_t k = min_k; k <= max_k; ++k) {
+        mappings.push_back(cluster_single_k_mapping(inputs.data, inputs.weights, k, seed));
+    }
+    return mappings;
+}
+
+arma::uvec
+comp_outcome_clusterings(
+    const InMemoryUnbalancedPanel& panel,
+    std::size_t grid_size,
+    std::size_t k,
+    std::optional<uint64_t> seed)
+{
+    const ClusteringInputs inputs = build_clustering_inputs(panel, grid_size);
+    return cluster_single_k_mapping(inputs.data, inputs.weights, k, seed);
 }
 
 // Exposed API: compute new cohort groupings after combining outcomes
