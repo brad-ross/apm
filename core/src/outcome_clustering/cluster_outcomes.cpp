@@ -1,4 +1,4 @@
-#include "cluster_outcomes.h"
+#include "outcome_clustering/cluster_outcomes.h"
 #include "panels/InMemoryUnbalancedPanel.h"
 #include "online_accumulators.h"
 #include "apm_core.h"
@@ -9,6 +9,12 @@
 #include <cmath>
 #include <limits>
 #include <set>
+
+// mlpack KMeans and policies
+#include <mlpack/methods/kmeans/kmeans.hpp>
+#include <mlpack/methods/kmeans/kmeans_plus_plus_initialization.hpp>
+#include <mlpack/methods/kmeans/allow_empty_clusters.hpp>
+#include "outcome_clustering/weighted_kmeans_policy.h"
 
 namespace apm {
 
@@ -123,19 +129,7 @@ void validate_k_range(std::size_t T, std::size_t min_k, std::size_t max_k) {
     }
 }
 
-// Shared single-k mapping helper
-arma::uvec compute_single_k_mapping(const arma::mat& outcome_val_cdfs, std::size_t k) {
-    const arma::uword T = outcome_val_cdfs.n_rows;
-    if (k == 0 || k > T) {
-        throw std::invalid_argument("compute_single_k_mapping: invalid k");
-    }
-    arma::mat data = outcome_val_cdfs.t(); // G x T
-    arma::mat centers;
-    if (!arma::kmeans(centers, data, static_cast<arma::uword>(k), arma::static_subset, static_cast<arma::uword>(25), false)) {
-        throw std::runtime_error("compute_single_k_mapping: kmeans failed");
-    }
-    return assign_outcomes_to_centers(data, centers);
-}
+// (no single-k mapping helper; we use mlpack KMeans with weighted Lloyd step)
 
 } // anonymous namespace
 
@@ -151,11 +145,34 @@ comp_outcome_clusterings(
 
     auto dists = comp_outcome_dists(panel, grid_size);
     const arma::mat& outcome_val_cdfs = dists.first;  // T x grid_size
+    const arma::uvec& outcome_counts = dists.second;  // T
+
+    arma::mat data = outcome_val_cdfs.t(); // G x T
+    arma::vec weights = arma::conv_to<arma::vec>::from(outcome_counts);
+
+    using Distance = mlpack::EuclideanDistance;
+    using InitPolicy = mlpack::KMeansPlusPlusInitialization;
+    using EmptyPolicy = mlpack::AllowEmptyClusters;
+    mlpack::KMeans<Distance, InitPolicy, EmptyPolicy, apm::clustering::WeightedNaiveKMeans, arma::mat> kmeans;
 
     std::vector<arma::uvec> mappings;
     mappings.reserve(max_k - min_k + 1);
+
+    struct LloydWeightsGuard {
+        LloydWeightsGuard(const arma::vec& w) { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = &w; }
+        ~LloydWeightsGuard() { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = nullptr; }
+    } guard(weights);
+
     for (std::size_t k = min_k; k <= max_k; ++k) {
-        mappings.push_back(compute_single_k_mapping(outcome_val_cdfs, k));
+        arma::Row<size_t> assignments;
+        arma::mat centers;
+        kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);
+
+        arma::uvec mapping(assignments.n_elem);
+        for (arma::uword i = 0; i < assignments.n_elem; ++i) {
+            mapping(i) = static_cast<arma::uword>(assignments(i));
+        }
+        mappings.push_back(std::move(mapping));
     }
     return mappings;
 }
@@ -169,7 +186,30 @@ comp_outcome_clusterings(
     validate_grid(grid_size);
     auto dists = comp_outcome_dists(panel, grid_size);
     const arma::mat& outcome_val_cdfs = dists.first;
-    return compute_single_k_mapping(outcome_val_cdfs, k);
+    const arma::uvec& outcome_counts = dists.second;
+
+    arma::mat data = outcome_val_cdfs.t();
+    arma::vec weights = arma::conv_to<arma::vec>::from(outcome_counts);
+
+    using Distance = mlpack::EuclideanDistance;
+    using InitPolicy = mlpack::KMeansPlusPlusInitialization;
+    using EmptyPolicy = mlpack::AllowEmptyClusters;
+    mlpack::KMeans<Distance, InitPolicy, EmptyPolicy, apm::clustering::WeightedNaiveKMeans, arma::mat> kmeans;
+
+    struct LloydWeightsGuard {
+        LloydWeightsGuard(const arma::vec& w) { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = &w; }
+        ~LloydWeightsGuard() { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = nullptr; }
+    } guard(weights);
+
+    arma::Row<size_t> assignments;
+    arma::mat centers;
+    kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);
+
+    arma::uvec mapping(assignments.n_elem);
+    for (arma::uword i = 0; i < assignments.n_elem; ++i) {
+        mapping(i) = static_cast<arma::uword>(assignments(i));
+    }
+    return mapping;
 }
 
 // Exposed API: compute new cohort groupings after combining outcomes

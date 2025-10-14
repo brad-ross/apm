@@ -26,7 +26,6 @@ target_link_libraries(test_apm
     PRIVATE
     apm
     GTest::gtest
-    ${ARMADILLO_LIBRARIES}
 )
 
 # Include directories

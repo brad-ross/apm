@@ -2,7 +2,7 @@
 #include <armadillo>
 #include <limits>
 
-#include "cluster_outcomes.h"
+#include "outcome_clustering/cluster_outcomes.h"
 #include "panels/InMemoryUnbalancedPanel.h"
 #include "utils.h"
 
