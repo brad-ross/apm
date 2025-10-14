@@ -74,7 +74,7 @@ void stream_update_outcome_cdfs(
     }
 }
 
-static std::pair<arma::mat, arma::uvec>
+std::pair<arma::mat, arma::uvec>
 comp_outcome_dists(const InMemoryUnbalancedPanel& panel, std::size_t grid_size)
 {
     if (grid_size == 0) {
@@ -109,7 +109,7 @@ struct VectorEq {
 };
 
 // Given data (G x T) and centers (G x k), return length-T 0-based cluster IDs.
-static arma::uvec assign_outcomes_to_centers(const arma::mat& data, const arma::mat& centers) {
+arma::uvec assign_outcomes_to_centers(const arma::mat& data, const arma::mat& centers) {
     const arma::uword T = data.n_cols;
     arma::uvec assignment(T);
     for (arma::uword i = 0; i < T; ++i) {
@@ -120,13 +120,13 @@ static arma::uvec assign_outcomes_to_centers(const arma::mat& data, const arma::
 }
 
 // Shared validation helpers
-static void validate_grid(std::size_t grid_size) {
+void validate_grid(std::size_t grid_size) {
     if (grid_size == 0) {
         throw std::invalid_argument("grid_size must be > 0");
     }
 }
 
-static void validate_k_range(std::size_t T, std::size_t min_k, std::size_t max_k) {
+void validate_k_range(std::size_t T, std::size_t min_k, std::size_t max_k) {
     if (min_k == 0) {
         throw std::invalid_argument("min_k must be > 0");
     }
@@ -139,7 +139,7 @@ static void validate_k_range(std::size_t T, std::size_t min_k, std::size_t max_k
 }
 
 // Shared single-k mapping helper
-static arma::uvec compute_single_k_mapping(const arma::mat& outcome_val_cdfs, std::size_t k) {
+arma::uvec compute_single_k_mapping(const arma::mat& outcome_val_cdfs, std::size_t k) {
     const arma::uword T = outcome_val_cdfs.n_rows;
     if (k == 0 || k > T) {
         throw std::invalid_argument("compute_single_k_mapping: invalid k");
@@ -152,7 +152,7 @@ static arma::uvec compute_single_k_mapping(const arma::mat& outcome_val_cdfs, st
     return assign_outcomes_to_centers(data, centers);
 }
 
-static std::pair<ObservedOutcomeIndices, arma::uvec>
+std::pair<ObservedOutcomeIndices, arma::uvec>
 get_new_cohorts_from_combining_outcomes(
     const ObservedOutcomeIndices& ooi,
     const arma::uvec& cohort_sizes,
