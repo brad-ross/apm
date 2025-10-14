@@ -15,10 +15,25 @@
 #include <mlpack/methods/kmeans/kmeans_plus_plus_initialization.hpp>
 #include <mlpack/methods/kmeans/allow_empty_clusters.hpp>
 #include "outcome_clustering/weighted_kmeans_policy.h"
+#include <mlpack/prereqs.hpp>
 
 namespace apm {
 
 namespace {
+inline void seed_rng_if_requested(const std::optional<uint64_t>& seed) {
+    if (!seed.has_value()) return;
+#if defined(MLPACK_VERSION_MAJOR)
+#  if (MLPACK_VERSION_MAJOR >= 3)
+    mlpack::RandomSeed(static_cast<size_t>(*seed));
+#  else
+    mlpack::math::RandomSeed(static_cast<size_t>(*seed));
+#  endif
+#else
+    // Fallback to Armadillo RNG if mlpack version macros are unavailable
+    arma::arma_rng::set_seed(static_cast<arma::uword>(*seed));
+#endif
+}
+
 // Pass 1: collect observed outcome values and compute global interior-quantile grid
 arma::vec compute_quantile_grid_from_panel(const InMemoryUnbalancedPanel& panel, std::size_t G) {
     std::vector<double> obs_y;
@@ -138,7 +153,8 @@ comp_outcome_clusterings(
     const InMemoryUnbalancedPanel& panel,
     std::size_t grid_size,
     std::size_t min_k,
-    std::size_t max_k)
+    std::size_t max_k,
+    std::optional<uint64_t> seed)
 {
     validate_grid(grid_size);
     validate_k_range(panel.T(), min_k, max_k);
@@ -164,6 +180,7 @@ comp_outcome_clusterings(
     } guard(weights);
 
     for (std::size_t k = min_k; k <= max_k; ++k) {
+        seed_rng_if_requested(seed);
         arma::Row<size_t> assignments;
         arma::mat centers;
         kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);
@@ -181,7 +198,8 @@ arma::uvec
 comp_outcome_clusterings(
     const InMemoryUnbalancedPanel& panel,
     std::size_t grid_size,
-    std::size_t k)
+    std::size_t k,
+    std::optional<uint64_t> seed)
 {
     validate_grid(grid_size);
     auto dists = comp_outcome_dists(panel, grid_size);
@@ -201,6 +219,7 @@ comp_outcome_clusterings(
         ~LloydWeightsGuard() { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = nullptr; }
     } guard(weights);
 
+    seed_rng_if_requested(seed);
     arma::Row<size_t> assignments;
     arma::mat centers;
     kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);

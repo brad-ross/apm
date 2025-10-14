@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <utility>
 #include <unordered_map>
+#include <optional>
+#include <cstdint>
 
 #ifdef USING_R
 #include <RcppArmadillo.h>
@@ -25,14 +27,16 @@ comp_outcome_clusterings(
     const InMemoryUnbalancedPanel& panel,
     std::size_t grid_size,
     std::size_t min_k,
-    std::size_t max_k);
+    std::size_t max_k,
+    std::optional<uint64_t> seed = std::nullopt);
 
 // Single-k mapping
 arma::uvec
 comp_outcome_clusterings(
     const InMemoryUnbalancedPanel& panel,
     std::size_t grid_size,
-    std::size_t k);
+    std::size_t k,
+    std::optional<uint64_t> seed = std::nullopt);
 
 // Public API: compute new cohort groupings after combining outcome indices.
 // Returns pair { new ObservedOutcomeIndices, new cohort sizes }.
