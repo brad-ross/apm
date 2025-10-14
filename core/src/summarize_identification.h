@@ -12,29 +12,25 @@
 
 namespace apm {
 
-class InMemoryUnbalancedPanel; // fwd
-
-struct OutcomeClusteringSummary {
+struct IdentificationSummary {
   std::size_t largest_super_cohort_size;            // total units in largest final super cohort
   double       largest_super_cohort_share;          // share of panel units
   std::size_t  min_cohort_size_in_largest_super;    // min combined cohort size within that super cohort
   std::size_t  num_o3_iterations;                   // number of O^3 iterations (length of super_cohort_iterates)
 };
 
-std::vector<OutcomeClusteringSummary>
-summarize_outcome_clusterings(
-    const InMemoryUnbalancedPanel& panel,
-    const std::vector<arma::uvec>& mappings,
+std::vector<IdentificationSummary>
+summarize_identification(
+    const std::vector<ObservedOutcomeIndices>& observed_outcome_indices_vec,
+    const std::vector<arma::uvec>& cohort_sizes_vec,
     std::size_t max_model_rank);
 
-OutcomeClusteringSummary
-summarize_outcome_clusterings(
-    const InMemoryUnbalancedPanel& panel,
-    const arma::uvec& mapping,
+IdentificationSummary
+summarize_identification(
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::uvec& cohort_sizes,
     std::size_t max_model_rank);
 
 } // namespace apm
 
 #endif // APM_SUMMARIZE_IDENTIFICATION_H
-
-
