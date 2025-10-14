@@ -97,6 +97,8 @@ enable_testing()
 find_package(GTest QUIET)
 if(GTest_FOUND)
     add_subdirectory(tests)
+    # Enable test-only APIs in the core library when building tests
+    target_compile_definitions(apm PUBLIC APM_TESTS=1)
 else()
     message(WARNING "Google Test not found. Tests will not be built.")
 endif()

@@ -18,6 +18,7 @@ add_executable(test_apm
     test_est_cohort_specific_params.cpp
     test_outcome_imputation.cpp
     test_est_target_param_components.cpp
+    test_cluster_outcomes.cpp
 )
 
 # Link with the core library and Google Test
@@ -32,6 +33,9 @@ target_link_libraries(test_apm
 target_include_directories(test_apm PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src
 )
+
+# Enable test-only APIs
+target_compile_definitions(test_apm PRIVATE APM_TESTS=1)
 
 # Add test
 add_test(

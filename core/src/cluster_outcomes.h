@@ -34,6 +34,18 @@ comp_outcome_clusterings(
     std::size_t grid_size,
     std::size_t k);
 
+#ifdef APM_TESTS
+namespace test {
+// Test-only access to outcome CDFs and counts used by clustering.
+// Returns pair { T x G matrix of per-outcome CDF values at interior quantile grid,
+//                length-T vector of per-outcome finite observation counts }.
+std::pair<arma::mat, arma::uvec>
+comp_outcome_dists_test(
+    const InMemoryUnbalancedPanel& panel,
+    std::size_t grid_size);
+}
+#endif
+
 } // namespace apm
 
 #endif // APM_CLUSTER_OUTCOMES_H

@@ -240,3 +240,12 @@ comp_outcome_clusterings(
 }
 
 } // namespace apm
+
+#ifdef APM_TESTS
+namespace apm { namespace test {
+std::pair<arma::mat, arma::uvec>
+comp_outcome_dists_test(const InMemoryUnbalancedPanel& panel, std::size_t grid_size) {
+    return comp_outcome_dists(panel, grid_size);
+}
+}} // namespace apm::test
+#endif
