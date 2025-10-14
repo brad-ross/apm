@@ -41,7 +41,7 @@ static std::pair<ObservedOutcomeIndices, arma::uvec>
 get_new_cohorts_from_combining_outcomes(
     const ObservedOutcomeIndices& ooi,
     const arma::uvec& cohort_sizes,
-    const std::unordered_map<int,int>& old_to_new_outcome);
+    const arma::uvec& old_to_new_outcome);
 
 static OutcomeClusteringSummary summarize_single_mapping(
     const InMemoryUnbalancedPanel& panel,
@@ -49,13 +49,8 @@ static OutcomeClusteringSummary summarize_single_mapping(
     const arma::uvec& cohort_sizes,
     std::size_t max_model_rank)
 {
-    const std::size_t T = panel.T();
-    std::unordered_map<int,int> old_to_new_outcome;
-    old_to_new_outcome.reserve(T);
-    for (std::size_t t = 0; t < T; ++t) {
-        old_to_new_outcome.emplace(static_cast<int>(t), static_cast<int>(mapping(static_cast<arma::uword>(t))));
-    }
-    auto combined = get_new_cohorts_from_combining_outcomes(panel.observed_outcome_indices(), cohort_sizes, old_to_new_outcome);
+    auto combined = get_new_cohorts_from_combining_outcomes(
+        panel.observed_outcome_indices(), cohort_sizes, mapping);
     const ObservedOutcomeIndices& combined_ooi = combined.first;
     const arma::uvec& combined_sizes = combined.second;
     auto super_cohort_iterates = o3_algorithm(combined_ooi, static_cast<unsigned int>(max_model_rank));
@@ -92,5 +87,3 @@ summarize_outcome_clusterings(
 }
 
 } // namespace apm
-
-

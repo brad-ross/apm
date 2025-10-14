@@ -93,21 +93,6 @@ comp_outcome_dists(const InMemoryUnbalancedPanel& panel, std::size_t grid_size)
     return {std::move(outcome_val_cdfs), std::move(outcome_counts)};
 }
 
-struct VectorHasher {
-    std::size_t operator()(const std::vector<arma::uword>& v) const noexcept {
-        std::size_t seed = v.size();
-        for (arma::uword x : v) {
-            seed ^= std::hash<arma::uword>{}(x) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-        }
-        return seed;
-    }
-};
-struct VectorEq {
-    bool operator()(const std::vector<arma::uword>& a, const std::vector<arma::uword>& b) const noexcept {
-        return a == b;
-    }
-};
-
 // Given data (G x T) and centers (G x k), return length-T 0-based cluster IDs.
 arma::uvec assign_outcomes_to_centers(const arma::mat& data, const arma::mat& centers) {
     const arma::uword T = data.n_cols;
@@ -152,58 +137,6 @@ arma::uvec compute_single_k_mapping(const arma::mat& outcome_val_cdfs, std::size
     return assign_outcomes_to_centers(data, centers);
 }
 
-std::pair<ObservedOutcomeIndices, arma::uvec>
-get_new_cohorts_from_combining_outcomes(
-    const ObservedOutcomeIndices& ooi,
-    const arma::uvec& cohort_sizes,
-    const std::unordered_map<int,int>& old_to_new_outcome)
-{
-    if (ooi.size() != cohort_sizes.n_elem) {
-        throw std::invalid_argument("get_new_cohorts_from_combining_outcomes: size mismatch between ooi and cohort_sizes");
-    }
-
-    ObservedOutcomeIndices combined_ooi;
-    combined_ooi.reserve(ooi.size());
-    std::vector<arma::uword> combined_sizes_vec;
-    combined_sizes_vec.reserve(ooi.size());
-
-    std::unordered_map<std::vector<arma::uword>, std::size_t, VectorHasher, VectorEq> key_to_group;
-    key_to_group.reserve(ooi.size() * 2);
-
-    for (std::size_t c = 0; c < ooi.size(); ++c) {
-        // Map and canonicalize
-        std::vector<arma::uword> mapped;
-        const arma::uvec& occ = ooi[c];
-        mapped.reserve(occ.n_elem);
-        for (arma::uword t_old : occ) {
-            auto it = old_to_new_outcome.find(static_cast<int>(t_old));
-            if (it == old_to_new_outcome.end()) continue; // skip unmapped
-            mapped.push_back(static_cast<arma::uword>(it->second));
-        }
-        std::sort(mapped.begin(), mapped.end());
-        mapped.erase(std::unique(mapped.begin(), mapped.end()), mapped.end());
-
-        auto itg = key_to_group.find(mapped);
-        const arma::uword size_c = cohort_sizes(static_cast<arma::uword>(c));
-        if (itg == key_to_group.end()) {
-            std::size_t g = combined_ooi.size();
-            key_to_group.emplace(mapped, g);
-            combined_ooi.emplace_back(arma::uvec(mapped));
-            combined_sizes_vec.push_back(size_c);
-        } else {
-            std::size_t g = itg->second;
-            combined_sizes_vec[g] += size_c;
-        }
-    }
-
-    arma::uvec combined_sizes(static_cast<arma::uword>(combined_sizes_vec.size()));
-    for (std::size_t i = 0; i < combined_sizes_vec.size(); ++i) {
-        combined_sizes(static_cast<arma::uword>(i)) = combined_sizes_vec[i];
-    }
-
-    return {std::move(combined_ooi), std::move(combined_sizes)};
-}
-
 } // anonymous namespace
 
 std::vector<arma::uvec>
@@ -237,6 +170,75 @@ comp_outcome_clusterings(
     auto dists = comp_outcome_dists(panel, grid_size);
     const arma::mat& outcome_val_cdfs = dists.first;
     return compute_single_k_mapping(outcome_val_cdfs, k);
+}
+
+// Exposed API: compute new cohort groupings after combining outcomes
+std::pair<ObservedOutcomeIndices, arma::uvec>
+get_new_cohorts_from_combining_outcomes(
+    const ObservedOutcomeIndices& ooi,
+    const arma::uvec& cohort_sizes,
+    const arma::uvec& old_to_new_outcome)
+{
+    struct VectorHasher {
+        std::size_t operator()(const std::vector<arma::uword>& v) const noexcept {
+            std::size_t seed = v.size();
+            for (arma::uword x : v) {
+                seed ^= std::hash<arma::uword>{}(x) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            }
+            return seed;
+        }
+    };
+    struct VectorEq {
+        bool operator()(const std::vector<arma::uword>& a, const std::vector<arma::uword>& b) const noexcept {
+            return a == b;
+        }
+    };
+
+    if (ooi.size() != cohort_sizes.n_elem) {
+        throw std::invalid_argument("get_new_cohorts_from_combining_outcomes: size mismatch between ooi and cohort_sizes");
+    }
+
+    ObservedOutcomeIndices combined_ooi;
+    combined_ooi.reserve(ooi.size());
+    std::vector<arma::uword> combined_sizes_vec;
+    combined_sizes_vec.reserve(ooi.size());
+
+    std::unordered_map<std::vector<arma::uword>, std::size_t, VectorHasher, VectorEq> key_to_group;
+    key_to_group.reserve(ooi.size() * 2);
+
+    for (std::size_t c = 0; c < ooi.size(); ++c) {
+        // Map and canonicalize
+        std::vector<arma::uword> mapped;
+        const arma::uvec& occ = ooi[c];
+        mapped.reserve(occ.n_elem);
+        for (arma::uword t_old : occ) {
+            if (t_old >= old_to_new_outcome.n_elem) {
+                throw std::out_of_range("get_new_cohorts_from_combining_outcomes: t_old index exceeds mapping length");
+            }
+            mapped.push_back(static_cast<arma::uword>(old_to_new_outcome(t_old)));
+        }
+        std::sort(mapped.begin(), mapped.end());
+        mapped.erase(std::unique(mapped.begin(), mapped.end()), mapped.end());
+
+        auto itg = key_to_group.find(mapped);
+        const arma::uword size_c = cohort_sizes(static_cast<arma::uword>(c));
+        if (itg == key_to_group.end()) {
+            std::size_t g = combined_ooi.size();
+            key_to_group.emplace(mapped, g);
+            combined_ooi.emplace_back(arma::uvec(mapped));
+            combined_sizes_vec.push_back(size_c);
+        } else {
+            std::size_t g = itg->second;
+            combined_sizes_vec[g] += size_c;
+        }
+    }
+
+    arma::uvec combined_sizes(static_cast<arma::uword>(combined_sizes_vec.size()));
+    for (std::size_t i = 0; i < combined_sizes_vec.size(); ++i) {
+        combined_sizes(static_cast<arma::uword>(i)) = combined_sizes_vec[i];
+    }
+
+    return {std::move(combined_ooi), std::move(combined_sizes)};
 }
 
 } // namespace apm

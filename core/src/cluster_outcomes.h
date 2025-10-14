@@ -34,6 +34,14 @@ comp_outcome_clusterings(
     std::size_t grid_size,
     std::size_t k);
 
+// Public API: compute new cohort groupings after combining outcome indices.
+// Returns pair { new ObservedOutcomeIndices, new cohort sizes }.
+std::pair<ObservedOutcomeIndices, arma::uvec>
+get_new_cohorts_from_combining_outcomes(
+    const ObservedOutcomeIndices& ooi,
+    const arma::uvec& cohort_sizes,
+    const arma::uvec& old_to_new_outcome);
+
 #ifdef APM_TESTS
 namespace test {
 // Test-only access to outcome CDFs and counts used by clustering.
