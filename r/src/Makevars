@@ -33,7 +33,8 @@ OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o \
            est_cohort_specific_params_bindings.o cohort_weight_estimates_bindings.o nuisance_params_bindings.o \
            est_outcome_means_bindings.o agg_cohort_specific_factor_model_params_bindings.o outcome_means_estimates_bindings.o est_target_params_bindings.o \
            outcome_imputation_bindings.o \
-           outcome_clustering_bindings.o ../../core/src/outcome_clustering/cluster_outcomes.o
+           outcome_clustering_bindings.o ../../core/src/outcome_clustering/cluster_outcomes.o \
+           summarize_identification_bindings.o ../../core/src/summarize_identification.o
 
 # mlpack detection with pkg-config (required for outcome clustering)
 MLPACK_CFLAGS := $(shell pkg-config --cflags mlpack 2>/dev/null)

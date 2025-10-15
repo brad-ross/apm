@@ -45,6 +45,11 @@ IdentificationSummary summarize_identification(
     std::size_t max_model_rank)
 {
     auto super_cohort_iterates = o3_algorithm(observed_outcome_indices, static_cast<unsigned int>(max_model_rank));
+    if (super_cohort_iterates.empty()) {
+        // With current o3_algorithm, this should not happen (initial state included),
+        // but handle defensively.
+        return IdentificationSummary{0, 0.0, 0, 0};
+    }
     const auto& o3_level_super_cohorts = super_cohort_iterates.back();
     auto stats = largest_super_cohort_stats(o3_level_super_cohorts, cohort_sizes);
     const arma::uword total_units_u = arma::accu(cohort_sizes);
