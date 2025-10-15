@@ -44,7 +44,6 @@ testthat::test_that("comp_outcome_clustering: two clusters single-k vs range equ
   testthat::expect_identical(as.integer(labels_single), as.integer(k2_col))
 })
 
-
 testthat::test_that("comp_outcome_clusterings: k-range 1..3 and grouping at k=3", {
   make_panel <- function(K = 5L) {
     T <- 4L
@@ -93,7 +92,6 @@ testthat::test_that("comp_outcome_clusterings: k-range 1..3 and grouping at k=3"
   testthat::expect_equal(unname(k3_col[3L]), unname(k3_col[4L]))
   testthat::expect_false(unname(k3_col[1L]) == unname(k3_col[3L]))
 })
-
 
 testthat::test_that("comp_outcome_clustering vs comp_outcome_clusterings: seed consistency for k=2,3", {
   make_panel <- function(K = 5L) {
