@@ -28,6 +28,7 @@ comp_outcome_clusterings(
     std::size_t grid_size,
     std::size_t min_k,
     std::size_t max_k,
+    std::optional<std::size_t> n_inits = std::nullopt,
     std::optional<uint64_t> seed = std::nullopt);
 
 // Single-k mapping
@@ -36,6 +37,7 @@ comp_outcome_clusterings(
     const InMemoryUnbalancedPanel& panel,
     std::size_t grid_size,
     std::size_t k,
+    std::optional<std::size_t> n_inits = std::nullopt,
     std::optional<uint64_t> seed = std::nullopt);
 
 // Public API: compute new cohort groupings after combining outcome indices.

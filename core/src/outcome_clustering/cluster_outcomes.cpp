@@ -167,6 +167,7 @@ arma::uvec cluster_single_k_mapping(
     const arma::mat& data,
     const arma::vec& weights,
     std::size_t k,
+    std::optional<std::size_t> n_inits,
     std::optional<uint64_t> seed)
 {
     using Distance = mlpack::EuclideanDistance;
@@ -179,14 +180,46 @@ arma::uvec cluster_single_k_mapping(
         ~LloydWeightsGuard() { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = nullptr; }
     } guard(weights);
 
-    seed_rng_if_requested(seed);
-    arma::Row<size_t> assignments;
-    arma::mat centers;
-    kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);
+    const std::size_t num_inits = n_inits.value_or(static_cast<std::size_t>(10));
+    if (num_inits == 0) {
+        throw std::invalid_argument("n_inits must be > 0");
+    }
 
-    arma::uvec mapping(assignments.n_elem);
-    for (arma::uword i = 0; i < assignments.n_elem; ++i) {
-        mapping(i) = static_cast<arma::uword>(assignments(i));
+    auto weighted_sse = [&](const arma::Row<size_t>& assignments, const arma::mat& centers) -> double {
+        const arma::uword T = data.n_cols;
+        double sse = 0.0;
+        for (arma::uword i = 0; i < T; ++i) {
+            const arma::uword a = static_cast<arma::uword>(assignments(i));
+            const double wi = weights(i);
+            if (wi == 0.0) continue;
+            const arma::vec diff = data.col(i) - centers.col(a);
+            sse += wi * arma::dot(diff, diff);
+        }
+        return sse;
+    };
+
+    double best_sse = std::numeric_limits<double>::infinity();
+    arma::Row<size_t> best_assignments;
+
+    for (std::size_t init = 0; init < num_inits; ++init) {
+        std::optional<uint64_t> per_seed =
+            seed.has_value() ? std::optional<uint64_t>(*seed + static_cast<uint64_t>(init)) : std::nullopt;
+        seed_rng_if_requested(per_seed);
+
+        arma::Row<size_t> assignments;
+        arma::mat centers;
+        kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);
+
+        const double sse = weighted_sse(assignments, centers);
+        if (sse < best_sse) {
+            best_sse = sse;
+            best_assignments = std::move(assignments);
+        }
+    }
+
+    arma::uvec mapping(best_assignments.n_elem);
+    for (arma::uword i = 0; i < best_assignments.n_elem; ++i) {
+        mapping(i) = static_cast<arma::uword>(best_assignments(i));
     }
     return mapping;
 }
@@ -199,6 +232,7 @@ comp_outcome_clusterings(
     std::size_t grid_size,
     std::size_t min_k,
     std::size_t max_k,
+    std::optional<std::size_t> n_inits,
     std::optional<uint64_t> seed)
 {
     validate_k_range(panel.T(), min_k, max_k);
@@ -208,7 +242,7 @@ comp_outcome_clusterings(
     std::vector<arma::uvec> mappings;
     mappings.reserve(max_k - min_k + 1);
     for (std::size_t k = min_k; k <= max_k; ++k) {
-        mappings.push_back(cluster_single_k_mapping(inputs.data, inputs.weights, k, seed));
+        mappings.push_back(cluster_single_k_mapping(inputs.data, inputs.weights, k, n_inits, seed));
     }
     return mappings;
 }
@@ -218,10 +252,11 @@ comp_outcome_clusterings(
     const InMemoryUnbalancedPanel& panel,
     std::size_t grid_size,
     std::size_t k,
+    std::optional<std::size_t> n_inits,
     std::optional<uint64_t> seed)
 {
     const ClusteringInputs inputs = build_clustering_inputs(panel, grid_size);
-    return cluster_single_k_mapping(inputs.data, inputs.weights, k, seed);
+    return cluster_single_k_mapping(inputs.data, inputs.weights, k, n_inits, seed);
 }
 
 // Exposed API: compute new cohort groupings after combining outcomes
