@@ -843,6 +843,8 @@ std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
     }
 
     std::vector<std::vector<std::set<arma::uword>>> all_iterations_super_cohorts;
+    // Push initial state (each cohort as its own super cohort)
+    all_iterations_super_cohorts.push_back(current_super_cohorts);
     
     // Repeat until convergence
     while (true) {
@@ -888,12 +890,6 @@ bool aligned_factors_identified(
 
     auto super_cohort_iterations = o3_algorithm(observed_outcome_indices, r);
 
-    // If no iterations were recorded, it means the cohorts did not merge at all.
-    // Since C > 1, this means it's not identified.
-    if (super_cohort_iterations.empty()) {
-        return false;
-    }
-    
     // Check the final state of super-cohorts (the last element of the iterations vector).
     const auto& final_super_cohorts = super_cohort_iterations.back();
 
