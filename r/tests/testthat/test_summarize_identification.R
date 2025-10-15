@@ -1,3 +1,5 @@
+context("Testing identification summarization functionality")
+
 test_that("summarize_identification returns named list with expected fields", {
   ooi <- list(c(1L, 3L), c(2L, 3L))
   sizes <- c(50L, 40L)
@@ -38,4 +40,44 @@ test_that("summarize_identification returns list of named lists for many panels"
   expect_equal(el$largest_super_cohort_size, 25)
   expect_equal(el$min_cohort_size_in_largest_super, 25)
   expect_equal(el$largest_super_cohort_share, 25/35, tolerance = 1e-12)
+})
+
+test_that("aligned_factors_identified returns TRUE for staircase pattern", {
+  observed_outcome_indices <- list(
+    c(1, 2, 3),
+    c(2, 3, 4),
+    c(3, 4, 5)
+  )
+  r <- 2L
+  expect_true(aligned_factors_identified(observed_outcome_indices, r))
+})
+
+test_that("aligned_factors_identified returns TRUE for non-contiguous pattern", {
+  observed_outcome_indices <- list(
+    c(1, 2, 3), # Cohort 1
+    c(2, 3, 4), # Cohort 2
+    c(1, 4, 5)  # Cohort 3
+  )
+  r <- 2L
+  expect_true(aligned_factors_identified(observed_outcome_indices, r))
+})
+
+test_that("aligned_factors_identified returns FALSE for unconnected cohorts", {
+  observed_outcome_indices <- list(
+    c(1, 2), # Cohort 1
+    c(2, 3, 4), # Cohort 2
+    c(3, 4, 5)     # This cohort has no overlap with the others
+  )
+  r <- 2L
+  expect_false(aligned_factors_identified(observed_outcome_indices, r))
+})
+
+test_that("aligned_factors_identified returns FALSE when no merges occur", {
+  observed_outcome_indices <- list(
+    c(1, 2),
+    c(2, 3),
+    c(3, 4, 5)
+  )
+  r <- 2L
+  expect_false(aligned_factors_identified(observed_outcome_indices, r))
 })

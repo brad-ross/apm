@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <iostream>
 #include "apm_core.h"
-#include "summarize_identification.h"
 #include "linear_algebra_utils.h"
 #include "test_helpers.h"
 
@@ -495,8 +494,6 @@ TEST(APMTest, O3Algorithm_StaircasePattern) {
     // canonicalize both the actual and expected results before comparison.
     ASSERT_EQ(canonicalize_o3_output(super_cohort_iterations),
               canonicalize_o3_output(expected_output));
-
-    ASSERT_TRUE(apm::aligned_factors_identified(observed_outcome_indices, r));
 }
 
 TEST(APMTest, O3Algorithm_NonContiguous) {
@@ -522,8 +519,6 @@ TEST(APMTest, O3Algorithm_NonContiguous) {
     // For comparison, canonicalize the nested vectors.
     ASSERT_EQ(canonicalize_o3_output(super_cohort_iterations),
               canonicalize_o3_output(expected_output));
-
-    ASSERT_TRUE(apm::aligned_factors_identified(observed_outcome_indices, r));
 }
 
 TEST(APMTest, FactorsNotIdentifiedOneIteration) {
@@ -546,7 +541,6 @@ TEST(APMTest, FactorsNotIdentifiedOneIteration) {
     // Canonicalize for stable comparison.
     ASSERT_EQ(canonicalize_o3_output(super_cohort_iterations),
               canonicalize_o3_output(expected_output));
-    ASSERT_FALSE(apm::aligned_factors_identified(observed_outcome_indices, r));
 }
 
 TEST(APMTest, FactorsNotIdentifiedNoIterations) {
@@ -566,7 +560,6 @@ TEST(APMTest, FactorsNotIdentifiedNoIterations) {
     };
     ASSERT_EQ(canonicalize_o3_output(super_cohort_iterations),
               canonicalize_o3_output(expected_output));
-    ASSERT_FALSE(apm::aligned_factors_identified(observed_outcome_indices, r));
 }
 
 int main(int argc, char **argv) {

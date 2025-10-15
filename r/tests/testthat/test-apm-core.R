@@ -192,7 +192,6 @@ test_that("o3_algorithm works for staircase pattern", {
   )
   
   expect_equal(canonicalize_o3_output(result), canonicalize_o3_output(expected))
-  expect_true(aligned_factors_identified(observed_outcome_indices, r))
 })
 
 test_that("o3_algorithm works for non-contiguous pattern", {
@@ -215,43 +214,4 @@ test_that("o3_algorithm works for non-contiguous pattern", {
   )
   
   expect_equal(canonicalize_o3_output(result), canonicalize_o3_output(expected))
-  expect_true(aligned_factors_identified(observed_outcome_indices, r))
 })
-
-test_that("aligned_factors_identified returns FALSE for unconnected cohorts", {
-  observed_outcome_indices <- list(
-    c(1, 2), # Cohort 1
-    c(2, 3, 4), # Cohort 2
-    c(3, 4, 5)     # This cohort has no overlap with the others
-  )
-  r <- 2
-  
-  result <- o3_algorithm(observed_outcome_indices, r)
-  
-  # Expected: initial state, then cohorts 1 and 2 merge, but 3 remains separate.
-  expected <- list(
-    list(c(1), c(2), c(3)),
-    list(c(1), c(2, 3))
-  )
-  
-  expect_equal(canonicalize_o3_output(result), canonicalize_o3_output(expected))
-  expect_false(aligned_factors_identified(observed_outcome_indices, r))
-})
-
-test_that("aligned_factors_identified returns FALSE when no merges occur", {
-  observed_outcome_indices <- list(
-    c(1, 2),
-    c(2, 3),
-    c(3, 4, 5)
-  )
-  r <- 2
-  
-  result <- o3_algorithm(observed_outcome_indices, r)
-  
-  # No merges occur; result should contain only the initial state.
-  expected <- list(
-    list(c(1), c(2), c(3))
-  )
-  expect_equal(canonicalize_o3_output(result), canonicalize_o3_output(expected))
-  expect_false(aligned_factors_identified(observed_outcome_indices, r))
-}) 
