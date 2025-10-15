@@ -183,7 +183,7 @@ TEST(ClusterOutcomesTest, KMeansAssignments_TwoClusters_SingleAndRange) {
     const uint64_t seed = 123ULL;
 
     // single-k
-    arma::uvec labels_single = apm::comp_outcome_clusterings(panel, G, static_cast<std::size_t>(2), std::optional<uint64_t>(seed));
+    arma::uvec labels_single = apm::comp_outcome_clustering(panel, G, static_cast<std::size_t>(2), std::optional<uint64_t>(seed));
     EXPECT_EQ(labels_single.n_elem, static_cast<arma::uword>(T));
     EXPECT_TRUE(labels_single(0) == labels_single(1));
     EXPECT_TRUE(labels_single(2) == labels_single(3));
@@ -301,8 +301,8 @@ TEST(ClusterOutcomesTest, KMeansConsistency_SingleVsRangeSameSeed) {
     const uint64_t seed = 777ULL;
 
     // Single-k results
-    arma::uvec k2_single = apm::comp_outcome_clusterings(panel, G, static_cast<std::size_t>(2), std::optional<uint64_t>(seed));
-    arma::uvec k3_single = apm::comp_outcome_clusterings(panel, G, static_cast<std::size_t>(3), std::optional<uint64_t>(seed));
+    arma::uvec k2_single = apm::comp_outcome_clustering(panel, G, static_cast<std::size_t>(2), std::optional<uint64_t>(seed));
+    arma::uvec k3_single = apm::comp_outcome_clustering(panel, G, static_cast<std::size_t>(3), std::optional<uint64_t>(seed));
 
     // Range results
     auto maps = apm::comp_outcome_clusterings(panel, G, static_cast<std::size_t>(2), static_cast<std::size_t>(3), seed);

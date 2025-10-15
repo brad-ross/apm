@@ -248,7 +248,7 @@ comp_outcome_clusterings(
 }
 
 arma::uvec
-comp_outcome_clusterings(
+comp_outcome_clustering(
     const InMemoryUnbalancedPanel& panel,
     std::size_t grid_size,
     std::size_t k,
