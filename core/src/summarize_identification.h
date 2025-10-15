@@ -65,6 +65,11 @@ summarize_identification(
     const arma::uvec& cohort_sizes,
     std::size_t max_model_rank);
 
+// Checks if the factors are identified across all cohorts using the O^3 algorithm
+bool aligned_factors_identified(
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    unsigned int r);
+
 } // namespace apm
 
 #endif // APM_SUMMARIZE_IDENTIFICATION_H

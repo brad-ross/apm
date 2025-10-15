@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include "apm_core.h"
+#include "summarize_identification.h"
 #include "linear_algebra_utils.h"
 #include "test_helpers.h"
 

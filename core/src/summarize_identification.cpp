@@ -157,4 +157,16 @@ summarize_identification(
     return summarize_identification(observed_outcome_indices_vec, cohort_sizes_vec, max_model_rank, -1);
 }
 
+bool aligned_factors_identified(
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    unsigned int r)
+{
+    const arma::uword C = observed_outcome_indices.size();
+    if (C <= 1) return true;
+
+    auto super_cohort_iterations = o3_algorithm(observed_outcome_indices, r);
+    const auto& final_super_cohorts = super_cohort_iterations.back();
+    return final_super_cohorts.size() == 1 && final_super_cohorts[0].size() == C;
+}
+
 } // namespace apm

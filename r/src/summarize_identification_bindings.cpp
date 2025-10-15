@@ -29,6 +29,29 @@ inline std::optional<int> r_iter_to_cpp(const Rcpp::Nullable<Rcpp::IntegerVector
 } // anonymous namespace
 
 //'
+//' Checks if the factors are identified across all cohorts.
+//'
+//' This function uses the O^3 algorithm to determine if there is sufficient
+//' overlap in observed outcomes across all cohorts to uniquely identify all factor 
+//' vectors expressed with respect to a common basis. Identification is achieved if 
+//' the algorithm terminates with a single super cohort containing all of the 
+//' original cohorts.
+//'
+//' @param observed_outcome_indices A list of integer vectors, where each
+//'   vector contains the 1-based indices for the observed outcomes for a cohort.
+//' @param r The model rank.
+//' @return `TRUE` if the factors are identified, `FALSE` otherwise.
+//' @export
+// [[Rcpp::export]]
+bool aligned_factors_identified(
+    Rcpp::List observed_outcome_indices,
+    unsigned int r)
+{
+    apm::ObservedOutcomeIndices ooi0 = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+    return apm::aligned_factors_identified(ooi0, r);
+}
+
+//'
 //' Return the largest super cohort's cohort indices at a given O^3 iteration
 //'
 //' @param observed_outcome_indices A list of integer vectors (1-based) of observed outcomes per cohort

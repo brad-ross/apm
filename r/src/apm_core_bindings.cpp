@@ -254,28 +254,7 @@ Rcpp::List o3_algorithm(
     return all_iterations_list;
 }
 
-//' Checks if the factors are identified across all cohorts.
-//'
-//' This function uses the O^3 algorithm to determine if there is sufficient
-//' overlap in observed outcomes across all cohorts to uniquely identify all factor 
-//' vectors expressed with respect to a common basis. Identification is achieved if 
-//' the algorithm terminates with a single super cohort containing all of the 
-//' original cohorts.
-//'
-//' @param observed_outcome_indices A list of integer vectors, where each
-//'   vector contains the 1-based indices for the observed outcomes for a cohort.
-//' @param r The model rank.
-//' @return `TRUE` if the factors are identified, `FALSE` otherwise.
-//' @export
-// [[Rcpp::export]]
-bool aligned_factors_identified(
-    Rcpp::List observed_outcome_indices,
-    unsigned int r) {
-    
-    std::vector<arma::uvec> cpp_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
-
-    return apm::aligned_factors_identified(cpp_observed_outcome_indices, r);
-} 
+ 
 
 //' Impute outcomes across cohorts using factors and cohort mean loadings (L)
 //'

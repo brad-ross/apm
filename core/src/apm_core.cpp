@@ -878,25 +878,6 @@ std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
     return all_iterations_super_cohorts;
 }
 
-bool aligned_factors_identified(
-    const ObservedOutcomeIndices& observed_outcome_indices,
-    unsigned int r) {
-
-    const arma::uword C = observed_outcome_indices.size();
-
-    if (C <= 1) {
-        return true;
-    }
-
-    auto super_cohort_iterations = o3_algorithm(observed_outcome_indices, r);
-
-    // Check the final state of super-cohorts (the last element of the iterations vector).
-    const auto& final_super_cohorts = super_cohort_iterations.back();
-
-    // Identification requires that all cohorts merge into a single super-cohort.
-    // This means the final list of super-cohorts has size 1, and that single
-    // super-cohort contains all C original cohorts.
-    return final_super_cohorts.size() == 1 && final_super_cohorts[0].size() == C;
-}
+ 
 
 } // namespace apm
