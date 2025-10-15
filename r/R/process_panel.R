@@ -123,12 +123,15 @@ construct_cohort_observed_outcomes_df <- function(outcome_ids, observed_outcome_
 #'   - when cohort_observed_outcomes_as_df = TRUE:
 #'       - cohort_observed_outcomes_df: long-form mapping of cohorts to outcomes
 #'       - unit_cohorts: data.table with columns unit_id_col, cohort_id
+#'       - cohort_sizes: integer vector; number of units per cohort ordered by cohort_id
 #'   - when cohort_observed_outcomes_as_df = FALSE:
 #'       - outcome_ids: sorted unique values of outcome_id_col
 #'       - outcome_ids: sorted unique values of outcome_id_col
 #'       - outcome_to_index: named integer vector mapping outcome value -> index
 #'       - observed_outcome_indices: list of integer index vectors per cohort (ordered by cohort_id)
 #'       - unit_cohorts: data.table with columns unit_id_col, cohort_id
+#'       - cohort_sizes: integer vector; number of units per cohort in the same order
+#'         as observed_outcome_indices
 #' @importFrom data.table setorder
 #' @export
 construct_cohorts_from_panel <- function(panel_df,
@@ -224,6 +227,10 @@ construct_cohorts_from_panel <- function(panel_df,
     ]
     setkey(unit_cohorts, unit_id)
 
+    # Compute cohort sizes (number of units per cohort) in cohort_id order
+    cohort_sizes <- unit_cohorts[, .N, by = cohort_id][order(cohort_id)][["N"]]
+    cohort_sizes <- as.integer(cohort_sizes)
+
     # Drop key columns from coh_map after cohort_id has been defined
     if (isTRUE(sort_cohorts_lexicographically)) {
         coh_map[, c("cohort_key", "cohort_order_key") := NULL]
@@ -248,7 +255,8 @@ construct_cohorts_from_panel <- function(panel_df,
     if (isTRUE(cohort_observed_outcomes_as_df)) {
         return(list(
             cohort_observed_outcomes_df = cohort_outcomes,
-            unit_cohorts = unit_cohorts
+            unit_cohorts = unit_cohorts,
+            cohort_sizes = cohort_sizes
         ))
     } else {
         # Reconstruct list-of-indices per cohort (only at the very end)
@@ -259,7 +267,8 @@ construct_cohorts_from_panel <- function(panel_df,
             outcome_ids = outcome_ids,
             outcome_to_index = outcome_to_index,
             observed_outcome_indices = observed_outcome_indices,
-            unit_cohorts = unit_cohorts
+            unit_cohorts = unit_cohorts,
+            cohort_sizes = cohort_sizes
         ))
     }
 }

@@ -44,6 +44,9 @@ test_that("staircase missingness with two units per cohort (matching core test)"
     expect_true(is.data.table(res$unit_cohorts))
     expect_equal(sort(names(res$unit_cohorts)), sort(c("unit_id", "cohort_id")))
 
+    # 4) cohort_sizes should reflect two units per cohort
+    expect_equal(res$cohort_sizes, rep.int(2L, length(expected_indices)))
+
     # Build expected mapping
     expected_map <- build_expected_unit_map(units_by_cohort)
 
@@ -217,6 +220,8 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
     setorder(res$unit_cohorts, unit_id)
     setorder(expected_map, unit_id)
     expect_equal(res$unit_cohorts, expected_map)
+    # cohort_sizes should reflect two units in each retained cohort
+    expect_equal(res$cohort_sizes, c(2L, 2L))
     # Case 2: Drop by rank only (third cohort has 2 units but only 1 outcome)
     units_by_cohort_rank <- list(
         c("u1", "u2"),
@@ -253,6 +258,8 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
     setorder(res_rank$unit_cohorts, unit_id)
     setorder(expected_map_rank, unit_id)
     expect_equal(res_rank$unit_cohorts, expected_map_rank)
+    # cohort_sizes should reflect two units in each retained cohort
+    expect_equal(res_rank$cohort_sizes, c(2L, 2L))
     
 })
 
