@@ -20,10 +20,10 @@ test_that("summarize_identification returns named list with expected fields", {
   expect_equal(out$largest_super_cohort_share, 50/90, tolerance = 1e-12)
 })
 
-test_that("summarize_identification_many returns list of named lists", {
+test_that("summarize_identification returns list of named lists for many panels", {
   ooi_list <- list(list(c(1L), c(2L, 3L)))
   size_list <- list(c(10L, 25L))
-  out <- summarize_identification_many(ooi_list, size_list, r = 2L)
+  out <- summarize_identification(ooi_list, size_list, r = 2L)
   expect_true(is.list(out))
   expect_equal(length(out), 1)
   el <- out[[1]]
