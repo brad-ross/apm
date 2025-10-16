@@ -380,8 +380,8 @@ UnbalancedPanel <- R6Class(
             private$unit_cohorts <- coh$unit_cohorts
             
             # Augment unit_cohorts with unit_idx
-            private$unit_cohorts[, unit_idx := private$unit_to_index[as.character(get(private$unit_id_col))]]
-
+            private$unit_cohorts[, unit_idx := private$unit_to_index[as.character(unit_id)]]
+            
             # Select only relevant columns from the original panel
             keep_cols <- c(private$unit_id_col, private$outcome_id_col, private$outcome_value_col, private$covar_cols, private$auxiliary_cols)
             orig_panel_only_relevant_cols <- private$original_panel[
@@ -390,15 +390,12 @@ UnbalancedPanel <- R6Class(
             ]
 
             # Inner join on unit id to attach cohort_id to each observation
-            processed <- private$unit_cohorts[orig_panel_only_relevant_cols, on = private$unit_id_col, nomatch = 0L]
+            processed <- private$unit_cohorts[orig_panel_only_relevant_cols, on = c("unit_id" = private$unit_id_col), nomatch = 0L]
 
             # Map outcome ids to outcome indices and drop original outcome id column
             processed[, outcome_idx := private$outcome_to_index[as.character(get(private$outcome_id_col))]]
             processed[, (private$outcome_id_col) := NULL]
-            
-            # Map unit ids to unit indices and drop original unit id column
-            processed[, unit_idx := private$unit_to_index[as.character(get(private$unit_id_col))]]
-            processed[, (private$unit_id_col) := NULL]
+            processed[, unit_id := NULL]
 
             # Sort by cohort_id, unit_idx, then outcome index (explicit column names)
             setorderv(processed, c("cohort_id", "unit_idx", "outcome_idx"))
