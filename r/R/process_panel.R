@@ -251,18 +251,22 @@ construct_cohorts_from_panel <- function(panel_df,
         datatable.showProgress=default_datatable_options$datatable.showProgress
     )
 
+    # Reconstruct list-of-indices per cohort (only at the very end)
+    split_list <- split(cohort_outcomes$outcome_idx, cohort_outcomes$cohort_id)
+    cohort_order <- as.integer(names(split_list))
+    observed_outcome_indices <- unname(split_list[order(cohort_order)])
+
     # Prepare return values
     if (isTRUE(cohort_observed_outcomes_as_df)) {
         return(list(
+            outcome_ids = outcome_ids,
+            outcome_to_index = outcome_to_index,
+            observed_outcome_indices = observed_outcome_indices,
             cohort_observed_outcomes_df = cohort_outcomes,
             unit_cohorts = unit_cohorts,
             cohort_sizes = cohort_sizes
         ))
     } else {
-        # Reconstruct list-of-indices per cohort (only at the very end)
-        split_list <- split(cohort_outcomes$outcome_idx, cohort_outcomes$cohort_id)
-        cohort_order <- as.integer(names(split_list))
-        observed_outcome_indices <- unname(split_list[order(cohort_order)])
         return(list(
             outcome_ids = outcome_ids,
             outcome_to_index = outcome_to_index,
@@ -293,10 +297,14 @@ UnbalancedPanel <- R6Class(
         get_model_rank = function() private$model_rank,
         get_min_cohort_size = function() private$min_cohort_size,
         get_unit_ids = function() private$unit_ids,
+        get_num_units = function() length(private$unit_ids),
         get_outcome_ids = function() private$outcome_ids,
+        get_num_outcomes = function() length(private$outcome_ids),
         get_outcome_to_index = function() private$outcome_to_index,
         get_observed_outcome_indices = function() private$observed_outcome_indices,
         get_unit_cohorts = function() private$unit_cohorts,
+        get_num_cohorts = function() length(private$cohort_sizes),
+        get_cohort_sizes = function() private$cohort_sizes,
         get_processed_panel = function() private$processed_panel,
         get_covar_cols = function() private$covar_cols,
         get_auxiliary_cols = function() private$auxiliary_cols,
@@ -374,11 +382,13 @@ UnbalancedPanel <- R6Class(
                 sort_cohorts_lexicographically = sort_cohorts_lexicographically,
                 cohort_observed_outcomes_as_df = FALSE
             )
+            
             private$outcome_ids <- coh$outcome_ids
             private$outcome_to_index <- coh$outcome_to_index
             private$observed_outcome_indices <- coh$observed_outcome_indices
             private$unit_cohorts <- coh$unit_cohorts
-            
+            private$cohort_sizes <- coh$cohort_sizes
+
             # Augment unit_cohorts with unit_idx
             private$unit_cohorts[, unit_idx := private$unit_to_index[as.character(unit_id)]]
             
@@ -437,6 +447,7 @@ UnbalancedPanel <- R6Class(
         outcome_to_index = NULL,
         observed_outcome_indices = NULL,
         unit_cohorts = NULL,
+        cohort_sizes = NULL,
         processed_panel = NULL,
         covar_cols = character(0),
         auxiliary_cols = character(0),

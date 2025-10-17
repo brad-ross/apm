@@ -38,7 +38,7 @@ comp_outcome_clustering <- function(panel, grid_size, k, n_inits = NULL, seed = 
 #' @param grid_size Integer number of quantile grid points (> 0)
 #' @param min_k Minimum number of clusters (>= 1)
 #' @param max_k Maximum number of clusters (>= min_k)
-#' @param n_inits Optional integer number of initializations per k
+#' @param n_inits Optional integer number of initializations per k (defaults to 10)
 #' @param seed Optional numeric seed for reproducibility
 #' @return Integer matrix of dimension T x (#k), columns named by k
 #' @export
