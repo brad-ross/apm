@@ -9,6 +9,7 @@
 #include <cmath>
 #include <limits>
 #include <set>
+#include <mutex>
 
 // mlpack KMeans and policies
 #include <mlpack/methods/kmeans/kmeans.hpp>
@@ -16,6 +17,11 @@
 #include <mlpack/methods/kmeans/allow_empty_clusters.hpp>
 #include "outcome_clustering/weighted_kmeans_policy.h"
 #include <mlpack/prereqs.hpp>
+
+#ifdef APM_HAS_TBB
+#include <oneapi/tbb/info.h>
+#include <oneapi/tbb/parallel_for.h>
+#endif
 
 namespace apm {
 
@@ -162,66 +168,78 @@ ClusteringInputs build_clustering_inputs(const InMemoryUnbalancedPanel& panel, s
     return out;
 }
 
-// Single-k weighted KMeans that returns 0-based cluster IDs (length T)
-arma::uvec cluster_single_k_mapping(
-    const arma::mat& data,
-    const arma::vec& weights,
-    std::size_t k,
-    std::optional<std::size_t> n_inits,
-    std::optional<uint64_t> seed)
+// Reusable helpers and types for KMeans
+using Distance = mlpack::EuclideanDistance;
+using InitPolicy = mlpack::KMeansPlusPlusInitialization;
+using EmptyPolicy = mlpack::AllowEmptyClusters;
+using KMeansType = mlpack::KMeans<Distance, InitPolicy, EmptyPolicy, apm::clustering::WeightedNaiveKMeans, arma::mat>;
+
+struct WeightsGuard {
+    explicit WeightsGuard(const arma::vec& w) { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = &w; }
+    ~WeightsGuard() { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = nullptr; }
+};
+
+inline std::optional<uint64_t> per_init_seed(std::optional<uint64_t> base, std::size_t init) {
+    return base ? std::optional<uint64_t>(*base + static_cast<uint64_t>(init)) : std::nullopt;
+}
+
+inline double weighted_sse(const arma::mat& data,
+                           const arma::vec& weights,
+                           const arma::Row<size_t>& assignments,
+                           const arma::mat& centers)
 {
-    using Distance = mlpack::EuclideanDistance;
-    using InitPolicy = mlpack::KMeansPlusPlusInitialization;
-    using EmptyPolicy = mlpack::AllowEmptyClusters;
-    mlpack::KMeans<Distance, InitPolicy, EmptyPolicy, apm::clustering::WeightedNaiveKMeans, arma::mat> kmeans;
-
-    struct LloydWeightsGuard {
-        LloydWeightsGuard(const arma::vec& w) { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = &w; }
-        ~LloydWeightsGuard() { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = nullptr; }
-    } guard(weights);
-
-    const std::size_t num_inits = n_inits.value_or(static_cast<std::size_t>(10));
-    if (num_inits == 0) {
-        throw std::invalid_argument("n_inits must be > 0");
+    const arma::uword T = data.n_cols;
+    double sse = 0.0;
+    for (arma::uword i = 0; i < T; ++i) {
+        const arma::uword a = static_cast<arma::uword>(assignments(i));
+        const double wi = weights(i);
+        if (wi == 0.0) continue;
+        const arma::vec diff = data.col(i) - centers.col(a);
+        sse += wi * arma::dot(diff, diff);
     }
+    return sse;
+}
 
-    auto weighted_sse = [&](const arma::Row<size_t>& assignments, const arma::mat& centers) -> double {
-        const arma::uword T = data.n_cols;
-        double sse = 0.0;
-        for (arma::uword i = 0; i < T; ++i) {
-            const arma::uword a = static_cast<arma::uword>(assignments(i));
-            const double wi = weights(i);
-            if (wi == 0.0) continue;
-            const arma::vec diff = data.col(i) - centers.col(a);
-            sse += wi * arma::dot(diff, diff);
-        }
-        return sse;
-    };
+inline std::pair<double, arma::Row<size_t>> run_kmeans_once(const arma::mat& data,
+                                                            const arma::vec& weights,
+                                                            std::size_t k,
+                                                            std::optional<uint64_t> seed)
+{
+    seed_rng_if_requested(seed);
+    KMeansType kmeans;
+    WeightsGuard guard(weights);
+    arma::Row<size_t> assignments; arma::mat centers;
+    kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);
+    double sse = weighted_sse(data, weights, assignments, centers);
+    return {sse, std::move(assignments)};
+}
 
+inline arma::uvec to_uvec(const arma::Row<size_t>& r) {
+    arma::uvec out(r.n_elem);
+    for (arma::uword i = 0; i < r.n_elem; ++i) out(i) = static_cast<arma::uword>(r(i));
+    return out;
+}
+
+struct BestForK {
+    std::mutex m;
     double best_sse = std::numeric_limits<double>::infinity();
     arma::Row<size_t> best_assignments;
-
-    for (std::size_t init = 0; init < num_inits; ++init) {
-        std::optional<uint64_t> per_seed =
-            seed.has_value() ? std::optional<uint64_t>(*seed + static_cast<uint64_t>(init)) : std::nullopt;
-        seed_rng_if_requested(per_seed);
-
-        arma::Row<size_t> assignments;
-        arma::mat centers;
-        kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);
-
-        const double sse = weighted_sse(assignments, centers);
+    void consider(double sse, arma::Row<size_t>&& asg) {
         if (sse < best_sse) {
             best_sse = sse;
-            best_assignments = std::move(assignments);
+            best_assignments = std::move(asg);
         }
     }
+};
 
-    arma::uvec mapping(best_assignments.n_elem);
-    for (arma::uword i = 0; i < best_assignments.n_elem; ++i) {
-        mapping(i) = static_cast<arma::uword>(best_assignments(i));
-    }
-    return mapping;
+inline std::pair<std::size_t, std::size_t> unflatten(std::size_t idx,
+                                                     std::size_t num_k,
+                                                     std::size_t n_inits)
+{
+    (void)num_k; // not needed for computation
+    const std::size_t k_idx = idx / n_inits;
+    const std::size_t init  = idx % n_inits;
+    return {k_idx, init};
 }
 
 } // anonymous namespace
@@ -233,16 +251,49 @@ comp_outcome_clusterings(
     std::size_t min_k,
     std::size_t max_k,
     std::optional<std::size_t> n_inits,
-    std::optional<uint64_t> seed)
+    std::optional<uint64_t> seed,
+    std::optional<std::size_t> num_threads)
 {
     validate_k_range(panel.T(), min_k, max_k);
 
     const ClusteringInputs inputs = build_clustering_inputs(panel, grid_size);
 
+    const std::size_t num_k = max_k - min_k + 1;
+    const std::size_t num_inits_val = n_inits.value_or(static_cast<std::size_t>(10));
+    if (num_inits_val == 0) {
+        throw std::invalid_argument("n_inits must be > 0");
+    }
+
+    std::vector<BestForK> trackers(num_k);
+
+#ifdef APM_HAS_TBB
+    apm::ParallelismScope par_scope(num_threads);
+    std::size_t nt = par_scope.nt;
+    if (nt > 1) {
+        const std::size_t total_tasks = num_k * num_inits_val;
+        oneapi::tbb::parallel_for(std::size_t(0), total_tasks, [&](std::size_t idx){
+            auto [k_idx, init] = unflatten(idx, num_k, num_inits_val);
+            const std::size_t k_val = min_k + k_idx;
+            auto [sse, asg] = run_kmeans_once(inputs.data, inputs.weights, k_val, per_init_seed(seed, init));
+            std::lock_guard<std::mutex> lock(trackers[k_idx].m);
+            trackers[k_idx].consider(sse, std::move(asg));
+        });
+    } else
+#endif
+    {
+        for (std::size_t k_idx = 0; k_idx < num_k; ++k_idx) {
+            const std::size_t k_val = min_k + k_idx;
+            for (std::size_t init = 0; init < num_inits_val; ++init) {
+                auto [sse, asg] = run_kmeans_once(inputs.data, inputs.weights, k_val, per_init_seed(seed, init));
+                trackers[k_idx].consider(sse, std::move(asg));
+            }
+        }
+    }
+
     std::vector<arma::uvec> mappings;
-    mappings.reserve(max_k - min_k + 1);
-    for (std::size_t k = min_k; k <= max_k; ++k) {
-        mappings.push_back(cluster_single_k_mapping(inputs.data, inputs.weights, k, n_inits, seed));
+    mappings.reserve(num_k);
+    for (std::size_t k_idx = 0; k_idx < num_k; ++k_idx) {
+        mappings.push_back(to_uvec(trackers[k_idx].best_assignments));
     }
     return mappings;
 }
@@ -253,10 +304,14 @@ comp_outcome_clustering(
     std::size_t grid_size,
     std::size_t k,
     std::optional<std::size_t> n_inits,
-    std::optional<uint64_t> seed)
+    std::optional<uint64_t> seed,
+    std::optional<std::size_t> num_threads)
 {
-    const ClusteringInputs inputs = build_clustering_inputs(panel, grid_size);
-    return cluster_single_k_mapping(inputs.data, inputs.weights, k, n_inits, seed);
+    auto res = comp_outcome_clusterings(panel, grid_size, k, k, n_inits, seed, num_threads);
+    if (res.empty()) {
+        throw std::runtime_error("Internal error: empty result for single-k clustering");
+    }
+    return res.front();
 }
 
 // Exposed API: compute new cohort groupings after combining outcomes

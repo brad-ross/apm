@@ -12,9 +12,12 @@ NULL
 #' @param k Number of clusters (> 0)
 #' @param n_inits Optional integer number of KMeans initializations
 #' @param seed Optional numeric seed for reproducibility
+#' @param num_threads Optional integer number of threads to use (default NULL)
+#' @details For reproducibility, set `num_threads = 1 and a fixed `seed`.
+#' Parallel runs (`num_threads > 1`) may produce minor differences.
 #' @return Integer vector of length T with cluster ids in 1..k
 #' @export
-comp_outcome_clustering <- function(panel, grid_size, k, n_inits = NULL, seed = NULL) {
+comp_outcome_clustering <- function(panel, grid_size, k, n_inits = NULL, seed = NULL, num_threads = NULL) {
     stopifnot(inherits(panel, "UnbalancedPanel"))
     xp <- panel$get_panel_holder_xptr()
     res <- comp_outcome_clustering_cpp(
@@ -22,7 +25,8 @@ comp_outcome_clustering <- function(panel, grid_size, k, n_inits = NULL, seed = 
         grid_size = as.integer(grid_size),
         k = as.integer(k),
         n_inits_in = if (is.null(n_inits)) NULL else as.integer(n_inits),
-        seed_in = if (is.null(seed)) NULL else as.numeric(seed)
+        seed_in = if (is.null(seed)) NULL else as.numeric(seed),
+        num_threads_in = if (is.null(num_threads)) NULL else as.integer(num_threads)
     )
     # Optionally set names to outcome ids if available
     outcome_ids <- try(panel$get_outcome_ids(), silent = TRUE)
@@ -40,9 +44,12 @@ comp_outcome_clustering <- function(panel, grid_size, k, n_inits = NULL, seed = 
 #' @param max_k Maximum number of clusters (>= min_k)
 #' @param n_inits Optional integer number of initializations per k (defaults to 10)
 #' @param seed Optional numeric seed for reproducibility
+#' @param num_threads Optional integer number of threads to use (default NULL)
+#' @details For reproducibility, set `num_threads = 1`and a fixed`seed`.
+#' Parallel runs (`num_threads > 1`) may produce minor differences.
 #' @return Integer matrix of dimension T x (#k), columns named by k
 #' @export
-comp_outcome_clusterings <- function(panel, grid_size, min_k, max_k, n_inits = NULL, seed = NULL) {
+comp_outcome_clusterings <- function(panel, grid_size, min_k, max_k, n_inits = NULL, seed = NULL, num_threads = NULL) {
     stopifnot(inherits(panel, "UnbalancedPanel"))
     xp <- panel$get_panel_holder_xptr()
     res <- comp_outcome_clusterings_cpp(
@@ -51,7 +58,8 @@ comp_outcome_clusterings <- function(panel, grid_size, min_k, max_k, n_inits = N
         min_k = as.integer(min_k),
         max_k = as.integer(max_k),
         n_inits_in = if (is.null(n_inits)) NULL else as.integer(n_inits),
-        seed_in = if (is.null(seed)) NULL else as.numeric(seed)
+        seed_in = if (is.null(seed)) NULL else as.numeric(seed),
+        num_threads_in = if (is.null(num_threads)) NULL else as.integer(num_threads)
     )
     # Optionally set rownames to outcome ids if available
     outcome_ids <- try(panel$get_outcome_ids(), silent = TRUE)

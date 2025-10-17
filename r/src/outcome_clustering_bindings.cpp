@@ -47,19 +47,22 @@ Rcpp::IntegerVector comp_outcome_clustering_cpp(
     int grid_size,
     int k,
     Rcpp::Nullable<Rcpp::IntegerVector> n_inits_in = R_NilValue,
-    Rcpp::Nullable<Rcpp::NumericVector> seed_in = R_NilValue)
+    Rcpp::Nullable<Rcpp::NumericVector> seed_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue)
 {
     const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
 
     std::optional<std::size_t> n_inits = parse_optional_size(n_inits_in);
     std::optional<uint64_t> seed = parse_optional_u64(seed_in);
+    std::optional<std::size_t> num_threads = parse_optional_size(num_threads_in);
 
     arma::uvec mapping0 = apm::comp_outcome_clustering(
         panel,
         static_cast<std::size_t>(grid_size),
         static_cast<std::size_t>(k),
         n_inits,
-        seed);
+        seed,
+        num_threads);
 
     const std::size_t T = static_cast<std::size_t>(mapping0.n_elem);
     Rcpp::IntegerVector out(static_cast<int>(T));
@@ -80,12 +83,14 @@ Rcpp::IntegerMatrix comp_outcome_clusterings_cpp(
     int min_k,
     int max_k,
     Rcpp::Nullable<Rcpp::IntegerVector> n_inits_in = R_NilValue,
-    Rcpp::Nullable<Rcpp::NumericVector> seed_in = R_NilValue)
+    Rcpp::Nullable<Rcpp::NumericVector> seed_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue)
 {
     const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
 
     std::optional<std::size_t> n_inits = parse_optional_size(n_inits_in);
     std::optional<uint64_t> seed = parse_optional_u64(seed_in);
+    std::optional<std::size_t> num_threads = parse_optional_size(num_threads_in);
 
     std::vector<arma::uvec> mappings = apm::comp_outcome_clusterings(
         panel,
@@ -93,7 +98,8 @@ Rcpp::IntegerMatrix comp_outcome_clusterings_cpp(
         static_cast<std::size_t>(min_k),
         static_cast<std::size_t>(max_k),
         n_inits,
-        seed);
+        seed,
+        num_threads);
 
     const std::size_t T = panel.T();
     const std::size_t K = static_cast<std::size_t>(mappings.size());
