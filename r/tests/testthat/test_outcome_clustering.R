@@ -93,6 +93,60 @@ testthat::test_that("comp_outcome_clusterings: k-range 1..3 and grouping at k=3"
   testthat::expect_false(unname(k3_col[1L]) == unname(k3_col[3L]))
 })
 
+testthat::test_that("comp_outcome_clusterings: k-range 1..3 with multi-threading", {
+  make_panel <- function(K = 5L) {
+    T <- 4L
+    df <- data.frame(
+      unit_id = rep(seq_len(K), each = T),
+      outcome_id = rep(seq_len(T), times = K),
+      y = rep(c(0, 0, 10, 10), times = K)
+    )
+    UnbalancedPanel$new(
+      df,
+      unit_id_col = "unit_id",
+      outcome_id_col = "outcome_id",
+      outcome_value_col = "y"
+    )
+  }
+
+  grid_size <- 3L
+  panel <- make_panel()
+
+  set.seed(123)
+  labels_range_mat <- comp_outcome_clusterings(
+    panel,
+    grid_size = grid_size,
+    min_k = 1L,
+    max_k = 3L,
+    num_threads = 2L
+  )
+  testthat::expect_true(is.matrix(labels_range_mat))
+  testthat::expect_equal(nrow(labels_range_mat), 4L)
+  testthat::expect_equal(ncol(labels_range_mat), 3L)
+  if (!is.null(colnames(labels_range_mat))) {
+    testthat::expect_true(all(as.character(1:3) %in% colnames(labels_range_mat)))
+  }
+
+  # k = 1: all same label
+  k1_col <- if (!is.null(colnames(labels_range_mat)) && any(colnames(labels_range_mat) == "1")) {
+    labels_range_mat[, "1", drop = TRUE]
+  } else {
+    labels_range_mat[, 1L, drop = TRUE]
+  }
+  testthat::expect_equal(length(unique(as.integer(k1_col))), 1L)
+
+  # k = 3: only 2 groups present due to identical feature rows per group
+  k3_col <- if (!is.null(colnames(labels_range_mat)) && any(colnames(labels_range_mat) == "3")) {
+    labels_range_mat[, "3", drop = TRUE]
+  } else {
+    labels_range_mat[, 3L, drop = TRUE]
+  }
+  testthat::expect_equal(length(unique(as.integer(k3_col))), 2L)
+  testthat::expect_equal(unname(k3_col[1L]), unname(k3_col[2L]))
+  testthat::expect_equal(unname(k3_col[3L]), unname(k3_col[4L]))
+  testthat::expect_false(unname(k3_col[1L]) == unname(k3_col[3L]))
+})
+
 testthat::test_that("comp_outcome_clustering vs comp_outcome_clusterings: seed consistency for k=2,3", {
   make_panel <- function(K = 5L) {
     T <- 4L

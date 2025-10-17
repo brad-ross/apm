@@ -256,6 +256,74 @@ TEST(ClusterOutcomesTest, KMeansAssignments_KRangeAndEmptyClusters) {
     EXPECT_NE(k3(0), k3(2));
 }
 
+TEST(ClusterOutcomesTest, KMeansAssignments_KRangeAndEmptyClusters_MultiThreaded) {
+    using apm::InMemoryUnbalancedPanel;
+
+    const int T = 4;
+    const int K = 5;
+    const std::size_t G = 3;
+
+    apm::ObservedOutcomeIndices ooi;
+    ooi.emplace_back(arma::uvec({0, 1, 2, 3}));
+
+    std::vector<int> unit_idx;
+    std::vector<int> cohort_id;
+    std::vector<int> outcome_idx;
+    std::vector<double> y;
+    unit_idx.reserve(static_cast<std::size_t>(K * T));
+    cohort_id.reserve(static_cast<std::size_t>(K * T));
+    outcome_idx.reserve(static_cast<std::size_t>(K * T));
+    y.reserve(static_cast<std::size_t>(K * T));
+
+    for (int u = 0; u < K; ++u) {
+        for (int t = 0; t < T; ++t) {
+            unit_idx.push_back(u);
+            cohort_id.push_back(0);
+            outcome_idx.push_back(t);
+            double val = (t <= 1) ? 0.0 : 10.0;
+            y.push_back(val);
+        }
+    }
+
+    std::vector<const double*> covar_cols;
+    std::vector<const double*> auxiliary_cols;
+    InMemoryUnbalancedPanel panel(
+        unit_idx.data(),
+        cohort_id.data(),
+        outcome_idx.data(),
+        y.data(),
+        covar_cols,
+        auxiliary_cols,
+        y.size(),
+        ooi,
+        /*one_indexed=*/false);
+
+    const uint64_t seed = 123ULL;
+
+    // Multi-threaded run: num_threads = 2, keep default n_inits
+    auto maps = apm::comp_outcome_clusterings(
+        panel,
+        G,
+        static_cast<std::size_t>(1),
+        static_cast<std::size_t>(3),
+        std::optional<std::size_t>(),
+        std::optional<uint64_t>(seed),
+        std::optional<std::size_t>(2));
+    ASSERT_EQ(maps.size(), 3u);
+
+    const arma::uvec& k1 = maps[0];
+    const arma::uvec& k3 = maps[2];
+
+    // k=1: all same label
+    EXPECT_EQ(arma::unique(k1).eval().n_elem, 1u);
+
+    // k=3: still only 2 groups present due to identical feature rows per group
+    EXPECT_EQ(arma::unique(k3).eval().n_elem, 2u);
+    EXPECT_TRUE(k3(0) == k3(1));
+    EXPECT_TRUE(k3(2) == k3(3));
+    EXPECT_NE(k3(0), k3(2));
+}
+
 TEST(ClusterOutcomesTest, KMeansConsistency_SingleVsRangeSameSeed) {
     using apm::InMemoryUnbalancedPanel;
 
