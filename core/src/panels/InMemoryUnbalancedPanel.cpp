@@ -104,6 +104,15 @@ InMemoryUnbalancedPanel::InMemoryUnbalancedPanel(
     }
 }
 
+arma::uvec InMemoryUnbalancedPanel::get_cohort_sizes() const {
+    arma::uword C = static_cast<arma::uword>(observed_outcome_indices_.size());
+    arma::uvec sizes(C, arma::fill::zeros);
+    for (const auto& blk : cohort_blocks_) {
+        sizes(static_cast<arma::uword>(blk.cohort)) += static_cast<arma::uword>(blk.unit_runs.size());
+    }
+    return sizes;
+}
+
 void InMemoryUnbalancedPanel::assemble_Y_for_unit(
     const UnitRun& ur,
     const arma::uvec& T_idxs_for_cohort,

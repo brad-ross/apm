@@ -388,23 +388,6 @@ std::vector<std::vector<std::set<arma::uword>>> o3_algorithm(
     const ObservedOutcomeIndices& observed_outcome_indices,
     unsigned int r);
 
-/**
- * @brief Checks if the factors are identified across all cohorts.
- *
- * This function uses the O^3 algorithm to determine if there is sufficient
- * overlap in observed outcomes across all cohorts to uniquely identify all factor 
- * vectors expressed with respect to a common basis. Identification is achieved if 
- * the algorithm terminates with a single super cohort containing all of the 
- * original cohorts.
- *
- * @param observed_outcome_indices A vector where each element is a vector of
- *                                 indices for the observed outcomes for a cohort.
- * @param r The model rank.
- * @return `true` if the factors are identified, `false` otherwise.
- */
-bool aligned_factors_identified(
-    const ObservedOutcomeIndices& observed_outcome_indices,
-    unsigned int r);
 
 } // namespace apm
 

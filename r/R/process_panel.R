@@ -123,22 +123,41 @@ construct_cohort_observed_outcomes_df <- function(outcome_ids, observed_outcome_
 #'   - when cohort_observed_outcomes_as_df = TRUE:
 #'       - cohort_observed_outcomes_df: long-form mapping of cohorts to outcomes
 #'       - unit_cohorts: data.table with columns unit_id_col, cohort_id
+#'       - cohort_sizes: integer vector; number of units per cohort ordered by cohort_id
 #'   - when cohort_observed_outcomes_as_df = FALSE:
 #'       - outcome_ids: sorted unique values of outcome_id_col
 #'       - outcome_ids: sorted unique values of outcome_id_col
 #'       - outcome_to_index: named integer vector mapping outcome value -> index
 #'       - observed_outcome_indices: list of integer index vectors per cohort (ordered by cohort_id)
 #'       - unit_cohorts: data.table with columns unit_id_col, cohort_id
+#'       - cohort_sizes: integer vector; number of units per cohort in the same order
+#'         as observed_outcome_indices
 #' @importFrom data.table setorder
 #' @export
 construct_cohorts_from_panel <- function(panel_df,
                                          unit_id_col,
                                          outcome_id_col,
                                          outcome_value_col,
-                                         model_rank,
+                                         model_rank = 1,
                                          min_cohort_size = 0,
                                          sort_cohorts_lexicographically = FALSE,
-                                         cohort_observed_outcomes_as_df = TRUE) {
+                                         cohort_observed_outcomes_as_df = TRUE,
+                                         verbose = FALSE) {
+    default_datatable_options <- list(
+        datatable.verbose=getOption("datatable.verbose"), 
+        datatable.showProgress=getOption("datatable.showProgress")
+    )
+    if (isTRUE(verbose)) {
+        # TODO: figure out how to set datatable.verbose to TRUE without causing a lot of noise
+        options(datatable.verbose=FALSE, datatable.showProgress=TRUE)
+    } else {
+        options(datatable.verbose=FALSE, datatable.showProgress=FALSE)
+    }
+    on.exit(options(
+        datatable.verbose=default_datatable_options$datatable.verbose, 
+        datatable.showProgress=default_datatable_options$datatable.showProgress
+    ))
+
     panel_dt <- to_data_table(panel_df)
 
     # Validate required columns exist and drop rows with missing outcome values
@@ -208,6 +227,10 @@ construct_cohorts_from_panel <- function(panel_df,
     ]
     setkey(unit_cohorts, unit_id)
 
+    # Compute cohort sizes (number of units per cohort) in cohort_id order
+    cohort_sizes <- unit_cohorts[, .N, by = cohort_id][order(cohort_id)][["N"]]
+    cohort_sizes <- as.integer(cohort_sizes)
+
     # Drop key columns from coh_map after cohort_id has been defined
     if (isTRUE(sort_cohorts_lexicographically)) {
         coh_map[, c("cohort_key", "cohort_order_key") := NULL]
@@ -223,22 +246,33 @@ construct_cohorts_from_panel <- function(panel_df,
     setorder(cohort_outcomes, cohort_id, outcome_idx)
     cohort_outcomes[, outcome_name := as.character(outcome_ids[outcome_idx])]
 
+    options(
+        datatable.verbose=default_datatable_options$datatable.verbose, 
+        datatable.showProgress=default_datatable_options$datatable.showProgress
+    )
+
+    # Reconstruct list-of-indices per cohort (only at the very end)
+    split_list <- split(cohort_outcomes$outcome_idx, cohort_outcomes$cohort_id)
+    cohort_order <- as.integer(names(split_list))
+    observed_outcome_indices <- unname(split_list[order(cohort_order)])
+
     # Prepare return values
     if (isTRUE(cohort_observed_outcomes_as_df)) {
-        return(list(
-            cohort_observed_outcomes_df = cohort_outcomes,
-            unit_cohorts = unit_cohorts
-        ))
-    } else {
-        # Reconstruct list-of-indices per cohort (only at the very end)
-        split_list <- split(cohort_outcomes$outcome_idx, cohort_outcomes$cohort_id)
-        cohort_order <- as.integer(names(split_list))
-        observed_outcome_indices <- unname(split_list[order(cohort_order)])
         return(list(
             outcome_ids = outcome_ids,
             outcome_to_index = outcome_to_index,
             observed_outcome_indices = observed_outcome_indices,
-            unit_cohorts = unit_cohorts
+            cohort_observed_outcomes_df = cohort_outcomes,
+            unit_cohorts = unit_cohorts,
+            cohort_sizes = cohort_sizes
+        ))
+    } else {
+        return(list(
+            outcome_ids = outcome_ids,
+            outcome_to_index = outcome_to_index,
+            observed_outcome_indices = observed_outcome_indices,
+            unit_cohorts = unit_cohorts,
+            cohort_sizes = cohort_sizes
         ))
     }
 }
@@ -263,10 +297,14 @@ UnbalancedPanel <- R6Class(
         get_model_rank = function() private$model_rank,
         get_min_cohort_size = function() private$min_cohort_size,
         get_unit_ids = function() private$unit_ids,
+        get_num_units = function() length(private$unit_ids),
         get_outcome_ids = function() private$outcome_ids,
+        get_num_outcomes = function() length(private$outcome_ids),
         get_outcome_to_index = function() private$outcome_to_index,
         get_observed_outcome_indices = function() private$observed_outcome_indices,
         get_unit_cohorts = function() private$unit_cohorts,
+        get_num_cohorts = function() length(private$cohort_sizes),
+        get_cohort_sizes = function() private$cohort_sizes,
         get_processed_panel = function() private$processed_panel,
         get_covar_cols = function() private$covar_cols,
         get_auxiliary_cols = function() private$auxiliary_cols,
@@ -276,11 +314,27 @@ UnbalancedPanel <- R6Class(
                               unit_id_col,
                               outcome_id_col,
                               outcome_value_col,
-                              model_rank,
+                              model_rank = 1,
                               min_cohort_size = 0,
                               sort_cohorts_lexicographically = FALSE,
                               covar_cols = character(0),
-                              auxiliary_cols = character(0)) {
+                              auxiliary_cols = character(0),
+                              verbose = FALSE) {
+            default_datatable_options <- list(
+                datatable.verbose=getOption("datatable.verbose"), 
+                datatable.showProgress=getOption("datatable.showProgress")
+            )
+            if (isTRUE(verbose)) {
+                # TODO: figure out how to set datatable.verbose to TRUE without causing a lot of noise
+                options(datatable.verbose=FALSE, datatable.showProgress=TRUE)
+            } else {
+                options(datatable.verbose=FALSE, datatable.showProgress=FALSE)
+            }
+            on.exit(options(
+                datatable.verbose=default_datatable_options$datatable.verbose, 
+                datatable.showProgress=default_datatable_options$datatable.showProgress
+            ))
+            
             private$original_panel <- to_data_table(panel_df)
             private$unit_id_col <- unit_id_col
             private$outcome_id_col <- outcome_id_col
@@ -328,14 +382,16 @@ UnbalancedPanel <- R6Class(
                 sort_cohorts_lexicographically = sort_cohorts_lexicographically,
                 cohort_observed_outcomes_as_df = FALSE
             )
+            
             private$outcome_ids <- coh$outcome_ids
             private$outcome_to_index <- coh$outcome_to_index
             private$observed_outcome_indices <- coh$observed_outcome_indices
             private$unit_cohorts <- coh$unit_cohorts
-            
-            # Augment unit_cohorts with unit_idx
-            private$unit_cohorts[, unit_idx := private$unit_to_index[as.character(get(private$unit_id_col))]]
+            private$cohort_sizes <- coh$cohort_sizes
 
+            # Augment unit_cohorts with unit_idx
+            private$unit_cohorts[, unit_idx := private$unit_to_index[as.character(unit_id)]]
+            
             # Select only relevant columns from the original panel
             keep_cols <- c(private$unit_id_col, private$outcome_id_col, private$outcome_value_col, private$covar_cols, private$auxiliary_cols)
             orig_panel_only_relevant_cols <- private$original_panel[
@@ -344,15 +400,12 @@ UnbalancedPanel <- R6Class(
             ]
 
             # Inner join on unit id to attach cohort_id to each observation
-            processed <- private$unit_cohorts[orig_panel_only_relevant_cols, on = private$unit_id_col, nomatch = 0L]
+            processed <- private$unit_cohorts[orig_panel_only_relevant_cols, on = c("unit_id" = private$unit_id_col), nomatch = 0L]
 
             # Map outcome ids to outcome indices and drop original outcome id column
             processed[, outcome_idx := private$outcome_to_index[as.character(get(private$outcome_id_col))]]
             processed[, (private$outcome_id_col) := NULL]
-            
-            # Map unit ids to unit indices and drop original unit id column
-            processed[, unit_idx := private$unit_to_index[as.character(get(private$unit_id_col))]]
-            processed[, (private$unit_id_col) := NULL]
+            processed[, unit_id := NULL]
 
             # Sort by cohort_id, unit_idx, then outcome index (explicit column names)
             setorderv(processed, c("cohort_id", "unit_idx", "outcome_idx"))
@@ -372,6 +425,11 @@ UnbalancedPanel <- R6Class(
                 num_units_in = length(private$unit_ids)
             )
 
+            options(
+                datatable.verbose=default_datatable_options$datatable.verbose, 
+                datatable.showProgress=default_datatable_options$datatable.showProgress
+            )
+
             invisible(self)
         }
     ),
@@ -389,6 +447,7 @@ UnbalancedPanel <- R6Class(
         outcome_to_index = NULL,
         observed_outcome_indices = NULL,
         unit_cohorts = NULL,
+        cohort_sizes = NULL,
         processed_panel = NULL,
         covar_cols = character(0),
         auxiliary_cols = character(0),

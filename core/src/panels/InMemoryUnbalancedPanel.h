@@ -39,6 +39,9 @@ public:
     const ObservedOutcomeIndices& observed_outcome_indices() const override { return observed_outcome_indices_; }
     std::size_t num_units() const override { return num_units_; }
 
+    // Returns a length-C vector with unit counts per atomic cohort (0-based cohort ids).
+    arma::uvec get_cohort_sizes() const;
+
     // Dimensions
     std::size_t T() const override { return static_cast<std::size_t>(num_outcomes(observed_outcome_indices_)); }
     std::size_t q() const override { return covar_cols_.size(); }

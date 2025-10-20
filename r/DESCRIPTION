@@ -27,6 +27,7 @@ LinkingTo:
 SystemRequirements: 
     C++17,
     Armadillo (>= 9.000),
+    mlpack (>= 4.0.0),
     Boost (>= 1.70.0)
 Suggests: 
     testthat (>= 3.0.0)

@@ -184,14 +184,14 @@ test_that("o3_algorithm works for staircase pattern", {
   
   result <- o3_algorithm(observed_outcome_indices, r)
   
-  # The initial state is not returned. All cohorts merge into one super-cohort
+  # The initial state is returned, then all cohorts merge into one super-cohort
   # in a single iteration.
   expected <- list(
+    list(c(1), c(2), c(3)),
     list(c(1, 2, 3))
   )
   
   expect_equal(canonicalize_o3_output(result), canonicalize_o3_output(expected))
-  expect_true(aligned_factors_identified(observed_outcome_indices, r))
 })
 
 test_that("o3_algorithm works for non-contiguous pattern", {
@@ -204,48 +204,14 @@ test_that("o3_algorithm works for non-contiguous pattern", {
   
   result <- o3_algorithm(observed_outcome_indices, r)
   
-  # Expected merge history (initial state is not returned)
+  # Expected merge history (initial state is returned)
   # 1. Cohorts 1 and 2 merge -> {{1,2}, {3}}
   # 2. Cohort 3 merges with {1,2} -> {{1,2,3}}
   expected <- list(
+    list(c(1), c(2), c(3)),
     list(c(1, 2), c(3)),
     list(c(1, 2, 3))
   )
   
   expect_equal(canonicalize_o3_output(result), canonicalize_o3_output(expected))
-  expect_true(aligned_factors_identified(observed_outcome_indices, r))
 })
-
-test_that("aligned_factors_identified returns FALSE for unconnected cohorts", {
-  observed_outcome_indices <- list(
-    c(1, 2), # Cohort 1
-    c(2, 3, 4), # Cohort 2
-    c(3, 4, 5)     # This cohort has no overlap with the others
-  )
-  r <- 2
-  
-  result <- o3_algorithm(observed_outcome_indices, r)
-  
-  # Expected: cohorts 1 and 2 merge, but 3 remains separate.
-  expected <- list(
-    list(c(1), c(2, 3))
-  )
-  
-  expect_equal(canonicalize_o3_output(result), canonicalize_o3_output(expected))
-  expect_false(aligned_factors_identified(observed_outcome_indices, r))
-})
-
-test_that("aligned_factors_identified returns FALSE when no merges occur", {
-  observed_outcome_indices <- list(
-    c(1, 2),
-    c(2, 3),
-    c(3, 4, 5)
-  )
-  r <- 2
-  
-  result <- o3_algorithm(observed_outcome_indices, r)
-  
-  # No iterations should occur, so the result should be an empty list.
-  expect_equal(result, list())
-  expect_false(aligned_factors_identified(observed_outcome_indices, r))
-}) 
