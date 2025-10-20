@@ -22,13 +22,8 @@ endif()
 # Find Boost (for Graph Library)
 find_package(Boost REQUIRED COMPONENTS graph)
 
-# Find Arrow using system installation (Homebrew)
-find_package(Arrow REQUIRED)
-
 # Find oneTBB for parallelization (optional; Homebrew installs TBBConfig.cmake)
 find_package(TBB CONFIG QUIET COMPONENTS tbb)
-
-# Arrow found successfully
 
 # Create the core library
 add_library(apm
@@ -63,7 +58,6 @@ target_link_libraries(apm
         ${ARMADILLO_LIBRARIES}
         mlpack
         Boost::graph
-        Arrow::arrow_shared
 )
 
 if(TARGET TBB::tbb)
@@ -74,15 +68,6 @@ else()
     message(STATUS "oneTBB NOT found; building with serial cohort loop")
 endif()
 
-# Explicitly link Acero and Compute libraries (needed for Homebrew Arrow)
-find_library(ARROW_ACERO_LIB NAMES arrow_acero libarrow_acero)
-find_library(ARROW_COMPUTE_LIB NAMES arrow_compute libarrow_compute)
-if(ARROW_ACERO_LIB)
-    target_link_libraries(apm PUBLIC ${ARROW_ACERO_LIB})
-endif()
-if(ARROW_COMPUTE_LIB)
-    target_link_libraries(apm PUBLIC ${ARROW_COMPUTE_LIB})
-endif()
 
 # On macOS, link against the Accelerate framework for BLAS/LAPACK
 if(APPLE)
