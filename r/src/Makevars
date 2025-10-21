@@ -2,11 +2,11 @@
 # This tells R how to compile and link the core C++ library
 
 # Use RcppArmadillo flags for consistent compilation and define USING_R flag
-PKG_CPPFLAGS = $(shell $(R_HOME)/bin/Rscript -e "RcppArmadillo:::CxxFlags()") -I../../core/src -DUSING_R -I/opt/homebrew/include
+PKG_CPPFLAGS = $(shell $(R_HOME)/bin/Rscript -e "RcppArmadillo:::CxxFlags()") -I../../core/src -DUSING_R
 PKG_CXXFLAGS = -std=c++17
 
-# RcppArmadillo is header-only, no special linking needed. Add Boost lib path.
-PKG_LIBS = -L/opt/homebrew/lib $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+# Link against LAPACK/BLAS provided by R
+PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
 # oneTBB detection with pkg-config; define APM_HAS_TBB if found
 TBB_CFLAGS := $(shell pkg-config --cflags tbb 2>/dev/null)
@@ -34,16 +34,13 @@ OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o \
            est_outcome_means_bindings.o agg_cohort_specific_factor_model_params_bindings.o outcome_means_estimates_bindings.o est_target_params_bindings.o \
            outcome_imputation_bindings.o \
            outcome_clustering_bindings.o ../../core/src/outcome_clustering/cluster_outcomes.o \
+           ../../core/src/outcome_clustering/weighted_kmeans.o \
            summarize_identification_bindings.o ../../core/src/summarize_identification.o
 
-# mlpack detection with pkg-config (required for outcome clustering)
+# mlpack detection with pkg-config (optional; enables accelerated KMeans if present)
 MLPACK_CFLAGS := $(shell pkg-config --cflags mlpack 2>/dev/null)
 MLPACK_LIBS   := $(shell pkg-config --libs   mlpack 2>/dev/null)
 ifneq ($(strip $(MLPACK_LIBS)),)
-  PKG_CPPFLAGS += $(MLPACK_CFLAGS)
+  PKG_CPPFLAGS += $(MLPACK_CFLAGS) -DAPM_HAS_MLPACK=1
   PKG_LIBS     += $(MLPACK_LIBS)
-else
-  # Homebrew fallback (uncomment if pkg-config for mlpack is unavailable)
-  # PKG_CPPFLAGS += -I/opt/homebrew/include
-  # PKG_LIBS     += -L/opt/homebrew/lib -lmlpack
 endif
