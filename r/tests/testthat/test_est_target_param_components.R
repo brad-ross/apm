@@ -139,14 +139,14 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
   n_threads <- get_cpp_default_concurrency()
   print(sprintf("Using up to %d threads", n_threads))
 
-  Tval <- 30L
+  Tval <- 20L
   r <- 2L
   window <- 3L
 
   outcomes <- make_outcomes(Tval)
   cohort_indices <- make_staircase_observed_indices(Tval, window)
   C <- length(cohort_indices)
-  units_per_cohort <- 1000L
+  units_per_cohort <- 500L
   units_by_cohort <- make_units_by_cohort(n_cohorts = C, units_per_cohort = units_per_cohort)
 
   ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE, include_outcome_fes = TRUE)
@@ -212,4 +212,12 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
 
   # Soft perf sanity: multi-thread not egregiously slower than single-thread
   expect_lt(as.numeric(t2), as.numeric(t1) * 2.0 + 1.0)
+
+  # Additional runtime comparison: cohort-specific parameter estimation only (R wrapper)
+  t1_cs <- system.time(res_cs_1 <- est_cohort_specific_params(panel_obj, est_specs = est_specs, num_threads = 1L))["elapsed"]
+  t2_cs <- system.time(res_cs_n <- est_cohort_specific_params(panel_obj, est_specs = est_specs, num_threads = n_threads))["elapsed"]
+  print(sprintf("Elapsed time est_cohort_specific_params (1 thread): %f", t1_cs))
+  print(sprintf("Elapsed time est_cohort_specific_params (%d threads): %f", n_threads, t2_cs))
+  # Soft perf sanity: multi-thread not egregiously slower than single-thread
+  expect_lt(as.numeric(t2_cs), as.numeric(t1_cs) * 2.0 + 1.0)
 })
