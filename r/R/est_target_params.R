@@ -57,7 +57,10 @@ est_target_params <- function(outcome_means, fn, aux_means = NULL, suff_stats = 
 #' @export
 est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_threads = NULL,
                                        cohort_outcomes_to_mask = NULL,
-                                       est_outcome_means_via_imputation = TRUE) {
+                                       est_outcome_means_via_imputation = TRUE,
+                                       imputation_tol = NULL,
+                                       imputation_max_iters = NULL,
+                                       imputation_fixed_point_method = NULL) {
   stopifnot(inherits(panel, "UnbalancedPanel"))
   if (!is.null(bootstrap) && !inherits(bootstrap, "WeightedBootstrap")) stop("bootstrap must be a WeightedBootstrap or NULL")
   .validate_est_specs(est_specs)
@@ -75,7 +78,10 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
     bootstrap_xptr = xp,
     num_threads_in = nt,
     cohort_outcomes_to_mask_in = cohort_outcomes_to_mask,
-    est_outcome_means_via_imputation = est_outcome_means_via_imputation
+    est_outcome_means_via_imputation = est_outcome_means_via_imputation,
+    imputation_tol = imputation_tol,
+    imputation_max_iters = if (is.null(imputation_max_iters)) NULL else as.integer(imputation_max_iters),
+    imputation_fixed_point_method = imputation_fixed_point_method
   )
   out <- list(
     outcome_means = .wrap_outcome_means_xptr_list(res$outcome_means),
