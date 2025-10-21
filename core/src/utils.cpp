@@ -1,5 +1,7 @@
 #include "utils.h"
 #include <unordered_set>
+#include <algorithm>
+#include <cstdlib>
 #ifdef APM_HAS_TBB
 #include <oneapi/tbb/global_control.h>
 #include <oneapi/tbb/info.h>
@@ -48,7 +50,18 @@ ObservedOutcomeIndices get_masked_observed_outcome_indices(
 ParallelismScope::ParallelismScope(std::optional<std::size_t> num_threads)
 {
 #ifdef APM_HAS_TBB
-	nt = num_threads.has_value() ? *num_threads : oneapi::tbb::info::default_concurrency();
+	// Determine base concurrency from argument or TBB default
+	std::size_t base_nt = num_threads.has_value() ? *num_threads : oneapi::tbb::info::default_concurrency();
+	// If environment variable APM_MAX_THREADS is set to a positive integer, cap by it
+	const char* env_nt = std::getenv("APM_MAX_THREADS");
+	if (env_nt != nullptr) {
+		char* endptr = nullptr;
+		long parsed = std::strtol(env_nt, &endptr, 10);
+		if (endptr != env_nt && parsed > 0) {
+			base_nt = static_cast<std::size_t>(std::min<long>(base_nt, parsed));
+		}
+	}
+	nt = base_nt;
 	if (nt > 1) {
 		gc_ = std::make_unique<oneapi::tbb::global_control>(
 			oneapi::tbb::global_control::max_allowed_parallelism,
@@ -56,14 +69,25 @@ ParallelismScope::ParallelismScope(std::optional<std::size_t> num_threads)
 		);
 	}
 #else
-	nt = num_threads.has_value() ? *num_threads : 1;
+	// Without TBB, run serially
+	nt = 1;
 #endif
 }
 
 std::size_t get_cpp_default_concurrency() {
 #ifdef APM_HAS_TBB
+	// If APM_MAX_THREADS is set, return that cap; else TBB default
+	const char* env_nt = std::getenv("APM_MAX_THREADS");
+	if (env_nt != nullptr) {
+		char* endptr = nullptr;
+		long parsed = std::strtol(env_nt, &endptr, 10);
+		if (endptr != env_nt && parsed > 0) {
+			return static_cast<std::size_t>(parsed);
+		}
+	}
 	return oneapi::tbb::info::default_concurrency();
 #else
+	// Built without TBB: default concurrency is always 1
 	return static_cast<std::size_t>(1);
 #endif
 }
