@@ -4,13 +4,7 @@
 #include <cmath>
 #include <limits>
 
-#ifdef APM_HAS_MLPACK
-#include <mlpack/methods/kmeans/kmeans.hpp>
-#include <mlpack/methods/kmeans/kmeans_plus_plus_initialization.hpp>
-#include <mlpack/methods/kmeans/allow_empty_clusters.hpp>
-#include "outcome_clustering/weighted_kmeans_policy.h"
-#include <mlpack/prereqs.hpp>
-#endif
+// mlpack support removed
 
 namespace apm {
 
@@ -18,28 +12,9 @@ namespace {
 
 inline void seed_rng_if_requested(const std::optional<uint64_t>& seed) {
     if (!seed.has_value()) return;
-#ifdef APM_HAS_MLPACK
-#  if defined(MLPACK_VERSION_MAJOR) && (MLPACK_VERSION_MAJOR >= 3)
-    mlpack::RandomSeed(static_cast<size_t>(*seed));
-#  else
-    mlpack::math::RandomSeed(static_cast<size_t>(*seed));
-#  endif
-#else
     arma::arma_rng::set_seed(static_cast<arma::uword>(*seed));
-#endif
 }
 
-#ifdef APM_HAS_MLPACK
-using Distance = mlpack::EuclideanDistance;
-using InitPolicy = mlpack::KMeansPlusPlusInitialization;
-using EmptyPolicy = mlpack::AllowEmptyClusters;
-using KMeansType = mlpack::KMeans<Distance, InitPolicy, EmptyPolicy, apm::clustering::WeightedNaiveKMeans, arma::mat>;
-
-struct WeightsGuard {
-    explicit WeightsGuard(const arma::vec& w) { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = &w; }
-    ~WeightsGuard() { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = nullptr; }
-};
-#endif
 
 inline double weighted_sse(const arma::mat& data,
                            const arma::vec& weights,
@@ -58,7 +33,6 @@ inline double weighted_sse(const arma::mat& data,
     return sse;
 }
 
-#ifndef APM_HAS_MLPACK
 arma::mat kpp_init(const arma::mat& data, std::size_t k, std::optional<uint64_t> seed)
 {
     seed_rng_if_requested(seed);
@@ -123,25 +97,9 @@ void weighted_lloyd(const arma::mat& data,
         }
     }
 }
-#endif
 
 } // anonymous namespace
 
-#ifdef APM_HAS_MLPACK
-std::pair<double, arma::Row<size_t>> kmeans_weighted(const arma::mat& data,
-                                                            const arma::vec& weights,
-                                                            std::size_t k,
-                                                            std::optional<uint64_t> seed)
-{
-    seed_rng_if_requested(seed);
-    KMeansType kmeans;
-    WeightsGuard guard(weights);
-    arma::Row<size_t> assignments; arma::mat centers;
-    kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);
-    double sse = weighted_sse(data, weights, assignments, centers);
-    return {sse, std::move(assignments)};
-}
-#else
 std::pair<double, arma::Row<size_t>> kmeans_weighted(const arma::mat& data,
                                                             const arma::vec& weights,
                                                             std::size_t k,
@@ -160,6 +118,5 @@ std::pair<double, arma::Row<size_t>> kmeans_weighted(const arma::mat& data,
     }
     return {sse, std::move(assignments)};
 }
-#endif
 
 } // namespace apm

@@ -8,16 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Configure Armadillo as header-only
 set(ARMA_DONT_USE_WRAPPER 1)
 find_package(Armadillo REQUIRED)
-# mlpack (Homebrew provides pkg-config metadata but not CMake config)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MLPACK REQUIRED mlpack)
-add_library(mlpack INTERFACE)
-target_include_directories(mlpack INTERFACE ${MLPACK_INCLUDE_DIRS})
-target_link_libraries(mlpack INTERFACE ${MLPACK_LIBRARIES})
-target_link_directories(mlpack INTERFACE ${MLPACK_LIBRARY_DIRS})
-if(MLPACK_CFLAGS_OTHER)
-    target_compile_options(mlpack INTERFACE ${MLPACK_CFLAGS_OTHER})
-endif()
 
 # Find Boost (for Graph Library)
 find_package(Boost REQUIRED COMPONENTS graph)
@@ -57,7 +47,6 @@ target_include_directories(apm PUBLIC src)
 target_link_libraries(apm
     PUBLIC
         ${ARMADILLO_LIBRARIES}
-        mlpack
         Boost::graph
 )
 
@@ -108,6 +97,6 @@ install(TARGETS apm
     RUNTIME DESTINATION bin
 )
 
-install(FILES src/apm_core.h src/est_outcome_means.h src/agg_cohort_specific_factor_model_params.h src/summarize_identification.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/cohort_specific_param_structs.h src/OutcomeMeanSuffStatEstimator.h src/nuisance_param_estimators.h src/est_cohort_specific_params.h src/utils.h src/target_params/est_target_params.h src/panels/AbstractUnbalancedPanel.h src/panels/InMemoryUnbalancedPanel.h src/panels/CohortLevelUnbalancedPanel.h src/outcome_imputation.h src/outcome_clustering/cluster_outcomes.h src/outcome_clustering/weighted_kmeans_policy.h src/outcome_clustering/weighted_kmeans.h
+install(FILES src/apm_core.h src/est_outcome_means.h src/agg_cohort_specific_factor_model_params.h src/summarize_identification.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/cohort_specific_param_structs.h src/OutcomeMeanSuffStatEstimator.h src/nuisance_param_estimators.h src/est_cohort_specific_params.h src/utils.h src/target_params/est_target_params.h src/panels/AbstractUnbalancedPanel.h src/panels/InMemoryUnbalancedPanel.h src/panels/CohortLevelUnbalancedPanel.h src/outcome_imputation.h src/outcome_clustering/cluster_outcomes.h src/outcome_clustering/weighted_kmeans.h
     DESTINATION include/apm
 )

@@ -36,11 +36,3 @@ OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o \
            outcome_clustering_bindings.o ../../core/src/outcome_clustering/cluster_outcomes.o \
            ../../core/src/outcome_clustering/weighted_kmeans.o \
            summarize_identification_bindings.o ../../core/src/summarize_identification.o
-
-# mlpack detection with pkg-config (optional; enables accelerated KMeans if present)
-MLPACK_CFLAGS := $(shell pkg-config --cflags mlpack 2>/dev/null)
-MLPACK_LIBS   := $(shell pkg-config --libs   mlpack 2>/dev/null)
-ifneq ($(strip $(MLPACK_LIBS)),)
-  PKG_CPPFLAGS += $(MLPACK_CFLAGS) -DAPM_HAS_MLPACK=1
-  PKG_LIBS     += $(MLPACK_LIBS)
-endif
