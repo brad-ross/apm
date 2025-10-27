@@ -142,5 +142,28 @@ apm::ObservedOutcomeIndices observed_outcome_indices_from_panel_holder(SEXP pane
     return ph->panel.observed_outcome_indices();
 }
 
+apm::ImputationOptions imputation_options_from_r_list(Rcpp::Nullable<Rcpp::List> imputation_options_in) {
+    apm::ImputationOptions opts;
+    if (imputation_options_in.isNotNull()) {
+        Rcpp::List L(imputation_options_in);
+        if (L.containsElementNamed("tol")) opts.tol = Rcpp::as<double>(L["tol"]);
+        if (L.containsElementNamed("max_iters")) {
+            int mi = Rcpp::as<int>(L["max_iters"]);
+            if (mi < 0) mi = 0;
+            opts.max_iters = static_cast<std::size_t>(mi);
+        }
+        if (L.containsElementNamed("method")) {
+            std::string m = Rcpp::as<std::string>(L["method"]);
+            for (auto &ch : m) ch = static_cast<char>(::tolower(ch));
+            if (m == "none") opts.method = apm::AccelMethod::None; else opts.method = apm::AccelMethod::IronsTuck;
+        }
+        if (L.containsElementNamed("grand_period")) { int v = Rcpp::as<int>(L["grand_period"]); if (v < 0) v = 0; opts.grand_period = static_cast<std::size_t>(v); }
+        if (L.containsElementNamed("grand_k")) { int v = Rcpp::as<int>(L["grand_k"]); if (v < 0) v = 0; opts.grand_k = static_cast<std::size_t>(v); }
+        if (L.containsElementNamed("stabilize_after")) { int v = Rcpp::as<int>(L["stabilize_after"]); if (v < 0) v = 0; opts.stabilize_after = static_cast<std::size_t>(v); }
+        if (L.containsElementNamed("extra_proj")) { int v = Rcpp::as<int>(L["extra_proj"]); if (v < 0) v = 0; opts.extra_proj = static_cast<std::size_t>(v); }
+    }
+    return opts;
+}
+
 } // namespace r_utils
 } // namespace apm

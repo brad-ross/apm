@@ -21,7 +21,21 @@ namespace apm {
 
 inline constexpr double DEFAULT_TOL = 1e-12;
 inline constexpr std::size_t DEFAULT_MAX_ITERS = std::numeric_limits<std::size_t>::max();
-inline constexpr const char* DEFAULT_FP_METHOD = "irons-tuck";
+
+enum class AccelMethod {
+    None,
+    IronsTuck
+};
+
+struct ImputationOptions {
+    double tol = DEFAULT_TOL;
+    std::size_t max_iters = DEFAULT_MAX_ITERS;
+    AccelMethod method = AccelMethod::IronsTuck;
+    std::size_t grand_period = 0;   // 0 disables grand acceleration
+    std::size_t grand_k = 4;        // h(X) = f^grand_k(X)
+    std::size_t stabilize_after = 0; // 0 disables stabilization
+    std::size_t extra_proj = 0;     // extra projections before acceleration
+};
 
 // High-level orchestration that returns G, optional a, g_0, and L
 FactorModelParameters comp_imputation_components(
@@ -30,9 +44,7 @@ FactorModelParameters comp_imputation_components(
     const std::vector<OutcomeMeanSufficientStatistics>& cohort_outcome_mean_suff_stats = std::vector<OutcomeMeanSufficientStatistics>(),
     std::optional<arma::vec> unit_weights_opt = std::nullopt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
-    double tol = DEFAULT_TOL,
-    std::size_t max_iters = DEFAULT_MAX_ITERS,
-    const std::string& fixed_point_method = DEFAULT_FP_METHOD);
+    const ImputationOptions& fp = ImputationOptions());
 
 // Overload that accepts FactorModelEstimates and OutcomeMeanSuffStatEstimates, with optional parallelization
 FactorModelEstimates comp_imputation_components(
@@ -41,9 +53,7 @@ FactorModelEstimates comp_imputation_components(
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests = std::vector<OutcomeMeanSuffStatEstimates>(),
     std::shared_ptr<const WeightedBootstrap> wb = nullptr,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
-    double tol = DEFAULT_TOL,
-    std::size_t max_iters = DEFAULT_MAX_ITERS,
-    const std::string& fixed_point_method = DEFAULT_FP_METHOD,
+    const ImputationOptions& fp = ImputationOptions(),
     std::optional<std::size_t> num_threads = std::nullopt);
 
 // Map-of-estimators overload (dispatches per key)
@@ -53,9 +63,7 @@ std::unordered_map<std::string, FactorModelEstimates> comp_imputation_components
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests = std::vector<OutcomeMeanSuffStatEstimates>(),
     std::shared_ptr<const WeightedBootstrap> wb = nullptr,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt = std::nullopt,
-    double tol = DEFAULT_TOL,
-    std::size_t max_iters = DEFAULT_MAX_ITERS,
-    const std::string& fixed_point_method = DEFAULT_FP_METHOD,
+    const ImputationOptions& fp = ImputationOptions(),
     std::optional<std::size_t> num_threads = std::nullopt);
 
 } // namespace apm

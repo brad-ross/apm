@@ -225,9 +225,7 @@ Rcpp::List est_target_param_components_from_panel_cpp(
     Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue,
     Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue,
     bool est_outcome_means_via_imputation = true,
-    Rcpp::Nullable<Rcpp::NumericVector> imputation_tol_in = R_NilValue,
-    Rcpp::Nullable<Rcpp::IntegerVector> imputation_max_iters_in = R_NilValue,
-    Rcpp::Nullable<Rcpp::String> imputation_fixed_point_method_in = R_NilValue)
+    Rcpp::Nullable<Rcpp::List> imputation_options_in = R_NilValue)
 {
     const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
     auto cpp_specs = apm::r_utils::to_cpp_specs(est_specs);
@@ -238,28 +236,10 @@ Rcpp::List est_target_param_components_from_panel_cpp(
     }
     apm::CohortOutcomeMask mask = apm::r_utils::to_cpp_mask(cohort_outcomes_to_mask_in);
 
-    double tol = apm::DEFAULT_TOL;
-    if (imputation_tol_in.isNotNull()) {
-        Rcpp::NumericVector v(imputation_tol_in);
-        if (v.size() > 0) tol = static_cast<double>(v[0]);
-    }
-    std::size_t max_iters = apm::DEFAULT_MAX_ITERS;
-    if (imputation_max_iters_in.isNotNull()) {
-        Rcpp::IntegerVector iv(imputation_max_iters_in);
-        if (iv.size() > 0) {
-            int mi = iv[0];
-            if (mi < 0) mi = 0;
-            max_iters = static_cast<std::size_t>(mi);
-        }
-    }
-    std::string fixed_point_method = apm::DEFAULT_FP_METHOD;
-    if (imputation_fixed_point_method_in.isNotNull()) {
-        Rcpp::String s = Rcpp::String(imputation_fixed_point_method_in.get());
-        fixed_point_method = std::string(s.get_cstring());
-    }
+    apm::ImputationOptions imputation_opts = apm::r_utils::imputation_options_from_r_list(imputation_options_in);
 
     apm::TargetParamComponents comps = apm::est_target_param_components_from_panel(
-        panel, cpp_specs, wb, nt_opt, mask, est_outcome_means_via_imputation, tol, max_iters, fixed_point_method);
+        panel, cpp_specs, wb, nt_opt, mask, est_outcome_means_via_imputation, imputation_opts);
 
     Rcpp::List ome_out(static_cast<int>(comps.outcome_means_by_spec.size()));
     Rcpp::CharacterVector names(static_cast<int>(comps.outcome_means_by_spec.size()));

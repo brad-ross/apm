@@ -150,9 +150,7 @@ TargetParamComponents est_target_param_components_from_panel(
     std::optional<std::size_t> num_threads,
     const CohortOutcomeMask& cohort_outcomes_to_mask,
     bool est_outcome_means_via_imputation,
-    double imputation_tol,
-    std::size_t imputation_max_iters,
-    const std::string& imputation_fixed_point_method)
+    const ImputationOptions& imputation_opts)
 {
     // 1) Cohort-specific estimates (raw C++) via panel-based core
     CohortSpecificEstimates ests = estimate_cohort_specific_params_from_internal_panel_rep(
@@ -184,9 +182,7 @@ TargetParamComponents est_target_param_components_from_panel(
             ests.cohort_outcome_mean_ests,
             bootstrap,
             std::optional<ObservedOutcomeIndices>{obs_idx_eff},
-            imputation_tol,
-            imputation_max_iters,
-            imputation_fixed_point_method,
+            imputation_opts,
             num_threads);
     }
 

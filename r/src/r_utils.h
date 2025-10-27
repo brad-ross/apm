@@ -3,6 +3,7 @@
 
 #include <RcppArmadillo.h>
 #include "../../core/src/utils.h" // ObservedOutcomeIndices
+#include "../../core/src/outcome_imputation.h" // ImputationOptions, AccelMethod
 #include "../../core/src/cohort_specific_param_structs.h" // OutcomeMeanSufficientStatistics
 #include "../../core/src/est_cohort_specific_params.h" // EstimatorSpecification, CohortOutcomeMask
 #include "../../core/src/panels/InMemoryUnbalancedPanel.h" // InMemoryUnbalancedPanel
@@ -48,6 +49,12 @@ apm::CohortOutcomeMask to_cpp_mask(Rcpp::Nullable<Rcpp::List> mask_in);
 
 // Resolve num_threads optional parameter (returns optional value flag and size)
 std::pair<bool, std::size_t> resolve_num_threads(Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in);
+
+// Parse ImputationOptions from an optional R list with fields:
+// tol (double), max_iters (int), method (string: "irons-tuck" or "none"),
+// grand_period (int), grand_k (int), stabilize_after (int), extra_proj (int).
+// Missing fields keep defaults from ImputationOptions().
+apm::ImputationOptions imputation_options_from_r_list(Rcpp::Nullable<Rcpp::List> imputation_options_in);
 
 // OutcomeMeanSuffStatEstimates helpers
 // Convert a nullable R list of XPtr<OutcomeMeanSuffStatEstimates> to a C++ vector

@@ -10,9 +10,9 @@
 #' @param weighted_bootstrap optional WeightedBootstrap R6 instance providing unit weights per bootstrap draw
 #' @param effective_observed_outcome_indices optional list of 1-based outcome indices to override panel
 #' @param num_threads optional integer, number of threads for internal parallel sections
-#' @param tol numeric tolerance for fixed-point iterations
-#' @param max_iters integer max iterations for fixed-point iterations
-#' @param fixed_point_method string, e.g. "irons-tuck"
+#' @param imputation_options optional named list mirroring ImputationOptions fields:
+#'   tol, max_iters, method ("irons-tuck" or "none"), grand_period, grand_k,
+#'   stabilize_after, extra_proj
 #' @export
 comp_imputation_components <- function(panel,
                                        factor_model_estimates,
@@ -20,9 +20,7 @@ comp_imputation_components <- function(panel,
                                        weighted_bootstrap = NULL,
                                        effective_observed_outcome_indices = NULL,
                                        num_threads = NULL,
-                                       tol = NULL,
-                                       max_iters = NULL,
-                                       fixed_point_method = NULL) {
+                                       imputation_options = NULL) {
   stopifnot(inherits(panel, "UnbalancedPanel"))
   holder_xp <- panel$get_panel_holder_xptr()
   nt <- if (is.null(num_threads)) NULL else as.integer(num_threads)
@@ -35,9 +33,7 @@ comp_imputation_components <- function(panel,
       cohort_outcome_mean_suff_stat_ests = xplist,
       weighted_bootstrap_xptr = if (is.null(weighted_bootstrap)) NULL else weighted_bootstrap$.__enclos_env__$private$xp,
       effective_observed_outcome_indices = effective_observed_outcome_indices,
-      tol_in = tol,
-      max_iters_in = if (is.null(max_iters)) NULL else as.integer(max_iters),
-      fixed_point_method_in = fixed_point_method,
+      imputation_options_in = imputation_options,
       num_threads_in = nt
     )
     return(FactorModelEstimates$new(xp_res))
@@ -58,9 +54,7 @@ comp_imputation_components <- function(panel,
       cohort_outcome_mean_suff_stat_ests = xplist,
       weighted_bootstrap_xptr = if (is.null(weighted_bootstrap)) NULL else weighted_bootstrap$.__enclos_env__$private$xp,
       effective_observed_outcome_indices = effective_observed_outcome_indices,
-      tol_in = tol,
-      max_iters_in = if (is.null(max_iters)) NULL else as.integer(max_iters),
-      fixed_point_method_in = fixed_point_method,
+      imputation_options_in = imputation_options,
       num_threads_in = nt
     )
     nms <- names(res)

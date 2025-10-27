@@ -84,9 +84,7 @@ TargetParamComponents est_target_param_components_from_panel(
     std::optional<std::size_t> num_threads = std::nullopt,
     const CohortOutcomeMask& cohort_outcomes_to_mask = CohortOutcomeMask(),
     bool est_outcome_means_via_imputation = true,
-    double imputation_tol = DEFAULT_TOL,
-    std::size_t imputation_max_iters = DEFAULT_MAX_ITERS,
-    const std::string& imputation_fixed_point_method = DEFAULT_FP_METHOD);
+    const ImputationOptions& imputation_opts = ImputationOptions());
 
 // Bootstrap-based inference for target parameters
 SimultaneousInferenceResults target_param_inference(

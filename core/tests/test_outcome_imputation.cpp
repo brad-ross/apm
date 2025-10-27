@@ -71,7 +71,8 @@ TEST(OutcomeImputationTest, FixedPoint_Vanilla_RecoversLambdaAndG0_NoCovariates)
 	auto var = apm::VariableSpec::outcome();
 
     // Run fixed-point via generalized API; only need g0, no lambda
-    arma::vec g0_est = apm::internal::comp_outcome_specific_params_fixed_point(panel, var, fmp, std::nullopt, std::nullopt, apm::DEFAULT_TOL, apm::DEFAULT_MAX_ITERS, "vanilla");
+    apm::ImputationOptions fp; fp.method = apm::AccelMethod::None;
+    arma::vec g0_est = apm::internal::comp_outcome_specific_params_fixed_point(panel, var, fmp, std::nullopt, std::nullopt, fp);
     
     arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
     
@@ -94,7 +95,8 @@ TEST(OutcomeImputationTest, FixedPoint_IronsTuck_RecoversLambdaAndG0_NoCovariate
     auto var = apm::VariableSpec::outcome();
 
     // Run Irons-Tuck fixed-point (returns g0). Expect orthogonal projection of g0_true
-    arma::vec g0_est = apm::internal::comp_outcome_specific_params_fixed_point(panel, var, fmp, std::nullopt, std::nullopt, apm::DEFAULT_TOL, apm::DEFAULT_MAX_ITERS, "irons-tuck");
+    apm::ImputationOptions fp; fp.method = apm::AccelMethod::IronsTuck;
+    arma::vec g0_est = apm::internal::comp_outcome_specific_params_fixed_point(panel, var, fmp, std::nullopt, std::nullopt, fp);
 
     arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
 
