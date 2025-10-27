@@ -528,10 +528,6 @@ FactorModelParameters comp_imputation_components(
     }
 }
 
-} // namespace apm
-
-namespace apm {
-
 FactorModelEstimates comp_imputation_components(
     const InMemoryUnbalancedPanel& panel,
     const FactorModelEstimates& factor_model_ests,

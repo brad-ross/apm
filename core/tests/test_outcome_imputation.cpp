@@ -151,12 +151,13 @@ TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_WithFixedEffects) {
 
     // Compute FE vectors via fixed-point
     auto var_y = apm::VariableSpec::outcome();
-    arma::vec g0_init = apm::internal::comp_outcome_specific_params_fixed_point(panel, var_y, fmp, std::nullopt);
+    apm::ImputationOptions fp; fp.method = apm::AccelMethod::None;
+    arma::vec g0_init = apm::internal::comp_outcome_specific_params_fixed_point(panel, var_y, fmp, std::nullopt, std::nullopt, fp);
 
     std::vector<arma::vec> g0_init_covars(static_cast<std::size_t>(ctx.q));
     for (std::size_t j = 0; j < static_cast<std::size_t>(ctx.q); ++j) {
         auto var_xj = apm::VariableSpec::covariate(j);
-        g0_init_covars[j] = apm::internal::comp_outcome_specific_params_fixed_point(panel, var_xj, fmp, std::nullopt);
+        g0_init_covars[j] = apm::internal::comp_outcome_specific_params_fixed_point(panel, var_xj, fmp, std::nullopt, std::nullopt, fp);
     }
 
     // Estimate alpha with FE residualization
