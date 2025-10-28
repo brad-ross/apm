@@ -63,3 +63,33 @@ TEST(LinearAlgebraUtilsTest, MinNormSolveUnderdetermined) {
     ASSERT_TRUE(arma::approx_equal(X.t() * null_space_basis, 
         arma::zeros(X.n_cols, null_space_basis.n_cols), "absdiff", 1e-9));
 } 
+
+static arma::mat make_hilbert_like(arma::uword m, arma::uword n){
+    arma::mat A(m,n);
+    for (arma::uword i=0;i<m;++i) {
+        for (arma::uword j=0;j<n;++j) {
+            A(i,j) = 1.0 / static_cast<double>(i + j + 1);
+        }
+    }
+    return A;
+}
+
+TEST(LSMR, OverdeterminedMatchesPinvDeterministic) {
+    const arma::uword m=50, n=10;
+    arma::mat A = make_hilbert_like(m,n);
+    arma::vec x_true(n);
+    for (arma::uword j=0;j<n;++j) x_true[j] = static_cast<double>(j+1);
+    arma::vec b = A * x_true;
+
+    apm::internal::LinearOperator Op{
+        n, m,
+        [&](const arma::vec& x, arma::vec& y){ y = A*x; },
+        [&](const arma::vec& y, arma::vec& z){ z = A.t()*y; }
+    };
+    apm::internal::LSMROptions opts; opts.atol=1e-16; opts.btol=1e-16; opts.max_iters=2000; opts.lambda=0.0;
+    auto res = apm::internal::lsmr(Op, b, opts);
+
+    arma::vec x_pinv = arma::pinv(A) * b;
+    double rel_err = arma::norm(res.x - x_pinv)/std::max(1.0, arma::norm(x_pinv));
+    ASSERT_LT(rel_err, 1e-6);
+}
