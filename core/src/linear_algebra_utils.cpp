@@ -69,12 +69,12 @@ arma::vec hutchinson_column_norms(const LinearOperator& A, std::size_t K, double
 
 std::pair<LinearOperator, arma::vec> make_column_scaled_operator(
     const LinearOperator& A,
-    bool exact_col_scaling,
-    std::optional<std::size_t> K,
+    std::size_t num_diag_approx_draws,
     double eps)
 {
-    arma::vec d = exact_col_scaling ? exact_column_norms(A, eps)
-                                    : hutchinson_column_norms(A, K.value_or(16), eps);
+    arma::vec d = (num_diag_approx_draws == 0)
+        ? exact_column_norms(A, eps)
+        : hutchinson_column_norms(A, num_diag_approx_draws, eps);
 
     LinearOperator S;
     S.domain_dim = A.domain_dim;
@@ -316,14 +316,14 @@ LSMRResult lsmr(const LinearOperator& A,
                 const LSMROptions& o,
                 std::optional<arma::vec> x0,
                 bool diagonal_precond,
-                bool exact_col_scaling,
-                std::optional<std::size_t> K,
+                std::size_t num_diag_approx_draws,
                 std::size_t homotopy_iters)
 {
+    std::cout << "using LSMR!" << std::endl;
     LinearOperator Ao = A;
     arma::vec d; // column scaling for preconditioned coordinates
     if (diagonal_precond) {
-        auto pair = make_column_scaled_operator(A, exact_col_scaling, K);
+        auto pair = make_column_scaled_operator(A, num_diag_approx_draws);
         Ao = pair.first;
         d  = std::move(pair.second);
     }

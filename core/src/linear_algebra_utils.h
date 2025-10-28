@@ -87,13 +87,12 @@ arma::vec exact_column_norms(const LinearOperator& A, double eps = 1e-12);
 arma::vec hutchinson_column_norms(const LinearOperator& A, std::size_t K = 16, double eps = 1e-12);
 
 // Build a column-scaled operator by computing d internally.
-// - If exact_col_scaling == true: use exact_column_norms(A, eps)
-// - Else: use hutchinson_column_norms(A, K.value_or(16), eps)
+// - If num_diag_approx_draws == 0: use exact_column_norms(A, eps)
+// - Else: use hutchinson_column_norms(A, num_diag_approx_draws, eps)
 // Returns the scaled operator and the scaling vector d (needed to unscale x).
 std::pair<LinearOperator, arma::vec> make_column_scaled_operator(
     const LinearOperator& A,
-    bool exact_col_scaling = true,
-    std::optional<std::size_t> K = std::nullopt,
+    std::size_t num_diag_approx_draws = 0,
     double eps = 1e-12);
 
 LSMRResult lsmr(const LinearOperator& A,
@@ -101,8 +100,7 @@ LSMRResult lsmr(const LinearOperator& A,
                 const LSMROptions& opts,
                 std::optional<arma::vec> x0 = std::nullopt,
                 bool diagonal_precond = false,
-                bool exact_col_scaling = true,
-                std::optional<std::size_t> K = std::nullopt,
+                std::size_t num_diag_approx_draws = 0,
                 std::size_t homotopy_iters = 0);
 
 } // namespace internal

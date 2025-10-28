@@ -87,7 +87,7 @@ TEST(LSMR, OverdeterminedMatchesPinvDeterministic) {
         [&](const arma::vec& y, arma::vec& z){ z = A.t()*y; }
     };
     apm::internal::LSMROptions opts; opts.atol=1e-16; opts.btol=1e-16; opts.max_iters=2000; opts.lambda=0.0;
-    auto res = apm::internal::lsmr(Op, b, opts, std::nullopt, true, true);
+    auto res = apm::internal::lsmr(Op, b, opts, std::nullopt, true);
 
     arma::vec x_pinv = arma::pinv(A) * b;
     double rel_err = arma::norm(res.x - x_pinv)/std::max(1.0, arma::norm(x_pinv));
