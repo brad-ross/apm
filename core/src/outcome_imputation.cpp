@@ -417,11 +417,13 @@ static std::pair<std::optional<arma::vec>, std::optional<arma::mat>> comp_unit_a
 
     // Solve for z with LSMR
     apm::internal::LSMROptions lopts;
-    lopts.atol = 1e-6;
-    lopts.btol = 1e-6;
-    lopts.conlim = 1e+8;
-    lopts.max_iters = fp.max_iters == std::numeric_limits<std::size_t>::max() ? static_cast<std::size_t>(2 * (T + d)) : fp.max_iters;
-    lopts.lambda = 0.0;
+    lopts.atol = fp.lsmr_atol;
+    lopts.btol = fp.lsmr_btol;
+    lopts.conlim = fp.lsmr_conlim;
+    lopts.max_iters = (fp.lsmr_max_iters > 0)
+        ? fp.lsmr_max_iters
+        : (fp.max_iters == std::numeric_limits<std::size_t>::max() ? static_cast<std::size_t>(2 * (T + d)) : fp.max_iters);
+    lopts.lambda = fp.lsmr_lambda;
 
     apm::internal::LSMRResult lres = apm::internal::lsmr(
         Aop,

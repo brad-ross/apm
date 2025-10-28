@@ -45,6 +45,12 @@ struct ImputationOptions {
     bool lsmr_diagonal_precond = false; // enable diagonal preconditioning
 	std::size_t lsmr_num_diag_approx_draws = 0; // 0 = exact; >0 uses Hutchinson with this many draws
 	std::size_t lsmr_homotopy_iters = 0; // number of homotopy iterations (0 disables)
+    // LSMR solver tolerance/limits (fed into internal LSMROptions)
+    double lsmr_atol = 1e-6;      // relative tol on ||A^T r|| (default preserves prior behavior)
+    double lsmr_btol = 1e-6;      // relative tol on ||r||
+    double lsmr_conlim = 1e+8;    // condition limit
+    std::size_t lsmr_max_iters = 0; // 0 = auto (use 2*(T + dim)), >0 overrides
+    double lsmr_lambda = 0.0;     // Tikhonov damping; 0 disables
 };
 
 // High-level orchestration that returns G, optional a, g_0, and L

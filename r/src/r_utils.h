@@ -52,7 +52,11 @@ std::pair<bool, std::size_t> resolve_num_threads(Rcpp::Nullable<Rcpp::IntegerVec
 
 // Parse ImputationOptions from an optional R list with fields:
 // tol (double), max_iters (int), method (string: "irons-tuck" or "none"),
-// grand_period (int), grand_k (int), stabilize_after (int), extra_proj (int).
+// grand_period (int), grand_k (int), stabilize_after (int), extra_proj (int),
+// solver (string: "fixed-point" or "lsmr"),
+// lsmr_diagonal_precond (bool), lsmr_num_diag_approx_draws (int >= 0),
+// lsmr_homotopy_iters (int >= 0), lsmr_atol (double), lsmr_btol (double),
+// lsmr_conlim (double), lsmr_max_iters (int >= 0), lsmr_lambda (double).
 // Missing fields keep defaults from ImputationOptions().
 apm::ImputationOptions imputation_options_from_r_list(Rcpp::Nullable<Rcpp::List> imputation_options_in);
 

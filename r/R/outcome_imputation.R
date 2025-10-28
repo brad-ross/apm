@@ -12,7 +12,9 @@
 #' @param num_threads optional integer, number of threads for internal parallel sections
 #' @param imputation_options optional named list mirroring ImputationOptions fields:
 #'   tol, max_iters, method ("irons-tuck" or "none"), grand_period, grand_k,
-#'   stabilize_after, extra_proj
+#'   stabilize_after, extra_proj, solver ("fixed-point" or "lsmr"),
+#'   lsmr_diagonal_precond, lsmr_num_diag_approx_draws, lsmr_homotopy_iters,
+#'   lsmr_atol, lsmr_btol, lsmr_conlim, lsmr_max_iters, lsmr_lambda
 #' @export
 comp_imputation_components <- function(panel,
                                        factor_model_estimates,
