@@ -65,8 +65,8 @@ struct LinearOperator {
 };
 
 struct LSMROptions {
-    double atol = 1e-6;        // relative tol on ||A^T r||
-    double btol = 1e-6;        // relative tol on ||r||
+    double atol = 1e-12;        // relative tol on ||A^T r||
+    double btol = 1e-12;        // relative tol on ||r||
     double conlim = 1e+8;      // condition limit
     std::size_t max_iters = std::numeric_limits<std::size_t>::max();
     double lambda = 0.0;       // Tikhonov damping; 0 disables
@@ -82,10 +82,28 @@ struct LSMRResult {
     int flag;                  // 0=converged, 1=conlim, 2=maxit, 3=breakdown
 };
 
+// Column norm estimators for matrix-free operators
+arma::vec exact_column_norms(const LinearOperator& A, double eps = 1e-12);
+arma::vec hutchinson_column_norms(const LinearOperator& A, std::size_t K = 16, double eps = 1e-12);
+
+// Build a column-scaled operator by computing d internally.
+// - If exact_col_scaling == true: use exact_column_norms(A, eps)
+// - Else: use hutchinson_column_norms(A, K.value_or(16), eps)
+// Returns the scaled operator and the scaling vector d (needed to unscale x).
+std::pair<LinearOperator, arma::vec> make_column_scaled_operator(
+    const LinearOperator& A,
+    bool exact_col_scaling = true,
+    std::optional<std::size_t> K = std::nullopt,
+    double eps = 1e-12);
+
 LSMRResult lsmr(const LinearOperator& A,
                 const arma::vec& b,
                 const LSMROptions& opts,
-                std::optional<arma::vec> x0 = std::nullopt);
+                std::optional<arma::vec> x0 = std::nullopt,
+                bool diagonal_precond = false,
+                bool exact_col_scaling = true,
+                std::optional<std::size_t> K = std::nullopt,
+                std::size_t homotopy_iters = 0);
 
 } // namespace internal
 
