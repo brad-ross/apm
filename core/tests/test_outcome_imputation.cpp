@@ -24,7 +24,7 @@ TEST(OutcomeImputationTest, OutcomeSpecificParams_NestedLambda_NoCovariates) {
 	auto var = apm::VariableSpec::outcome();
 
 	// Using generalized API with both g_0_prev provided and storing unit params (lambda)
-	auto res = apm::internal::comp_unit_and_outcome_specific_params(
+	auto res = apm::internal::get_unit_and_outcome_specific_params(
 		std::optional<arma::vec>(ctx.g0_true),
 		panel,
 		var,
@@ -54,6 +54,45 @@ TEST(OutcomeImputationTest, OutcomeSpecificParams_NestedLambda_NoCovariates) {
 		L_exp.row(u) = ctx.l_unit[static_cast<std::size_t>(u)].t(); // + gamma.t();
 	}
 	EXPECT_TRUE(arma::approx_equal(L, L_exp, "absdiff", 1e-8));
+}
+
+TEST(OutcomeImputationTest, OutcomeSpecificParams_NestedLambda_NoCovariates_LSMR) {
+	// Context and raw panel without covariates; include fixed effects in data generation
+	auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/3, /*q=*/0, /*with_covariates=*/false, /*with_fixed_effects=*/true);
+	auto rp = make_raw_panel(ctx);
+
+	std::vector<const double*> covar_cols;      // q = 0
+	std::vector<const double*> auxiliary_cols;  // d = 0
+	apm::InMemoryUnbalancedPanel panel(
+		rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+		covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+	// Signal FE present via FactorModelParameters; select LSMR solver
+	apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true /*FE present*/);
+	auto var = apm::VariableSpec::outcome();
+
+	apm::ImputationOptions fp; fp.solver = apm::ImputationSolver::LSMR;
+	apm::FactorModelParameters out = apm::comp_imputation_components(
+		panel, fmp, /*cohort_outcome_mean_suff_stats=*/{}, std::nullopt, std::nullopt, fp);
+
+	// g0 equals orthogonal projection of true g0 onto complement of span(G)
+	ASSERT_TRUE(out.g_0.has_value());
+	arma::vec g0_est = *out.g_0;
+	arma::vec g0_exp = ctx.g0_true - ctx.G_true * apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+	EXPECT_TRUE(arma::approx_equal(g0_est, g0_exp, "absdiff", 1e-8));
+
+	// Lambda returned with expected dimensions and values (shifted by gamma due to projection)
+	ASSERT_TRUE(out.L.has_value());
+	const arma::mat& L = *out.L;
+	EXPECT_EQ(static_cast<std::size_t>(L.n_rows), panel.num_units());
+	EXPECT_EQ(static_cast<std::size_t>(L.n_cols), static_cast<std::size_t>(ctx.G_true.n_cols));
+	EXPECT_TRUE(L.is_finite());
+
+	arma::vec gamma = apm::internal::min_norm_solve(ctx.G_true, ctx.g0_true);
+	for (arma::uword u = 0; u < L.n_rows; ++u) {
+		arma::rowvec L_exp = ctx.l_unit[static_cast<std::size_t>(u)].t() + gamma.t();
+		EXPECT_TRUE(arma::approx_equal(L.row(u), L_exp, "absdiff", 1e-8));
+	}
 }
 
 TEST(OutcomeImputationTest, FixedPoint_Vanilla_RecoversLambdaAndG0_NoCovariates) {
@@ -167,6 +206,36 @@ TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_WithFixedEffects) {
     EXPECT_TRUE(alpha.is_finite());
     ASSERT_EQ(static_cast<std::size_t>(ctx.a_true.n_elem), static_cast<std::size_t>(ctx.q));
     EXPECT_TRUE(arma::approx_equal(alpha, ctx.a_true, "absdiff", 1e-5));
+}
+
+TEST(OutcomeImputationTest, CompCovarCoefs_RecoversAlpha_WithFixedEffects_LSMR) {
+	// Context with covariates and fixed effects included in data generation
+	auto ctx = make_staircase_panel_context(/*T=*/7, /*r=*/2, /*T_c=*/3, /*units_per=*/5, /*q=*/2, /*with_covariates=*/true, /*with_fixed_effects=*/true);
+	auto rp = make_raw_panel(ctx);
+
+	// Build panel with covariate columns
+	std::vector<const double*> covar_cols;
+	covar_cols.push_back(rp.cov1.data());
+	covar_cols.push_back(rp.cov2.data());
+	std::vector<const double*> auxiliary_cols; // none
+
+	apm::InMemoryUnbalancedPanel panel(
+		rp.unit_idx.data(), rp.cohort_id.data(), rp.outcome_idx.data(), rp.y.data(),
+		covar_cols, auxiliary_cols, rp.y.size(), ctx.observed_outcome_indices, /*one_indexed=*/false);
+
+	// Signal presence of FE and covariates via FactorModelParameters
+	arma::vec a_dim(static_cast<arma::uword>(ctx.q), arma::fill::zeros);
+	apm::FactorModelParameters fmp(ctx.G_true, ctx.g0_true, a_dim);
+
+	// Use LSMR solver in the overall imputation pipeline, which internally
+	// computes alpha via comp_covar_coefs with FE residualization
+	apm::ImputationOptions fp; fp.solver = apm::ImputationSolver::LSMR;
+	apm::FactorModelParameters out = apm::comp_imputation_components(panel, fmp, /*cohort_outcome_mean_suff_stats=*/{}, std::nullopt, std::nullopt, fp);
+
+	// Check alpha recovered
+	ASSERT_TRUE(out.a.has_value());
+	ASSERT_EQ(static_cast<std::size_t>(out.a->n_elem), static_cast<std::size_t>(ctx.q));
+	EXPECT_TRUE(arma::approx_equal(*out.a, ctx.a_true, "absdiff", 1e-5));
 }
 
 TEST(OutcomeImputationTest, ImputationComponents_CovarsAndFixedEffects) {
