@@ -27,6 +27,11 @@ enum class AccelMethod {
     IronsTuck
 };
 
+enum class ImputationSolver {
+    FixedPoint,
+    LSMR
+};
+
 struct ImputationOptions {
     double tol = DEFAULT_TOL;
     std::size_t max_iters = DEFAULT_MAX_ITERS;
@@ -35,6 +40,11 @@ struct ImputationOptions {
     std::size_t grand_k = 4;        // h(X) = f^grand_k(X)
     std::size_t stabilize_after = 0; // 0 disables stabilization
     std::size_t extra_proj = 0;     // extra projections before acceleration
+    ImputationSolver solver = ImputationSolver::FixedPoint; // LSMR or FixedPoint
+    // LSMR-specific options
+    bool lsmr_diagonal_precond = false; // enable diagonal preconditioning
+	std::size_t lsmr_num_diag_approx_draws = 0; // 0 = exact; >0 uses Hutchinson with this many draws
+	std::size_t lsmr_homotopy_iters = 0; // number of homotopy iterations (0 disables)
 };
 
 // High-level orchestration that returns G, optional a, g_0, and L
