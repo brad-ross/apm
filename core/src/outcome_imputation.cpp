@@ -434,6 +434,20 @@ static std::pair<std::optional<arma::vec>, std::optional<arma::mat>> comp_unit_a
         /*num_diag_approx_draws=*/fp.lsmr_num_diag_approx_draws,
         /*homotopy_iters=*/fp.lsmr_homotopy_iters);
 
+    if (lres.flag == 2) {
+        std::cerr << "Warning: comp_unit_and_outcome_specific_params_lsmr reached the maximum number of iterations ("
+                  << lopts.max_iters << "). Residual norms: ||r||=" << lres.rnorm
+                  << ", ||A^T r||=" << lres.arnorm << std::endl;
+    }
+    if (lres.flag == 1) {
+        std::cerr << "Warning: comp_unit_and_outcome_specific_params_lsmr reached the condition number limit (conlim="
+                  << lopts.conlim << "). Estimated cond(A)=" << lres.acond
+                  << ". Residual norms: ||r||=" << lres.rnorm
+                  << ", ||A^T r||=" << lres.arnorm
+                  << ", iters=" << lres.iters
+                  << std::endl;
+    }
+
     arma::vec g0 = N * lres.x;
     // Re-orthogonalize for numerical stability
     g0 -= G * ::apm::internal::min_norm_solve(G, g0);

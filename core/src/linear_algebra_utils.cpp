@@ -293,10 +293,9 @@ LSMRResult lsmr_core(const LinearOperator& A,
         if (1.0 + test2 <= 1.0) istop = 5;
         if (1.0 + t1 <= 1.0) istop = 4;
         if (test3 <= ctol) istop = 3;
-        // Require both tests to pass to ensure approach to min-norm solution
         bool ok2 = (test2 <= o.atol);
         bool ok1 = (test1 <= rtol);
-        if (ok1 && ok2) istop = 1;
+        if (ok1 || ok2) istop = 1;
 
         if (istop > 0) break;
     }
