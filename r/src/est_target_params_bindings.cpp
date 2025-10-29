@@ -10,6 +10,7 @@
 #include "../../core/src/panels/InMemoryUnbalancedPanel.h"
 #include "../../core/src/cohort_specific_param_structs.h"
 #include "cohort_specific_estimates_helpers.h"
+#include "../../core/src/outcome_imputation.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
@@ -223,7 +224,8 @@ Rcpp::List est_target_param_components_from_panel_cpp(
     SEXP bootstrap_xptr = R_NilValue,
     Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue,
     Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue,
-    bool est_outcome_means_via_imputation = true)
+    bool est_outcome_means_via_imputation = true,
+    Rcpp::Nullable<Rcpp::List> imputation_options_in = R_NilValue)
 {
     const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
     auto cpp_specs = apm::r_utils::to_cpp_specs(est_specs);
@@ -234,8 +236,10 @@ Rcpp::List est_target_param_components_from_panel_cpp(
     }
     apm::CohortOutcomeMask mask = apm::r_utils::to_cpp_mask(cohort_outcomes_to_mask_in);
 
+    apm::ImputationOptions imputation_opts = apm::r_utils::imputation_options_from_r_list(imputation_options_in);
+
     apm::TargetParamComponents comps = apm::est_target_param_components_from_panel(
-        panel, cpp_specs, wb, nt_opt, mask, est_outcome_means_via_imputation);
+        panel, cpp_specs, wb, nt_opt, mask, est_outcome_means_via_imputation, imputation_opts);
 
     Rcpp::List ome_out(static_cast<int>(comps.outcome_means_by_spec.size()));
     Rcpp::CharacterVector names(static_cast<int>(comps.outcome_means_by_spec.size()));

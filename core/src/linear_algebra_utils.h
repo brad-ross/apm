@@ -6,6 +6,9 @@
 #else
 #include <armadillo>
 #endif
+#include <functional>
+#include <optional>
+#include <limits>
 
 namespace apm {
 namespace internal {
@@ -49,6 +52,56 @@ arma::mat multi_min_norm_solve(const arma::mat& A, const arma::mat& B);
  * @return The minimum-frobenius norm solution vector X.
  */
 arma::vec min_norm_solve(const arma::mat& A, const arma::vec& b);
+
+// ------------------------------------------------------------
+// Matrix-free LSMR (Fong & Saunders) linear least-squares solver
+// ------------------------------------------------------------
+
+struct LinearOperator {
+    arma::uword domain_dim;   // n
+    arma::uword range_dim;    // m
+    std::function<void(const arma::vec&, arma::vec&)> apply;           // y = A x
+    std::function<void(const arma::vec&, arma::vec&)> apply_transpose; // z = A^T y
+};
+
+struct LSMROptions {
+    double atol = 1e-12;        // relative tol on ||A^T r||
+    double btol = 1e-12;        // relative tol on ||r||
+    double conlim = 1e+8;      // condition limit
+    std::size_t max_iters = std::numeric_limits<std::size_t>::max();
+    double lambda = 0.0;       // Tikhonov damping; 0 disables
+};
+
+struct LSMRResult {
+    arma::vec x;               // solution
+    std::size_t iters;         // iterations used
+    double rnorm;              // ||r||_2
+    double arnorm;             // ||A^T r||_2
+    double anorm;              // ||A|| estimate
+    double acond;              // cond(A) estimate
+    int flag;                  // 0=converged, 1=conlim, 2=maxit, 3=breakdown
+};
+
+// Column norm estimators for matrix-free operators
+arma::vec exact_column_norms(const LinearOperator& A, double eps = 1e-12);
+arma::vec hutchinson_column_norms(const LinearOperator& A, std::size_t K = 16, double eps = 1e-12);
+
+// Build a column-scaled operator by computing d internally.
+// - If num_diag_approx_draws == 0: use exact_column_norms(A, eps)
+// - Else: use hutchinson_column_norms(A, num_diag_approx_draws, eps)
+// Returns the scaled operator and the scaling vector d (needed to unscale x).
+std::pair<LinearOperator, arma::vec> make_column_scaled_operator(
+    const LinearOperator& A,
+    std::size_t num_diag_approx_draws = 0,
+    double eps = 1e-12);
+
+LSMRResult lsmr(const LinearOperator& A,
+                const arma::vec& b,
+                const LSMROptions& opts,
+                std::optional<arma::vec> x0 = std::nullopt,
+                bool diagonal_precond = false,
+                std::size_t num_diag_approx_draws = 0,
+                std::size_t homotopy_iters = 0);
 
 } // namespace internal
 

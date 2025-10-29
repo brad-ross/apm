@@ -4,9 +4,7 @@
 
 #include <cstddef>
 #include <utility>
-#include <unordered_map>
 #include <optional>
-#include <cstdint>
 
 #ifdef USING_R
 #include <RcppArmadillo.h>

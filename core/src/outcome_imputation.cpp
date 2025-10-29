@@ -61,7 +61,7 @@ arma::vec comp_lambda_i(const arma::mat& G_c, const arma::vec& w_i)
 
 } // namespace internal
 
-std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::comp_unit_and_outcome_specific_params(
+std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::get_unit_and_outcome_specific_params(
     std::optional<arma::vec> g_0_prev_opt,
     const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
@@ -171,7 +171,7 @@ std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::com
     }
 }
 
-arma::vec apm::internal::comp_outcome_specific_params(
+arma::vec apm::internal::get_outcome_specific_params(
     const arma::vec& g_0_prev,
     const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
@@ -180,60 +180,23 @@ arma::vec apm::internal::comp_outcome_specific_params(
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
     std::optional<arma::vec> covar_coefs_for_residualization)
 {
-    auto res = apm::internal::comp_unit_and_outcome_specific_params(
+    auto res = apm::internal::get_unit_and_outcome_specific_params(
         std::optional<arma::vec>(g_0_prev), panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, covar_coefs_for_residualization, /*store_unit_params=*/false);
     if (!res.first.has_value()) {
-        throw std::runtime_error("Expected g_0 in comp_outcome_specific_params result");
+        throw std::runtime_error("Expected g_0 in get_outcome_specific_params result");
     }
     return std::move(*res.first);
 }
 
-namespace {
+namespace internal {
 
-static arma::vec comp_vanilla_fixed_point_update(
-    const arma::vec& g_0,
-    const arma::vec& g_1,
-    const arma::vec& /*r_prev*/, bool /*have_prev*/)
-{
-    (void)g_0;
-    return g_1;
-}
-
-static arma::vec comp_irons_tuck_fixed_point_update(
-    const arma::vec& g_0,
-    const arma::vec& g_1,
-    const arma::vec& r_prev,
-    bool have_prev)
-{
-    arma::vec r_k = g_1 - g_0;
-    if (!have_prev) {
-        return g_1;
-    }
-    arma::vec dr = r_k - r_prev;
-    double denom = arma::dot(dr, dr);
-    if (denom <= 0.0) {
-        return g_1;
-    }
-    double omega = - arma::dot(r_k, dr) / denom;
-    if (!std::isfinite(omega)) {
-        return g_1;
-    }
-    if (omega < 0.0) omega = 0.0;
-    if (omega > 2.0) omega = 2.0;
-    return g_0 + omega * r_k;
-}
-
-} // anonymous namespace
-
-std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::comp_unit_and_outcome_specific_params_fixed_point(
+std::pair<std::optional<arma::vec>, std::optional<arma::mat>> comp_unit_and_outcome_specific_params_fixed_point(
     const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
     std::optional<arma::vec> unit_weights_opt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
-    double tol,
-    std::size_t max_iters,
-    const std::string& fixed_point_method,
+    const apm::ImputationOptions& fp,
     std::optional<arma::vec> covar_coefs_for_residualization,
     bool store_unit_params)
 {
@@ -244,65 +207,345 @@ std::pair<std::optional<arma::vec>, std::optional<arma::mat>> apm::internal::com
     }
 
     arma::vec g_0(static_cast<arma::uword>(T), arma::fill::zeros);
-    arma::vec r_prev;
-    bool have_prev = false;
-    bool converged = false;
+
+    auto F = [&](const arma::vec& g) -> arma::vec {
+        return apm::internal::get_outcome_specific_params(
+            g, panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, covar_coefs_for_residualization);
+    };
+
+    auto apply_k = [&](const arma::vec& x, std::size_t k) -> arma::vec {
+        arma::vec y = x;
+        for (std::size_t i = 0; i < k; ++i) y = F(y);
+        return y;
+    };
+
+    auto aitken = [&](const arma::vec& x0, const arma::vec& x1, const arma::vec& x2) -> arma::vec {
+        arma::vec d1 = x1 - x0;
+        arma::vec d2 = x2 - x1;
+        arma::vec dd = d2 - d1;
+        double denom = arma::dot(dd, dd);
+        if (denom <= 0.0) return x2;
+        double tau = - arma::dot(d2, dd) / denom;
+        if (!std::isfinite(tau)) return x2;
+        return x2 + tau * d2;
+    };
 
     std::size_t iter = 0;
-    for (; iter < max_iters; ++iter) {
-        arma::vec g_1 = apm::internal::comp_outcome_specific_params(
-            g_0, panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, covar_coefs_for_residualization);
+    for (; iter < fp.max_iters; ++iter) {
+        // 1) Always start with one projection
+        arma::vec g_proj = F(g_0);
 
-        arma::vec r_k = g_1 - g_0;
-        if (arma::norm(r_k, "inf") <= tol) {
-            g_0 = std::move(g_1);
-            converged = true;
+        // Optional extra simple projections before acceleration
+        for (std::size_t e = 0; e < fp.extra_proj; ++e) {
+            g_proj = F(g_proj);
+        }
+
+        const bool use_accel = (fp.method == apm::AccelMethod::IronsTuck);
+        const bool do_grand = use_accel && fp.grand_period > 0 && ((iter + 1) % fp.grand_period == 0);
+
+        arma::vec g_next;
+        if (!use_accel) {
+            g_next = g_proj;
+        } else if (do_grand) {
+            // Grand acceleration on h(X)=f^k(X)
+            arma::vec h1 = apply_k(g_0, fp.grand_k);
+            arma::vec h2 = apply_k(h1, fp.grand_k);
+            g_next = aitken(g_0, h1, h2);
+        } else {
+            // Regular acceleration on X, f(X), f(f(X))
+            arma::vec g2 = F(g_proj);
+            g_next = aitken(g_0, g_proj, g2);
+        }
+
+        // Stabilization: one extra projection after acceleration once running long
+        if (fp.stabilize_after > 0 && (iter + 1) >= fp.stabilize_after && use_accel) {
+            g_next = F(g_next);
+        }
+
+        arma::vec r_k = g_next - g_0;
+        if (arma::norm(r_k, "inf") <= fp.tol) {
+            g_0 = std::move(g_next);
             break;
         }
 
-        arma::vec g_next;
-        if (fixed_point_method == "irons-tuck") {
-            g_next = comp_irons_tuck_fixed_point_update(g_0, g_1, r_prev, have_prev);
-        } else {
-            g_next = comp_vanilla_fixed_point_update(g_0, g_1, r_prev, have_prev);
-        }
-
-        r_prev = std::move(r_k);
-        have_prev = true;
         g_0 = std::move(g_next);
     }
-    
-    if (iter == max_iters) {
-        std::cerr << "Warning: comp_unit_and_outcome_specific_params_fixed_point with fixed_point_method=" << fixed_point_method << " did not converge within max_iters="
-                  << max_iters << ", tol=" << tol << std::endl;
+
+    if (iter == fp.max_iters) {
+        std::cerr << "Warning: comp_unit_and_outcome_specific_params_fixed_point did not converge within max_iters="
+                  << fp.max_iters << ", tol=" << fp.tol << std::endl;
     }
 
-    return apm::internal::comp_unit_and_outcome_specific_params(
+    return apm::internal::get_unit_and_outcome_specific_params(
         std::optional<arma::vec>(g_0), panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, covar_coefs_for_residualization, store_unit_params);
 }
 
-arma::vec apm::internal::comp_outcome_specific_params_fixed_point(
+arma::vec comp_outcome_specific_params_fixed_point(
     const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
     std::optional<arma::vec> unit_weights_opt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
-    double tol,
-    std::size_t max_iters,
-    const std::string& fixed_point_method)
+    const apm::ImputationOptions& fp)
 {
-    auto res = apm::internal::comp_unit_and_outcome_specific_params_fixed_point(
-        panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, tol, max_iters, fixed_point_method, std::nullopt, /*store_unit_params=*/false);
+    auto res = comp_unit_and_outcome_specific_params_fixed_point(
+        panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, fp, std::nullopt, /*store_unit_params=*/false);
     if (!res.first.has_value()) {
         throw std::runtime_error("Expected g_0 in comp_outcome_specific_params_fixed_point result");
     }
     return std::move(*res.first);
 }
 
+static std::pair<std::optional<arma::vec>, std::optional<arma::mat>> comp_unit_and_outcome_specific_params_lsmr(
+    const AbstractUnbalancedPanel& panel,
+    const VariableSpec& var,
+    const FactorModelParameters& factor_model_params,
+    std::optional<arma::vec> unit_weights_opt,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt,
+    const apm::ImputationOptions& fp,
+    std::optional<arma::vec> covar_coefs_for_residualization,
+    bool store_unit_params)
+{
+    const ObservedOutcomeIndices& ooi = effective_ooi_opt ? *effective_ooi_opt
+                                                          : panel.observed_outcome_indices();
+    const arma::mat& G = factor_model_params.G;
+    const std::size_t T = panel.T();
 
-namespace internal {
+    // Compute null-space basis N of G^T (T x d)
+    arma::mat N = arma::null(G.t());
+    const arma::uword d = N.n_cols;
+    if (d == 0) {
+        // Degenerate: no null space; g_0 must be zero
+        arma::vec g0(T, arma::fill::zeros);
+        std::optional<arma::mat> L_opt;
+        if (store_unit_params) {
+            const std::size_t r = static_cast<std::size_t>(G.n_cols);
+            L_opt.emplace(static_cast<arma::uword>(panel.num_units()), static_cast<arma::uword>(r), arma::fill::zeros);
+            // Compute per-unit lambdas against zero g0
+            arma::vec Y; arma::mat X_obs;
+            for (const auto& blk : panel.cohort_blocks()) {
+                const auto cohort0 = blk.cohort;
+                const arma::uvec& T_idxs = ooi.at(cohort0);
+                arma::mat G_c = G.rows(T_idxs);
+                const auto& pos_map = panel.pos_T_idx_for_cohort(cohort0);
+                for (const auto& ur : blk.unit_runs) {
+                    arma::vec w_i = assemble_w_i(ur, T_idxs, pos_map, panel, var, Y, X_obs);
+                    arma::vec lambda_i = apm::internal::comp_lambda_i(G_c, w_i);
+                    (*L_opt).row(static_cast<arma::uword>(ur.unit)) = lambda_i.t();
+                }
+            }
+        }
+        return std::make_pair(std::optional<arma::vec>(std::move(g0)), std::move(L_opt));
+    }
 
-std::optional<arma::mat> comp_unit_specific_params(
+    // Build cohort-level sufficient stats: s_c and ybar_c
+    struct CohStats { arma::uvec idx; double s_sqrt; arma::vec ybar; };
+    std::vector<CohStats> cohorts;
+    cohorts.reserve(ooi.size());
+
+    arma::vec Y; arma::mat X_obs;
+    for (const auto& blk : panel.cohort_blocks()) {
+        const auto cohort0 = blk.cohort;
+        const arma::uvec& T_idxs = ooi.at(cohort0);
+        if (T_idxs.n_elem == 0) continue;
+
+        arma::vec accum(T_idxs.n_elem, arma::fill::zeros);
+        double s = 0.0;
+        const auto& pos_map = panel.pos_T_idx_for_cohort(cohort0);
+
+        for (const auto& ur : blk.unit_runs) {
+			arma::vec w_i = assemble_w_i(ur, T_idxs, pos_map, panel, var, Y, X_obs);
+			if (covar_coefs_for_residualization && var.kind == VariableSpec::Kind::Outcome && panel.q() > 0) {
+                arma::mat X_obs_q;
+                panel.assemble_X_for_unit(ur, panel.T(), T_idxs, /*X_full=*/nullptr, /*X_obs=*/&X_obs_q, std::nullopt);
+                arma::vec covar_term = X_obs_q * (*covar_coefs_for_residualization);
+                w_i -= covar_term;
+            }
+            double u_w = unit_weights_opt ? (*unit_weights_opt)[static_cast<arma::uword>(ur.unit)] : 1.0;
+            if (!(std::isfinite(u_w) && u_w > 0.0)) continue;
+            accum += u_w * w_i;
+            s += u_w;
+        }
+
+        if (s <= 0.0) continue;
+        arma::vec ybar = accum / s;
+        cohorts.push_back(CohStats{T_idxs, std::sqrt(s), std::move(ybar)});
+    }
+
+    // Construct operator A' via matrix-free apply/apply_transpose
+    apm::internal::LinearOperator Aop;
+    {
+        arma::uword mprime = 0;
+        for (const auto& cs : cohorts) mprime += cs.idx.n_elem;
+        Aop.domain_dim = d;
+        Aop.range_dim = mprime;
+        Aop.apply = [&, G, N, cohorts](const arma::vec& v, arma::vec& y) {
+            y.set_size(Aop.range_dim);
+            arma::uword off = 0;
+            for (const auto& cs : cohorts) {
+                arma::mat G_c = G.rows(cs.idx);
+                arma::vec Nc_v = N.rows(cs.idx) * v;
+                arma::vec proj = Nc_v - G_c * ::apm::internal::min_norm_solve(G_c, Nc_v);
+                y.subvec(off, off + cs.idx.n_elem - 1) = cs.s_sqrt * proj;
+                off += cs.idx.n_elem;
+            }
+        };
+        Aop.apply_transpose = [&, G, N, cohorts](const arma::vec& u, arma::vec& z) {
+            z.zeros(d);
+            arma::uword off = 0;
+            for (const auto& cs : cohorts) {
+                arma::mat G_c = G.rows(cs.idx);
+                arma::vec uc = u.subvec(off, off + cs.idx.n_elem - 1) * cs.s_sqrt;
+                arma::vec proj = uc - G_c * ::apm::internal::min_norm_solve(G_c, uc);
+                z += N.rows(cs.idx).t() * proj;
+                off += cs.idx.n_elem;
+            }
+        };
+    }
+
+    // Build b' stacked over cohorts: sqrt(s_c) * P_c ybar_c
+    arma::vec bprime(Aop.range_dim, arma::fill::zeros);
+    {
+        arma::uword off = 0;
+        for (const auto& cs : cohorts) {
+            arma::mat G_c = G.rows(cs.idx);
+            arma::vec proj = cs.ybar - G_c * ::apm::internal::min_norm_solve(G_c, cs.ybar);
+            bprime.subvec(off, off + cs.idx.n_elem - 1) = cs.s_sqrt * proj;
+            off += cs.idx.n_elem;
+        }
+    }
+
+    // Solve for z with LSMR
+    apm::internal::LSMROptions lopts;
+    lopts.atol = fp.lsmr_atol;
+    lopts.btol = fp.lsmr_btol;
+    lopts.conlim = fp.lsmr_conlim;
+    lopts.max_iters = (fp.lsmr_max_iters > 0)
+        ? fp.lsmr_max_iters
+        : (fp.max_iters == std::numeric_limits<std::size_t>::max() ? static_cast<std::size_t>(2 * (T + d)) : fp.max_iters);
+    lopts.lambda = fp.lsmr_lambda;
+
+    apm::internal::LSMRResult lres = apm::internal::lsmr(
+        Aop,
+        bprime,
+        lopts,
+        /*x0=*/std::nullopt,
+        /*diagonal_precond=*/fp.lsmr_diagonal_precond,
+        /*num_diag_approx_draws=*/fp.lsmr_num_diag_approx_draws,
+        /*homotopy_iters=*/fp.lsmr_homotopy_iters);
+
+    if (lres.flag == 2) {
+        std::cerr << "Warning: comp_unit_and_outcome_specific_params_lsmr reached the maximum number of iterations ("
+                  << lopts.max_iters << "). Residual norms: ||r||=" << lres.rnorm
+                  << ", ||A^T r||=" << lres.arnorm << std::endl;
+    }
+    if (lres.flag == 1) {
+        std::cerr << "Warning: comp_unit_and_outcome_specific_params_lsmr reached the condition number limit (conlim="
+                  << lopts.conlim << "). Estimated cond(A)=" << lres.acond
+                  << ". Residual norms: ||r||=" << lres.rnorm
+                  << ", ||A^T r||=" << lres.arnorm
+                  << ", iters=" << lres.iters
+                  << std::endl;
+    }
+
+    arma::vec g0 = N * lres.x;
+    // Re-orthogonalize for numerical stability
+    g0 -= G * ::apm::internal::min_norm_solve(G, g0);
+
+    std::optional<arma::mat> L_opt;
+    if (store_unit_params) {
+        const std::size_t r = static_cast<std::size_t>(G.n_cols);
+        L_opt.emplace(static_cast<arma::uword>(panel.num_units()), static_cast<arma::uword>(r), arma::fill::zeros);
+        arma::vec Y2; arma::mat X_obs2;
+        for (const auto& blk : panel.cohort_blocks()) {
+            const auto cohort0 = blk.cohort;
+            const arma::uvec& T_idxs = ooi.at(cohort0);
+            if (T_idxs.n_elem == 0) continue;
+            arma::mat G_c = G.rows(T_idxs);
+            arma::vec g0c = g0.elem(T_idxs);
+            const auto& pos_map = panel.pos_T_idx_for_cohort(cohort0);
+            for (const auto& ur : blk.unit_runs) {
+				arma::vec w_i = assemble_w_i(ur, T_idxs, pos_map, panel, var, Y2, X_obs2);
+				if (covar_coefs_for_residualization && var.kind == VariableSpec::Kind::Outcome && panel.q() > 0) {
+                    arma::mat X_obs_q;
+                    panel.assemble_X_for_unit(ur, panel.T(), T_idxs, /*X_full=*/nullptr, /*X_obs=*/&X_obs_q, std::nullopt);
+                    arma::vec covar_term = X_obs_q * (*covar_coefs_for_residualization);
+                    w_i -= covar_term;
+                }
+                arma::vec r_for_lambda = w_i - g0c;
+                arma::vec lambda_i = apm::internal::comp_lambda_i(G_c, r_for_lambda);
+                (*L_opt).row(static_cast<arma::uword>(ur.unit)) = lambda_i.t();
+            }
+        }
+    }
+
+    return std::make_pair(std::optional<arma::vec>(std::move(g0)), std::move(L_opt));
+}
+
+// New: g0-only wrapper for LSMR
+arma::vec comp_outcome_specific_params_lsmr(
+    const AbstractUnbalancedPanel& panel,
+    const VariableSpec& var,
+    const FactorModelParameters& factor_model_params,
+    std::optional<arma::vec> unit_weights_opt,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt,
+    const apm::ImputationOptions& fp)
+{
+    auto res = comp_unit_and_outcome_specific_params_lsmr(
+        panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, fp, std::nullopt, /*store_unit_params=*/false);
+    if (!res.first.has_value()) {
+        throw std::runtime_error("Expected g_0 in comp_outcome_specific_params_lsmr result");
+    }
+    return std::move(*res.first);
+}
+
+std::pair<std::optional<arma::vec>, std::optional<arma::mat>> comp_unit_and_outcome_specific_params(
+    const AbstractUnbalancedPanel& panel,
+    const VariableSpec& var,
+    const FactorModelParameters& factor_model_params,
+    std::optional<arma::vec> unit_weights_opt,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt,
+    const apm::ImputationOptions& fp,
+    std::optional<arma::vec> covar_coefs_for_residualization,
+    bool store_unit_params)
+{
+    // If there are no fixed effects, ignore LSMR and only compute unit-specific params when requested
+    if (!factor_model_params.has_fixed_effects()) {
+        if (store_unit_params) {
+            auto res = apm::internal::get_unit_and_outcome_specific_params(
+                std::optional<arma::vec>(), panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, covar_coefs_for_residualization, /*store_unit_params=*/true);
+            return std::make_pair(std::optional<arma::vec>(), std::move(res.second));
+        }
+        return std::make_pair(std::optional<arma::vec>(), std::optional<arma::mat>());
+    }
+
+    // With fixed effects present: dispatch to requested solver
+    if (fp.solver == apm::ImputationSolver::LSMR) {
+        return comp_unit_and_outcome_specific_params_lsmr(
+            panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, fp, covar_coefs_for_residualization, store_unit_params);
+    }
+
+    return apm::internal::comp_unit_and_outcome_specific_params_fixed_point(
+        panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, fp, covar_coefs_for_residualization, store_unit_params);
+}
+
+arma::vec comp_outcome_specific_params(
+    const AbstractUnbalancedPanel& panel,
+    const VariableSpec& var,
+    const FactorModelParameters& factor_model_params,
+    std::optional<arma::vec> unit_weights_opt,
+    std::optional<ObservedOutcomeIndices> effective_ooi_opt,
+    const apm::ImputationOptions& fp)
+{
+    auto res = apm::internal::comp_unit_and_outcome_specific_params(
+        panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, fp, std::nullopt, /*store_unit_params=*/false);
+    if (!res.first.has_value()) {
+        throw std::runtime_error("Expected g_0 in comp_outcome_specific_params result");
+    }
+    return std::move(*res.first);
+}
+
+std::optional<arma::mat> get_unit_specific_params(
     const AbstractUnbalancedPanel& panel,
     const VariableSpec& var,
     const FactorModelParameters& factor_model_params,
@@ -310,11 +553,10 @@ std::optional<arma::mat> comp_unit_specific_params(
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
     std::optional<arma::vec> covar_coefs_for_residualization)
 {
-    auto res = apm::internal::comp_unit_and_outcome_specific_params(
+    auto res = apm::internal::get_unit_and_outcome_specific_params(
         std::optional<arma::vec>(), panel, var, factor_model_params, unit_weights_opt, effective_ooi_opt, covar_coefs_for_residualization, /*store_unit_params=*/true);
     return std::move(res.second);
 }
-
 
 arma::vec comp_covar_coefs(
     const AbstractUnbalancedPanel& panel,
@@ -439,9 +681,7 @@ FactorModelParameters comp_imputation_components(
     const std::vector<OutcomeMeanSufficientStatistics>& cohort_outcome_mean_suff_stats,
     std::optional<arma::vec> unit_weights_opt,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
-    double tol,
-    std::size_t max_iters,
-    const std::string& fixed_point_method)
+    const apm::ImputationOptions& fp)
 {
     std::optional<arma::vec> alpha_opt;
 
@@ -473,14 +713,14 @@ FactorModelParameters comp_imputation_components(
     // Pre-computations always use the original panel and unit-level weights
     if (factor_model_params.has_fixed_effects()) {
         if (factor_model_params.has_covariate_coefs() && factor_model_params.q() > 0) {
-            arma::vec g_0_init = apm::internal::comp_outcome_specific_params_fixed_point(
-                panel, VariableSpec::outcome(), factor_model_params, unit_weights_opt, effective_ooi_opt, tol, max_iters, fixed_point_method);
+            arma::vec g_0_init = internal::comp_outcome_specific_params(
+                panel, VariableSpec::outcome(), factor_model_params, unit_weights_opt, effective_ooi_opt, fp);
 
             const std::size_t q = factor_model_params.q();
             std::vector<arma::vec> g_0_init_covars(q);
             for (std::size_t j = 0; j < q; ++j) {
-                g_0_init_covars[j] = apm::internal::comp_outcome_specific_params_fixed_point(
-                    panel, VariableSpec::covariate(j), factor_model_params, unit_weights_opt, effective_ooi_opt, tol, max_iters, fixed_point_method);
+                g_0_init_covars[j] = internal::comp_outcome_specific_params(
+                    panel, VariableSpec::covariate(j), factor_model_params, unit_weights_opt, effective_ooi_opt, fp);
             }
 
             std::optional<arma::vec> g_0_init_opt = std::move(g_0_init);
@@ -493,8 +733,8 @@ FactorModelParameters comp_imputation_components(
                                                                       : panel;
         std::optional<arma::vec> final_weights = cohort_panel_opt ? cohort_weights_opt : unit_weights_opt;
 
-        auto final_pair = apm::internal::comp_unit_and_outcome_specific_params_fixed_point(
-            final_panel, VariableSpec::outcome(), factor_model_params, final_weights, effective_ooi_opt, tol, max_iters, fixed_point_method, alpha_opt, /*store_unit_params=*/true);
+		std::pair<std::optional<arma::vec>, std::optional<arma::mat>> final_pair = internal::comp_unit_and_outcome_specific_params(
+			final_panel, VariableSpec::outcome(), factor_model_params, final_weights, effective_ooi_opt, fp, alpha_opt, /*store_unit_params=*/true);
 
         FactorModelParameters out;
         out.G = factor_model_params.G;
@@ -512,8 +752,12 @@ FactorModelParameters comp_imputation_components(
                                                                       : panel;
         std::optional<arma::vec> final_weights = cohort_panel_opt ? cohort_weights_opt : unit_weights_opt;
 
-        auto L_opt = apm::internal::comp_unit_specific_params(
-            final_panel, VariableSpec::outcome(), factor_model_params, final_weights, effective_ooi_opt, alpha_opt);
+		std::optional<arma::mat> L_opt;
+		{
+			auto pair_l = internal::comp_unit_and_outcome_specific_params(
+				final_panel, VariableSpec::outcome(), factor_model_params, final_weights, effective_ooi_opt, fp, alpha_opt, /*store_unit_params=*/true);
+			L_opt = std::move(pair_l.second);
+		}
 
         FactorModelParameters out;
         out.G = factor_model_params.G;
@@ -524,19 +768,13 @@ FactorModelParameters comp_imputation_components(
     }
 }
 
-} // namespace apm
-
-namespace apm {
-
 FactorModelEstimates comp_imputation_components(
     const InMemoryUnbalancedPanel& panel,
     const FactorModelEstimates& factor_model_ests,
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests,
     std::shared_ptr<const WeightedBootstrap> wb,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
-    double tol,
-    std::size_t max_iters,
-    const std::string& fixed_point_method,
+    const apm::ImputationOptions& fp,
     std::optional<std::size_t> num_threads)
 {
     apm::ParallelismScope par_scope(num_threads);
@@ -559,9 +797,7 @@ FactorModelEstimates comp_imputation_components(
         suff_stats_point,
         std::nullopt,
         effective_ooi_opt,
-        tol,
-        max_iters,
-        fixed_point_method);
+        fp);
 
     // Bootstrap replicates
     const bool has_param_boot = factor_model_ests.has_bootstrap_replicates();
@@ -605,9 +841,7 @@ FactorModelEstimates comp_imputation_components(
                 suff_stats_b,
                 std::optional<arma::vec>(std::move(unit_weights_b)),
                 effective_ooi_opt,
-                tol,
-                max_iters,
-                fixed_point_method);
+                fp);
         };
 
 #ifdef APM_HAS_TBB
@@ -634,9 +868,7 @@ std::unordered_map<std::string, FactorModelEstimates> comp_imputation_components
     const std::vector<OutcomeMeanSuffStatEstimates>& cohort_outcome_mean_suff_stat_ests,
     std::shared_ptr<const WeightedBootstrap> wb,
     std::optional<ObservedOutcomeIndices> effective_ooi_opt,
-    double tol,
-    std::size_t max_iters,
-    const std::string& fixed_point_method,
+    const apm::ImputationOptions& fp,
     std::optional<std::size_t> num_threads)
 {
     std::unordered_map<std::string, FactorModelEstimates> out;
@@ -651,9 +883,7 @@ std::unordered_map<std::string, FactorModelEstimates> comp_imputation_components
             cohort_outcome_mean_suff_stat_ests,
             wb,
             effective_ooi_opt,
-            tol,
-            max_iters,
-            fixed_point_method,
+            fp,
             num_threads);
         out.emplace(key, std::move(res));
     }

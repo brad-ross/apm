@@ -1,40 +1,16 @@
-# Makevars for apm R package
-# This tells R how to compile and link the core C++ library
-
-# Use RcppArmadillo flags for consistent compilation and define USING_R flag
 PKG_CPPFLAGS = $(shell $(R_HOME)/bin/Rscript -e "RcppArmadillo:::CxxFlags()") -I../../core/src -DUSING_R
 PKG_CXXFLAGS = -std=c++17
 
-# Link against LAPACK/BLAS provided by R
 PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
-# oneTBB via RcppParallel (preferred), with pkg-config fallback
-RCPP_PARALLEL_CXXFLAGS := $(shell $(R_HOME)/bin/Rscript -e "cat(tryCatch(RcppParallel::CxxFlags(), error=function(e) ''))")
-RCPP_PARALLEL_LIBS     := $(shell $(R_HOME)/bin/Rscript -e "cat(tryCatch(RcppParallel::RcppParallelLibs(), error=function(e) ''))")
+RCPP_PARALLEL_CXXFLAGS := $(shell $(R_HOME)/bin/Rscript -e "RcppParallel::CxxFlags()")
+RCPP_PARALLEL_LIBS     := $(shell $(R_HOME)/bin/Rscript -e "RcppParallel::RcppParallelLibs()")
+PKG_CPPFLAGS += $(RCPP_PARALLEL_CXXFLAGS) -DAPM_HAS_TBB=1
+PKG_LIBS     += $(RCPP_PARALLEL_LIBS)
+$(info APM: Building with oneTBB via RcppParallel on Windows)
+$(info APM: RCPP_PARALLEL_CXXFLAGS=$(RCPP_PARALLEL_CXXFLAGS))
+$(info APM: RCPP_PARALLEL_LIBS=$(RCPP_PARALLEL_LIBS))
 
-# Try RcppParallel headers first; only define APM_HAS_TBB if headers are available
-ifneq ($(strip $(RCPP_PARALLEL_CXXFLAGS)),)
-  PKG_CPPFLAGS += $(RCPP_PARALLEL_CXXFLAGS) -DAPM_HAS_TBB=1
-  PKG_LIBS     += $(RCPP_PARALLEL_LIBS)
-  $(info APM: Building with oneTBB via RcppParallel (headers available))
-  $(info APM: RCPP_PARALLEL_CXXFLAGS=$(RCPP_PARALLEL_CXXFLAGS))
-  $(info APM: RCPP_PARALLEL_LIBS=$(RCPP_PARALLEL_LIBS))
-else
-  # Fallback: system oneTBB via pkg-config; define APM_HAS_TBB if headers/libs found
-  TBB_CFLAGS := $(shell pkg-config --cflags tbb 2>/dev/null)
-  TBB_LIBS   := $(shell pkg-config --libs   tbb 2>/dev/null)
-  ifneq ($(strip $(TBB_CFLAGS) $(TBB_LIBS)),)
-    PKG_CPPFLAGS += $(TBB_CFLAGS) -DAPM_HAS_TBB=1
-    PKG_LIBS     += $(TBB_LIBS)
-    $(info APM: Building with system oneTBB via pkg-config)
-    $(info APM: TBB_CFLAGS=$(TBB_CFLAGS))
-    $(info APM: TBB_LIBS=$(TBB_LIBS))
-  else
-    $(info APM: oneTBB not found (no headers via RcppParallel or pkg-config); building serial path)
-  endif
-endif
-
-# Object files (including the core library)
 OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o \
            ../../core/src/apm_core.o ../../core/src/linear_algebra_utils.o ../../core/src/bootstrap.o ../../core/src/online_accumulators.o \
            ../../core/src/factor_model_estimators/FactorModelEstimator.o ../../core/src/factor_model_estimators/pc_estimators.o \

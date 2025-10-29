@@ -1,7 +1,8 @@
 #include "outcome_clustering/cluster_outcomes.h"
 #include "panels/InMemoryUnbalancedPanel.h"
 #include "online_accumulators.h"
-#include "apm_core.h"
+#include "utils.h"
+#include "outcome_clustering/weighted_kmeans.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -11,12 +12,6 @@
 #include <set>
 #include <mutex>
 
-// mlpack KMeans and policies
-#include <mlpack/methods/kmeans/kmeans.hpp>
-#include <mlpack/methods/kmeans/kmeans_plus_plus_initialization.hpp>
-#include <mlpack/methods/kmeans/allow_empty_clusters.hpp>
-#include "outcome_clustering/weighted_kmeans_policy.h"
-#include <mlpack/prereqs.hpp>
 
 #ifdef APM_HAS_TBB
 #include <oneapi/tbb/info.h>
@@ -26,19 +21,6 @@
 namespace apm {
 
 namespace {
-inline void seed_rng_if_requested(const std::optional<uint64_t>& seed) {
-    if (!seed.has_value()) return;
-#if defined(MLPACK_VERSION_MAJOR)
-#  if (MLPACK_VERSION_MAJOR >= 3)
-    mlpack::RandomSeed(static_cast<size_t>(*seed));
-#  else
-    mlpack::math::RandomSeed(static_cast<size_t>(*seed));
-#  endif
-#else
-    // Fallback to Armadillo RNG if mlpack version macros are unavailable
-    arma::arma_rng::set_seed(static_cast<arma::uword>(*seed));
-#endif
-}
 
 // Pass 1: collect observed outcome values and compute global interior-quantile grid
 arma::vec compute_quantile_grid_from_panel(const InMemoryUnbalancedPanel& panel, std::size_t G) {
@@ -168,50 +150,8 @@ ClusteringInputs build_clustering_inputs(const InMemoryUnbalancedPanel& panel, s
     return out;
 }
 
-// Reusable helpers and types for KMeans
-using Distance = mlpack::EuclideanDistance;
-using InitPolicy = mlpack::KMeansPlusPlusInitialization;
-using EmptyPolicy = mlpack::AllowEmptyClusters;
-using KMeansType = mlpack::KMeans<Distance, InitPolicy, EmptyPolicy, apm::clustering::WeightedNaiveKMeans, arma::mat>;
-
-struct WeightsGuard {
-    explicit WeightsGuard(const arma::vec& w) { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = &w; }
-    ~WeightsGuard() { apm::clustering::WeightedNaiveKMeans<Distance, arma::mat>::weights_ptr = nullptr; }
-};
-
 inline std::optional<uint64_t> per_init_seed(std::optional<uint64_t> base, std::size_t init) {
     return base ? std::optional<uint64_t>(*base + static_cast<uint64_t>(init)) : std::nullopt;
-}
-
-inline double weighted_sse(const arma::mat& data,
-                           const arma::vec& weights,
-                           const arma::Row<size_t>& assignments,
-                           const arma::mat& centers)
-{
-    const arma::uword T = data.n_cols;
-    double sse = 0.0;
-    for (arma::uword i = 0; i < T; ++i) {
-        const arma::uword a = static_cast<arma::uword>(assignments(i));
-        const double wi = weights(i);
-        if (wi == 0.0) continue;
-        const arma::vec diff = data.col(i) - centers.col(a);
-        sse += wi * arma::dot(diff, diff);
-    }
-    return sse;
-}
-
-inline std::pair<double, arma::Row<size_t>> run_kmeans_once(const arma::mat& data,
-                                                            const arma::vec& weights,
-                                                            std::size_t k,
-                                                            std::optional<uint64_t> seed)
-{
-    seed_rng_if_requested(seed);
-    KMeansType kmeans;
-    WeightsGuard guard(weights);
-    arma::Row<size_t> assignments; arma::mat centers;
-    kmeans.Cluster(data, static_cast<size_t>(k), assignments, centers);
-    double sse = weighted_sse(data, weights, assignments, centers);
-    return {sse, std::move(assignments)};
 }
 
 inline arma::uvec to_uvec(const arma::Row<size_t>& r) {
@@ -240,6 +180,36 @@ inline std::pair<std::size_t, std::size_t> unflatten(std::size_t idx,
     const std::size_t k_idx = idx / n_inits;
     const std::size_t init  = idx % n_inits;
     return {k_idx, init};
+}
+
+// Canonicalize cluster labels by order of first occurrence to ensure stable labeling.
+void canonicalize_assignments(arma::Row<size_t>& assignments) {
+    const arma::uword T = assignments.n_elem;
+    if (T == 0) return;
+    const size_t k_guess = static_cast<size_t>(assignments.max() + 1);
+    std::vector<arma::uword> first_index(k_guess, std::numeric_limits<arma::uword>::max());
+    for (arma::uword i = 0; i < T; ++i) {
+        const size_t lbl = assignments(i);
+        if (lbl >= k_guess) continue;
+        if (i < first_index[lbl]) first_index[lbl] = i;
+    }
+    std::vector<std::pair<arma::uword, size_t>> ordering;
+    ordering.reserve(k_guess);
+    for (size_t lbl = 0; lbl < k_guess; ++lbl) {
+        if (first_index[lbl] != std::numeric_limits<arma::uword>::max()) {
+            ordering.emplace_back(first_index[lbl], lbl);
+        }
+    }
+    std::sort(ordering.begin(), ordering.end(), [](const auto& a, const auto& b){ return a.first < b.first; });
+    std::vector<size_t> remap(k_guess, static_cast<size_t>(0));
+    size_t next = 0;
+    for (const auto& p : ordering) {
+        remap[p.second] = next++;
+    }
+    for (arma::uword i = 0; i < T; ++i) {
+        const size_t old = assignments(i);
+        if (old < remap.size()) assignments(i) = remap[old];
+    }
 }
 
 } // anonymous namespace
@@ -274,7 +244,7 @@ comp_outcome_clusterings(
         oneapi::tbb::parallel_for(std::size_t(0), total_tasks, [&](std::size_t idx){
             auto [k_idx, init] = unflatten(idx, num_k, num_inits_val);
             const std::size_t k_val = min_k + k_idx;
-            auto [sse, asg] = run_kmeans_once(inputs.data, inputs.weights, k_val, per_init_seed(seed, init));
+            auto [sse, asg] = kmeans_weighted(inputs.data, inputs.weights, k_val, per_init_seed(seed, init));
             std::lock_guard<std::mutex> lock(trackers[k_idx].m);
             trackers[k_idx].consider(sse, std::move(asg));
         });
@@ -284,7 +254,7 @@ comp_outcome_clusterings(
         for (std::size_t k_idx = 0; k_idx < num_k; ++k_idx) {
             const std::size_t k_val = min_k + k_idx;
             for (std::size_t init = 0; init < num_inits_val; ++init) {
-                auto [sse, asg] = run_kmeans_once(inputs.data, inputs.weights, k_val, per_init_seed(seed, init));
+                auto [sse, asg] = kmeans_weighted(inputs.data, inputs.weights, k_val, per_init_seed(seed, init));
                 trackers[k_idx].consider(sse, std::move(asg));
             }
         }
@@ -293,6 +263,7 @@ comp_outcome_clusterings(
     std::vector<arma::uvec> mappings;
     mappings.reserve(num_k);
     for (std::size_t k_idx = 0; k_idx < num_k; ++k_idx) {
+        canonicalize_assignments(trackers[k_idx].best_assignments);
         mappings.push_back(to_uvec(trackers[k_idx].best_assignments));
     }
     return mappings;

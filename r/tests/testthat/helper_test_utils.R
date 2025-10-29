@@ -152,8 +152,16 @@ expected_Y_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
 expected_covariates_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
     N <- length(unit_ids)
     TT <- length(T_idx)
-    cov1 <- matrix(match(unit_ids, ctx$all_units), nrow = N, ncol = TT)
-    cov2 <- matrix(as.integer(cohort_id), nrow = N, ncol = TT)
+    # Map units to global 1..N index and outcomes to 1..T indices
+    u_idx <- as.numeric(match(unit_ids, ctx$all_units))
+    t_idx <- as.numeric(T_idx)
+    # Time-varying covariates (match C++ DGP):
+    # cov1 = u * t
+    cov1 <- outer(u_idx, t_idx, function(u, t) u * t)
+    # cov2 = (u * t) * (t + 0.5*u + 1.0) + 0.7 * cohort_id
+    cov2 <- cov1 * (matrix(t_idx, nrow = N, ncol = TT, byrow = TRUE) +
+                    0.5 * matrix(u_idx, nrow = N, ncol = TT) + 1.0) +
+            0.7 * as.numeric(cohort_id)
     array(c(cov1, cov2), dim = c(N, TT, 2L))
 }
 
@@ -225,8 +233,13 @@ build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_c
                 }
                 dt[get("outcome_id") %in% observed_outcomes, ("y") := y_obs]
                 if (isTRUE(include_covariates)) {
-                    dt[, ("cov1") := as.integer(match(u, ctx$all_units))]
-                    dt[, ("cov2") := as.integer(k)]
+                    # Populate time-varying covariates for all outcomes (full T per unit)
+                    u_idx <- as.numeric(match(u, ctx$all_units))
+                    t_idx_full <- seq_along(outcomes)
+                    cov1_full <- u_idx * as.numeric(t_idx_full)
+                    cov2_full <- cov1_full * (as.numeric(t_idx_full) + 0.5 * u_idx + 1.0) + 0.7 * as.numeric(k)
+                    dt[, ("cov1") := cov1_full]
+                    dt[, ("cov2") := cov2_full]
                 }
                 if (isTRUE(include_auxiliary)) {
                     dt[, ("aux1") := as.integer(match(u, ctx$all_units))]

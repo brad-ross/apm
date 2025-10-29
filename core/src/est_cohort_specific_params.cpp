@@ -259,6 +259,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
         // Cohort observed outcome indices (respect masking via ooi_effective)
         const arma::uvec& T_idxs_for_cohort = ooi_effective.at(blk.cohort);
         const std::size_t T_c = static_cast<std::size_t>(T_idxs_for_cohort.n_elem);
+        const std::unordered_map<int, std::size_t> pos_map_for_cohort = make_pos_map(T_idxs_for_cohort);
 
         // Estimators
         OutcomeMeanSuffStatEstimator omsse(
@@ -283,6 +284,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
         // Optional masked outcomes estimator for this cohort (computed in the same pass)
         bool compute_masked = false;
         arma::uvec masked_T_idxs;
+        std::unordered_map<int, std::size_t> pos_map_masked;
         std::optional<OutcomeMeanSuffStatEstimator> omsse_masked;
         arma::vec Y_mask;
         if (has_mask) {
@@ -293,6 +295,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
                 const std::size_t K_mask = static_cast<std::size_t>(itM->second.n_elem);
                 omsse_masked.emplace(K_mask, /*T=*/0, /*q=*/0, bootstrap);
                 Y_mask.set_size(static_cast<arma::uword>(K_mask));
+                pos_map_masked = make_pos_map(masked_T_idxs);
             }
         }
 
@@ -302,7 +305,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
                 ur,
                 T,
                 T_idxs_for_cohort,
-                make_pos_map(T_idxs_for_cohort),
+                pos_map_for_cohort,
                 Y, X_full, X_obs);
 
             // Add datum to factor estimators
@@ -330,8 +333,7 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
 
             // Also accumulate masked outcome means if requested
             if (compute_masked) {
-                auto pos_mask = make_pos_map(masked_T_idxs);
-                panel.assemble_Y_for_unit(ur, masked_T_idxs, pos_mask, Y_mask);
+                panel.assemble_Y_for_unit(ur, masked_T_idxs, pos_map_masked, Y_mask);
                 omsse_masked->add_datum(static_cast<std::size_t>(ur.unit), Y_mask);
             }
 

@@ -113,10 +113,14 @@ test_that("covariate means are computed with expected dimensions and values", {
     CM <- oms$covar_means()
     expect_true(is.matrix(CM))
     expect_equal(dim(CM), c(length(outcomes), 2L))
-    # cov1 across cohort 1 has two units with values 1 and 2 at all outcomes -> mean 1.5
-    expect_true(all(CM[, 1] == 2))
-    # cov2 is cohort id constant (=1)
-    expect_true(all(CM[, 2] == 1))
+    # Validate covariate means against processed panel by cohort and outcome
+    pp <- panel$get_processed_panel()
+    for (t in seq_along(outcomes)) {
+        sub <- pp[cohort_id == 1 & outcome_idx == t]
+        expect_true(nrow(sub) > 0)
+        expect_equal(CM[t, 1], mean(sub$cov1), tolerance = 1e-12)
+        expect_equal(CM[t, 2], mean(sub$cov2), tolerance = 1e-12)
+    }
 })
 
 test_that("q=0 flows without covariate means", {

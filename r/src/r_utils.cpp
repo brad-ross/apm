@@ -142,5 +142,73 @@ apm::ObservedOutcomeIndices observed_outcome_indices_from_panel_holder(SEXP pane
     return ph->panel.observed_outcome_indices();
 }
 
+apm::ImputationOptions imputation_options_from_r_list(Rcpp::Nullable<Rcpp::List> imputation_options_in) {
+    apm::ImputationOptions opts;
+    if (imputation_options_in.isNotNull()) {
+        Rcpp::List L(imputation_options_in);
+        if (L.containsElementNamed("tol")) opts.tol = Rcpp::as<double>(L["tol"]);
+        if (L.containsElementNamed("max_iters")) {
+            int mi = Rcpp::as<int>(L["max_iters"]);
+            if (mi < 0) mi = 0;
+            opts.max_iters = static_cast<std::size_t>(mi);
+        }
+        if (L.containsElementNamed("method")) {
+            std::string m = Rcpp::as<std::string>(L["method"]);
+            for (auto &ch : m) ch = static_cast<char>(::tolower(ch));
+            if (m == "none") opts.method = apm::AccelMethod::None; else opts.method = apm::AccelMethod::IronsTuck;
+        }
+        if (L.containsElementNamed("grand_period")) { int v = Rcpp::as<int>(L["grand_period"]); if (v < 0) v = 0; opts.grand_period = static_cast<std::size_t>(v); }
+        if (L.containsElementNamed("grand_k")) { int v = Rcpp::as<int>(L["grand_k"]); if (v < 0) v = 0; opts.grand_k = static_cast<std::size_t>(v); }
+        if (L.containsElementNamed("stabilize_after")) { int v = Rcpp::as<int>(L["stabilize_after"]); if (v < 0) v = 0; opts.stabilize_after = static_cast<std::size_t>(v); }
+        if (L.containsElementNamed("extra_proj")) { int v = Rcpp::as<int>(L["extra_proj"]); if (v < 0) v = 0; opts.extra_proj = static_cast<std::size_t>(v); }
+
+        // Solver selection ("fixed-point" or "lsmr"). Defaults to FixedPoint.
+        if (L.containsElementNamed("solver")) {
+            std::string s = Rcpp::as<std::string>(L["solver"]);
+            for (auto &ch : s) ch = static_cast<char>(::tolower(ch));
+            if (s == "lsmr") {
+                opts.solver = apm::ImputationSolver::LSMR;
+            } else if (s == "fixed-point" || s == "fixed_point" || s == "fixedpoint" || s == "fixed") {
+                opts.solver = apm::ImputationSolver::FixedPoint;
+            }
+        }
+
+        // LSMR-specific options
+        if (L.containsElementNamed("lsmr_diagonal_precond")) {
+            opts.lsmr_diagonal_precond = Rcpp::as<bool>(L["lsmr_diagonal_precond"]);
+        }
+        if (L.containsElementNamed("lsmr_num_diag_approx_draws")) {
+            int v = Rcpp::as<int>(L["lsmr_num_diag_approx_draws"]);
+            if (v < 0) v = 0;
+            opts.lsmr_num_diag_approx_draws = static_cast<std::size_t>(v);
+        }
+        if (L.containsElementNamed("lsmr_homotopy_iters")) {
+            int v = Rcpp::as<int>(L["lsmr_homotopy_iters"]);
+            if (v < 0) v = 0;
+            opts.lsmr_homotopy_iters = static_cast<std::size_t>(v);
+        }
+
+        // LSMR solver numeric controls
+        if (L.containsElementNamed("lsmr_atol")) {
+            opts.lsmr_atol = Rcpp::as<double>(L["lsmr_atol"]);
+        }
+        if (L.containsElementNamed("lsmr_btol")) {
+            opts.lsmr_btol = Rcpp::as<double>(L["lsmr_btol"]);
+        }
+        if (L.containsElementNamed("lsmr_conlim")) {
+            opts.lsmr_conlim = Rcpp::as<double>(L["lsmr_conlim"]);
+        }
+        if (L.containsElementNamed("lsmr_max_iters")) {
+            int v = Rcpp::as<int>(L["lsmr_max_iters"]);
+            if (v < 0) v = 0;
+            opts.lsmr_max_iters = static_cast<std::size_t>(v);
+        }
+        if (L.containsElementNamed("lsmr_lambda")) {
+            opts.lsmr_lambda = Rcpp::as<double>(L["lsmr_lambda"]);
+        }
+    }
+    return opts;
+}
+
 } // namespace r_utils
 } // namespace apm

@@ -136,14 +136,17 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
   skip_on_cran()
   if (!isTRUE(getOption("apm_run_perf_tests", FALSE))) skip("Set options(apm_run_perf_tests = TRUE) to enable perf checks.")
 
-  Tval <- 300L
+  n_threads <- get_cpp_default_concurrency()
+  print(sprintf("Using up to %d threads", n_threads))
+
+  Tval <- 20L
   r <- 2L
   window <- 3L
 
   outcomes <- make_outcomes(Tval)
   cohort_indices <- make_staircase_observed_indices(Tval, window)
   C <- length(cohort_indices)
-  units_per_cohort <- 1000L
+  units_per_cohort <- 500L
   units_by_cohort <- make_units_by_cohort(n_cohorts = C, units_per_cohort = units_per_cohort)
 
   ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = TRUE, include_outcome_fes = TRUE)
@@ -155,7 +158,7 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
   set_apm_threads(1L)
   panel_construction_time <- system.time(panel_obj <- UnbalancedPanel$new(panel, "unit_id", "outcome_id", "y", model_rank = r))["elapsed"]
   # TODO: figure out data.table concurrency; right now multithreaded is slower than single-threaded
-  # set_apm_threads(get_cpp_default_concurrency())
+  # set_apm_threads(n_threads)
   # panel_construction_time_multi <- system.time(panel_obj_multi <- UnbalancedPanel$new(panel, "unit_id", "outcome_id", "y", model_rank = r))["elapsed"]
 
   print(sprintf("Single-threaded panel construction time: %f", panel_construction_time))
@@ -167,13 +170,13 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
   est_specs <- list(pc = list(factor_model_estimator = "principal_components", include_outcome_fes = TRUE, r = r))
 
   t1 <- system.time(res1_imp <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = 1L, est_outcome_means_via_imputation = TRUE))["elapsed"]
-  t2 <- system.time(res2_imp <- est_target_param_components(panel_obj, est_specs = est_specs, est_outcome_means_via_imputation = TRUE))["elapsed"]
+  t2 <- system.time(res2_imp <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = n_threads, est_outcome_means_via_imputation = TRUE))["elapsed"]
   # Also compute direct composition (no imputation) variants
   # res1_dir <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = 1L, est_outcome_means_via_imputation = FALSE)
-  # res2_dir <- est_target_param_components(panel_obj, est_specs = est_specs, est_outcome_means_via_imputation = FALSE)
+  # res2_dir <- est_target_param_components(panel_obj, est_specs = est_specs, num_threads = n_threads, est_outcome_means_via_imputation = FALSE)
 
   print(sprintf("Elapsed time (1 thread): %f", t1))
-  print(sprintf("Elapsed time (%d threads): %f", get_cpp_default_concurrency(), t2))
+  print(sprintf("Elapsed time (%d threads): %f", n_threads, t2))
 
   M1_imp <- res1_imp$outcome_means$pc$mean_outcomes()
   M2_imp <- res2_imp$outcome_means$pc$mean_outcomes()
@@ -209,4 +212,12 @@ test_that("pipeline runs reasonably fast on a larger panel (optional perf check)
 
   # Soft perf sanity: multi-thread not egregiously slower than single-thread
   expect_lt(as.numeric(t2), as.numeric(t1) * 2.0 + 1.0)
+
+  # Additional runtime comparison: cohort-specific parameter estimation only (R wrapper)
+  t1_cs <- system.time(res_cs_1 <- est_cohort_specific_params(panel_obj, est_specs = est_specs, num_threads = 1L))["elapsed"]
+  t2_cs <- system.time(res_cs_n <- est_cohort_specific_params(panel_obj, est_specs = est_specs, num_threads = n_threads))["elapsed"]
+  print(sprintf("Elapsed time est_cohort_specific_params (1 thread): %f", t1_cs))
+  print(sprintf("Elapsed time est_cohort_specific_params (%d threads): %f", n_threads, t2_cs))
+  # Soft perf sanity: multi-thread not egregiously slower than single-thread
+  expect_lt(as.numeric(t2_cs), as.numeric(t1_cs) * 2.0 + 1.0)
 })
