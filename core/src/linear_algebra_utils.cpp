@@ -319,7 +319,6 @@ LSMRResult lsmr(const LinearOperator& A,
                 std::size_t num_diag_approx_draws,
                 std::size_t homotopy_iters)
 {
-    std::cout << "using LSMR!" << std::endl;
     LinearOperator Ao = A;
     arma::vec d; // column scaling for preconditioned coordinates
     if (diagonal_precond) {

@@ -699,14 +699,14 @@ FactorModelParameters comp_imputation_components(
     // Pre-computations always use the original panel and unit-level weights
     if (factor_model_params.has_fixed_effects()) {
         if (factor_model_params.has_covariate_coefs() && factor_model_params.q() > 0) {
-			arma::vec g_0_init = internal::comp_outcome_specific_params(
-				panel, VariableSpec::outcome(), factor_model_params, unit_weights_opt, effective_ooi_opt, fp);
+            arma::vec g_0_init = internal::comp_outcome_specific_params(
+                panel, VariableSpec::outcome(), factor_model_params, unit_weights_opt, effective_ooi_opt, fp);
 
             const std::size_t q = factor_model_params.q();
             std::vector<arma::vec> g_0_init_covars(q);
             for (std::size_t j = 0; j < q; ++j) {
-				g_0_init_covars[j] = internal::comp_outcome_specific_params(
-					panel, VariableSpec::covariate(j), factor_model_params, unit_weights_opt, effective_ooi_opt, fp);
+                g_0_init_covars[j] = internal::comp_outcome_specific_params(
+                    panel, VariableSpec::covariate(j), factor_model_params, unit_weights_opt, effective_ooi_opt, fp);
             }
 
             std::optional<arma::vec> g_0_init_opt = std::move(g_0_init);
