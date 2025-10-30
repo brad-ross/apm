@@ -115,26 +115,67 @@ construct_cohort_observed_outcomes_df <- function(outcome_ids, observed_outcome_
 #'   values in this column are dropped prior to cohort construction
 #' @param model_rank Integer model rank
 #' @param min_cohort_size Minimum units per cohort to keep (default: 0)
+#' @param subset_to_largest_super_cohort Logical; if TRUE, subset the panel to the largest super cohort at 
+#' the final iteration of the O^3 algorithm (default: FALSE)
+#' @param sort_cohorts_lexicographically Logical; if TRUE, sort the cohorts lexicographically by 
+#' the outcome indices (default: FALSE)
 #' @param cohort_observed_outcomes_as_df Logical; if TRUE (default), return a
 #'   single `cohort_observed_outcomes_df` (with columns `cohort_id`, `outcome_idx`,
 #'   `outcome_name`) instead of the triplet (`outcome_ids`, `outcome_to_index`,
 #'   `observed_outcome_indices`). If FALSE, return the original triplet.
-#' @return list with either:
-#'   - when cohort_observed_outcomes_as_df = TRUE:
-#'       - cohort_observed_outcomes_df: long-form mapping of cohorts to outcomes
-#'       - unit_cohorts: data.table with columns unit_id_col, cohort_id
-#'       - cohort_sizes: integer vector; number of units per cohort ordered by cohort_id
-#'   - when cohort_observed_outcomes_as_df = FALSE:
-#'       - outcome_ids: sorted unique values of outcome_id_col
-#'       - outcome_ids: sorted unique values of outcome_id_col
-#'       - outcome_to_index: named integer vector mapping outcome value -> index
-#'       - observed_outcome_indices: list of integer index vectors per cohort (ordered by cohort_id)
-#'       - unit_cohorts: data.table with columns unit_id_col, cohort_id
-#'       - cohort_sizes: integer vector; number of units per cohort in the same order
-#'         as observed_outcome_indices
+#' @param verbose Logical; if TRUE, print a log during the construction process
+#'   (default: FALSE)
+#' @return list with the following elements:
+#'   - outcome_ids: sorted unique values of outcome_id_col
+#'   - outcome_to_index: named integer vector mapping outcome value -> index
+#'   - observed_outcome_indices: list of integer index vectors per cohort (ordered by cohort_id)
+#'   - unit_cohorts: data.table with columns unit_id_col, cohort_id
+#'   - cohort_sizes: integer vector; number of units per cohort ordered by cohort_id
+#'   - cohort_observed_outcomes_df: long-form mapping of cohorts to outcomes (only returned when cohort_observed_outcomes_as_df = TRUE)
 #' @importFrom data.table setorder
 #' @export
 construct_cohorts_from_panel <- function(panel_df,
+                                         unit_id_col,
+                                         outcome_id_col,
+                                         outcome_value_col,
+                                         model_rank = 1,
+                                         min_cohort_size = 0,
+                                         subset_to_largest_super_cohort = FALSE,
+                                         sort_cohorts_lexicographically = FALSE,
+                                         cohort_observed_outcomes_as_df = TRUE,
+                                         verbose = FALSE) {
+    full_panel_cohorts <- construct_cohorts_from_panel_core(
+        panel_df, 
+        unit_id_col, 
+        outcome_id_col, 
+        outcome_value_col, 
+        model_rank, 
+        min_cohort_size, 
+        sort_cohorts_lexicographically, 
+        cohort_observed_outcomes_as_df, verbose)
+
+    if (isTRUE(subset_to_largest_super_cohort)) {
+        largest_super_cohort <- get_largest_super_cohort(
+            full_panel_cohorts$observed_outcome_indices, 
+            full_panel_cohorts$cohort_sizes, 
+            model_rank)
+        uc <- to_data_table(full_panel_cohorts$unit_cohorts)
+        data.table::setindexv(uc, "cohort_id")
+        unit_cohorts_in_largest_super_cohort <- uc[
+            .(largest_super_cohort), on = "cohort_id", nomatch = 0L, .(unit_id)
+        ]
+        data.table::setnames(unit_cohorts_in_largest_super_cohort, "unit_id", unit_id_col)
+        panel_df <- to_data_table(panel_df)[
+            unit_cohorts_in_largest_super_cohort, on = unit_id_col, nomatch = 0L
+        ]
+        return(construct_cohorts_from_panel_core(
+            panel_df, unit_id_col, outcome_id_col, outcome_value_col, model_rank, min_cohort_size, sort_cohorts_lexicographically, cohort_observed_outcomes_as_df, verbose))
+    }
+
+    full_panel_cohorts
+}
+
+construct_cohorts_from_panel_core <- function(panel_df,
                                          unit_id_col,
                                          outcome_id_col,
                                          outcome_value_col,
@@ -316,6 +357,7 @@ UnbalancedPanel <- R6Class(
                               outcome_value_col,
                               model_rank = 1,
                               min_cohort_size = 0,
+                              subset_to_largest_super_cohort = FALSE,
                               sort_cohorts_lexicographically = FALSE,
                               covar_cols = character(0),
                               auxiliary_cols = character(0),
@@ -366,11 +408,6 @@ UnbalancedPanel <- R6Class(
             }
             private$auxiliary_cols <- auxiliary_cols
             
-            # Build sorted unit ids and index map
-            unit_ids <- sort(unique(private$original_panel[[private$unit_id_col]]))
-            private$unit_ids <- unit_ids
-            private$unit_to_index <- setNames(seq_along(unit_ids), as.character(unit_ids))
-
             # Compute cohorts and save artifacts
             coh <- construct_cohorts_from_panel(
                 panel_df = private$original_panel,
@@ -378,6 +415,7 @@ UnbalancedPanel <- R6Class(
                 outcome_id_col = private$outcome_id_col,
                 outcome_value_col = private$outcome_value_col,
                 model_rank = private$model_rank,
+                subset_to_largest_super_cohort = subset_to_largest_super_cohort,
                 min_cohort_size = private$min_cohort_size,
                 sort_cohorts_lexicographically = sort_cohorts_lexicographically,
                 cohort_observed_outcomes_as_df = FALSE
@@ -388,6 +426,11 @@ UnbalancedPanel <- R6Class(
             private$observed_outcome_indices <- coh$observed_outcome_indices
             private$unit_cohorts <- coh$unit_cohorts
             private$cohort_sizes <- coh$cohort_sizes
+
+            # Build sorted unit ids and index map
+            unit_ids <- sort(unique(private$unit_cohorts$unit_id))
+            private$unit_ids <- unit_ids
+            private$unit_to_index <- setNames(seq_along(unit_ids), as.character(unit_ids))
 
             # Augment unit_cohorts with unit_idx
             private$unit_cohorts[, unit_idx := private$unit_to_index[as.character(unit_id)]]
