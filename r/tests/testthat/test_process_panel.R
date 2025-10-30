@@ -327,3 +327,86 @@ test_that("construct_cohort_observed_outcomes_df builds long-form mapping", {
     expect_equal(res_df, expected_df)
 })
 
+test_that("subset_to_largest_super_cohort retains all cohorts when model_rank equals adjacency overlap", {
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3) # cohorts: [1,2,3], [2,3,4], [3,4,5]
+    units_by_cohort <- make_units_by_cohort(3, 2)            # two units per cohort
+
+    panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE)
+
+    # Baseline without subsetting
+    base <- construct_cohorts_from_panel(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 2,                         # equals adjacency overlap for k=3
+        min_cohort_size = 0,
+        sort_cohorts_lexicographically = TRUE,
+        cohort_observed_outcomes_as_df = FALSE
+    )
+
+    # With subsetting to largest super cohort (should keep the full set)
+    subsetted <- construct_cohorts_from_panel(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 2,
+        min_cohort_size = 0,
+        subset_to_largest_super_cohort = TRUE,
+        sort_cohorts_lexicographically = TRUE,
+        cohort_observed_outcomes_as_df = FALSE
+    )
+
+    expect_equal(subsetted$outcome_ids, base$outcome_ids)
+    expect_equal(subsetted$observed_outcome_indices, base$observed_outcome_indices)
+
+    setorder(subsetted$unit_cohorts, unit_id)
+    setorder(base$unit_cohorts, unit_id)
+    expect_equal(subsetted$unit_cohorts, base$unit_cohorts)
+
+    expect_equal(subsetted$cohort_sizes, base$cohort_sizes)
+})
+
+test_that("subset_to_largest_super_cohort picks the largest cohort when model_rank exceeds adjacency overlap", {
+    outcomes <- make_outcomes(5)
+    cohort_indices <- make_staircase_observed_indices(5, 3) # overlap between adjacent cohorts is 2
+
+    # Make cohorts of unequal sizes so the largest is unambiguous
+    units_by_cohort <- list(
+        c("u1", "u2", "u3"),  # 3 units (largest)
+        c("u4", "u5"),        # 2 units
+        c("u6")               # 1 unit
+    )
+
+    panel_dt <- build_panel_from_indices(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE)
+
+    res <- construct_cohorts_from_panel(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 3,                         # > overlap (2) -> super cohort cannot span multiple cohorts
+        min_cohort_size = 0,
+        subset_to_largest_super_cohort = TRUE,
+        sort_cohorts_lexicographically = TRUE,
+        cohort_observed_outcomes_as_df = FALSE
+    )
+
+    # Only the largest cohort should remain; its outcomes are the first cohort's indices
+    expect_equal(res$observed_outcome_indices, list(as.integer(cohort_indices[[1]])))
+
+    # unit_cohorts should include only units from the largest cohort
+    expect_true(is.data.table(res$unit_cohorts))
+    setorder(res$unit_cohorts, unit_id)
+    expected_uc <- data.table(unit_id = units_by_cohort[[1]], cohort_id = 1L)
+    setkey(expected_uc, unit_id)
+    expect_equal(res$unit_cohorts, expected_uc)
+
+    # cohort_sizes should reflect the retained cohort's size
+    expect_equal(res$cohort_sizes, 3L)
+
+    # outcome_ids restricted to that cohort's outcomes (since unobserved rows are dropped)
+    expect_equal(res$outcome_ids, outcomes[cohort_indices[[1]]])
+})
