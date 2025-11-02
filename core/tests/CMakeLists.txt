@@ -19,6 +19,7 @@ add_executable(test_apm
     test_est_cohort_specific_params.cpp
     test_outcome_imputation.cpp
     test_est_target_param_components.cpp
+    test_est_target_params.cpp
     test_cluster_outcomes.cpp
 )
 
