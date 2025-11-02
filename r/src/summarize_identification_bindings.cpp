@@ -153,3 +153,28 @@ Rcpp::List summarize_identification_many_cpp(
     for (int i = 0; i < n; ++i) out[i] = id_summary_to_r(v[static_cast<std::size_t>(i)]);
     return out;
 }
+
+//'
+//' Mask observed outcome indices by cohort
+//'
+//' Applies a per-cohort outcome mask to a list of observed outcome indices.
+//'
+//' @param observed_outcome_indices A list of integer vectors (1-based) of observed
+//'   outcomes per cohort.
+//' @param cohort_outcomes_to_mask Optional named list mapping 1-based cohort ids to
+//'   integer vectors of 1-based outcome indices to drop for that cohort. Names must
+//'   be coercible to integers. If NULL or empty, the input is returned unchanged.
+//' @return A list of integer vectors (1-based) with masked outcomes removed per cohort.
+//' @examples
+//' get_masked_observed_outcome_indices(list(c(1,3), c(2,3)), list(`1`=c(3)))
+//' @export
+// [[Rcpp::export]]
+Rcpp::List get_masked_observed_outcome_indices(
+    Rcpp::List observed_outcome_indices,
+    Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue)
+{
+    apm::ObservedOutcomeIndices ooi0 = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+    apm::CohortOutcomeMask mask = apm::r_utils::to_cpp_mask(cohort_outcomes_to_mask_in);
+    apm::ObservedOutcomeIndices masked = apm::get_masked_observed_outcome_indices(ooi0, mask);
+    return apm::r_utils::to_r_observed_outcome_indices(masked);
+}
