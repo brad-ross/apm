@@ -39,6 +39,7 @@ validate_mask_arg <- function(mask) {
 #'   - cohort_outcome_means: list over cohorts of OutcomeMeanSuffStatEstimates
 #'   - cohort_weights: named list over spec keys of CohortWeightEstimates
 #'   - optionally masked_observed_outcome_indices, masked_cohort_outcome_means when masking is used
+#'   - optionally cohort_outcome_mask (named list of masked outcome indices per cohort) when masking is used
 #' @export
 est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_threads = 1L,
                                        cohort_outcomes_to_mask = NULL) {
@@ -79,6 +80,9 @@ est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_t
     }
     if ("masked_cohort_outcome_means" %in% names(res)) {
         out$masked_cohort_outcome_means <- res$masked_cohort_outcome_means
+    }
+    if ("cohort_outcome_mask" %in% names(res)) {
+        out$cohort_outcome_mask <- res$cohort_outcome_mask
     }
     if ("cohort_auxiliary_means" %in% names(res)) {
         wrapped_aux <- lapply(res$cohort_auxiliary_means, function(xp) CohortAuxiliaryDataMeanEstimates$new(xp))

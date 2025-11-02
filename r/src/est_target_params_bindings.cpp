@@ -251,6 +251,11 @@ Rcpp::List est_target_param_components_from_panel_cpp(
     }
     ome_out.attr("names") = names;
 
+    Rcpp::List cohort_stats(static_cast<int>(comps.cohort_outcome_mean_ests.size()));
+    for (int i = 0; i < static_cast<int>(comps.cohort_outcome_mean_ests.size()); ++i) {
+        cohort_stats[i] = make_xptr(apm::OutcomeMeanSuffStatEstimates(comps.cohort_outcome_mean_ests[static_cast<std::size_t>(i)]));
+    }
+
     Rcpp::RObject aux_out = R_NilValue;
     if (!comps.cohort_auxiliary_means.empty()) {
         Rcpp::List aux_list(static_cast<int>(comps.cohort_auxiliary_means.size()));
@@ -260,17 +265,29 @@ Rcpp::List est_target_param_components_from_panel_cpp(
         aux_out = aux_list;
     }
 
-    Rcpp::List final(2);
-    final["outcome_means"] = ome_out;
-    final["auxiliary_means"] = aux_out;
+    Rcpp::RObject masked_indices_out = R_NilValue;
     if (comps.masked_observed_outcome_indices.has_value()) {
-        final.push_back(apm::r_utils::to_r_observed_outcome_indices(*comps.masked_observed_outcome_indices),
-                        "masked_observed_outcome_indices");
+        masked_indices_out = apm::r_utils::to_r_observed_outcome_indices(*comps.masked_observed_outcome_indices);
     }
+
+    Rcpp::RObject masked_means_out = R_NilValue;
     if (!comps.masked_cohort_outcome_means.empty()) {
-        final.push_back(apm::r_utils::masked_means_to_r_list(comps.masked_cohort_outcome_means),
-                        "masked_cohort_outcome_means");
+        masked_means_out = apm::r_utils::masked_means_to_r_list(comps.masked_cohort_outcome_means);
     }
+
+    Rcpp::RObject mask_out = R_NilValue;
+    if (comps.cohort_outcome_mask.has_value()) {
+        mask_out = apm::r_utils::mask_to_r_list(*comps.cohort_outcome_mask);
+    }
+
+    Rcpp::List final = Rcpp::List::create(
+        Rcpp::Named("outcome_means") = ome_out,
+        Rcpp::Named("cohort_outcome_mean_ests") = cohort_stats,
+        Rcpp::Named("cohort_auxiliary_means") = aux_out,
+        Rcpp::Named("masked_cohort_outcome_means") = masked_means_out,
+        Rcpp::Named("masked_observed_outcome_indices") = masked_indices_out,
+        Rcpp::Named("cohort_outcome_mask") = mask_out
+    );
     return final;
 }
 

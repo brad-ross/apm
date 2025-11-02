@@ -50,10 +50,13 @@ est_target_params <- function(outcome_means, fn, aux_means = NULL, suff_stats = 
 #' This runs cohort-specific estimation and immediately aggregates/estimates cohort
 #' mean outcomes across cohorts, returning a list with:
 #' - outcome_means: named list (by spec) of `OutcomeMeansEstimates` objects
-#' - auxiliary_means: list of `CohortAuxiliaryDataMeanEstimates` (one per cohort), or NULL if none
+#' - cohort_outcome_mean_ests: list of `OutcomeMeanSuffStatEstimates` (one per cohort)
+#' - cohort_auxiliary_means: list of `CohortAuxiliaryDataMeanEstimates` (one per cohort), or NULL if none
+#' - masked_cohort_outcome_means / masked_observed_outcome_indices: present when masking is used
+#' - cohort_outcome_mask: named list of masked outcome indices when masking is used
 #'
 #' @inheritParams est_cohort_specific_params
-#' @return list with `outcome_means` and `auxiliary_means`.
+#' @return list with the components described above.
 #' @export
 est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_threads = NULL,
                                        cohort_outcomes_to_mask = NULL,
@@ -81,16 +84,23 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
   )
   out <- list(
     outcome_means = .wrap_outcome_means_xptr_list(res$outcome_means),
-    auxiliary_means = NULL
+    cohort_outcome_mean_ests = lapply(res$cohort_outcome_mean_ests, function(xp) OutcomeMeanSuffStatEstimates$new(xp)),
+    cohort_auxiliary_means = NULL,
+    masked_cohort_outcome_means = NULL,
+    masked_observed_outcome_indices = NULL,
+    cohort_outcome_mask = NULL
   )
-  if (!is.null(res$auxiliary_means)) {
-    out$auxiliary_means <- lapply(res$auxiliary_means, function(xp) CohortAuxiliaryDataMeanEstimates$new(xp))
+  if (!is.null(res$cohort_auxiliary_means)) {
+    out$cohort_auxiliary_means <- lapply(res$cohort_auxiliary_means, function(xp) CohortAuxiliaryDataMeanEstimates$new(xp))
   }
   if (!is.null(res$masked_cohort_outcome_means)) {
     out$masked_cohort_outcome_means <- res$masked_cohort_outcome_means
   }
   if (!is.null(res$masked_observed_outcome_indices)) {
     out$masked_observed_outcome_indices <- res$masked_observed_outcome_indices
+  }
+  if (!is.null(res$cohort_outcome_mask)) {
+    out$cohort_outcome_mask <- res$cohort_outcome_mask
   }
   out
 }
