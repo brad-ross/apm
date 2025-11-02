@@ -74,6 +74,7 @@ struct TargetParamComponents {
     std::vector<CohortAuxiliaryDataMeanEstimates> cohort_auxiliary_means;
     std::unordered_map<int, OutcomeMeanSufficientStatistics> masked_cohort_outcome_means;
     std::optional<ObservedOutcomeIndices> masked_observed_outcome_indices;
+    std::optional<CohortOutcomeMask> cohort_outcome_mask;
 };
 
 class InMemoryUnbalancedPanel; // fwd

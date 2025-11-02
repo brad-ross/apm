@@ -40,6 +40,7 @@ add_library(apm
     src/panels/CohortLevelUnbalancedPanel.cpp
     src/utils.cpp
     src/target_params/est_target_params.cpp
+    src/target_params/est_outcome_mean_err_metrics.cpp
 )
 target_include_directories(apm PUBLIC src)
 
@@ -98,5 +99,6 @@ install(TARGETS apm
 )
 
 install(FILES src/apm_core.h src/est_outcome_means.h src/agg_cohort_specific_factor_model_params.h src/summarize_identification.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/cohort_specific_param_structs.h src/OutcomeMeanSuffStatEstimator.h src/nuisance_param_estimators.h src/est_cohort_specific_params.h src/utils.h src/target_params/est_target_params.h src/panels/AbstractUnbalancedPanel.h src/panels/InMemoryUnbalancedPanel.h src/panels/CohortLevelUnbalancedPanel.h src/outcome_imputation.h src/outcome_clustering/cluster_outcomes.h src/outcome_clustering/weighted_kmeans.h
+    src/target_params/est_outcome_mean_err_metrics.h
     DESTINATION include/apm
 )

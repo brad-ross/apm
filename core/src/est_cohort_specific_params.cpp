@@ -89,7 +89,8 @@ static CohortSpecificEstimates build_cohort_specific_estimates(
     std::unordered_map<std::string, CohortWeightEstimates> cohort_weights,
     std::vector<CohortAuxiliaryDataMeanEstimates>&& aux_out,
     const std::optional<ObservedOutcomeIndices>& masked_indices_opt,
-    std::unordered_map<int, OutcomeMeanSufficientStatistics>&& masked_means)
+    std::unordered_map<int, OutcomeMeanSufficientStatistics>&& masked_means,
+    std::optional<CohortOutcomeMask> cohort_outcome_mask)
 {
     const std::size_t C = outcome_out.size();
 
@@ -118,6 +119,7 @@ static CohortSpecificEstimates build_cohort_specific_estimates(
         out.masked_observed_outcome_indices = masked_indices_opt;
         out.masked_cohort_outcome_means = std::move(masked_means);
     }
+    out.cohort_outcome_mask = std::move(cohort_outcome_mask);
     return out;
 }
 
@@ -417,7 +419,8 @@ CohortSpecificEstimates estimate_cohort_specific_params_from_internal_panel_rep(
         std::move(weights_by_spec),
         std::move(aux_out),
         masked_indices_opt,
-        std::move(masked_means_map)
+        std::move(masked_means_map),
+        has_mask ? std::optional<CohortOutcomeMask>(cohort_outcomes_to_mask) : std::nullopt
     );
 }
 

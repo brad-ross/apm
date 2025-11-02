@@ -32,6 +32,7 @@ struct CohortSpecificEstimates {
     // Optional: present only when masking is applied
     std::optional<ObservedOutcomeIndices> masked_observed_outcome_indices;
     std::unordered_map<int, OutcomeMeanSufficientStatistics> masked_cohort_outcome_means;
+    std::optional<CohortOutcomeMask> cohort_outcome_mask;
 };
 
 // New panel-based entry point. Indices inside panel may be 0- or 1-based; panel handles it.
