@@ -82,6 +82,19 @@ test_that("aligned_factors_identified returns FALSE when no merges occur", {
   expect_false(aligned_factors_identified(observed_outcome_indices, r))
 })
 
+test_that("count_outcomes_with_rank_overlap_per_cohort matches expected counts", {
+  ooi <- list(
+    c(1L, 2L, 3L),
+    c(2L, 3L, 4L),
+    c(5L)
+  )
+  counts <- count_outcomes_with_rank_overlap_per_cohort(ooi, rank = 2L)
+  expect_equal(as.integer(counts), c(4L, 4L, 1L))
+
+  counts_all <- count_outcomes_with_rank_overlap_per_cohort(ooi, rank = 0L)
+  expect_equal(as.integer(counts_all), c(5L, 5L, 5L))
+})
+
 test_that("get_masked_observed_outcome_indices masks per cohort as expected", {
   ooi <- list(c(1L, 3L), c(2L, 3L))
   # Drop outcome 3 from cohort 1 only
