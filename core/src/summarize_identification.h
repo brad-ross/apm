@@ -70,6 +70,15 @@ bool aligned_factors_identified(
     const ObservedOutcomeIndices& observed_outcome_indices,
     unsigned int r);
 
+// For each focal cohort, count the number of unique outcomes that appear in any
+// cohort whose overlap with the focal cohort contains at least `rank`
+// outcomes. The focal cohort's own outcomes always contribute to its count.
+// Cohort indices are 0-based.
+arma::uvec
+count_outcomes_with_rank_overlap_per_cohort(
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::size_t rank);
+
 } // namespace apm
 
 #endif // APM_SUMMARIZE_IDENTIFICATION_H

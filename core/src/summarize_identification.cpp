@@ -3,7 +3,7 @@
 
 #include <set>
 #include <limits>
-#include <unordered_map>
+#include <unordered_set>
 #include <stdexcept>
 
 namespace apm {
@@ -167,6 +167,99 @@ bool aligned_factors_identified(
     auto super_cohort_iterations = o3_algorithm(observed_outcome_indices, r);
     const auto& final_super_cohorts = super_cohort_iterations.back();
     return final_super_cohorts.size() == 1 && final_super_cohorts[0].size() == C;
+}
+
+arma::uvec
+count_outcomes_with_rank_overlap_per_cohort(
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::size_t rank)
+{
+    const std::size_t C = observed_outcome_indices.size();
+
+    arma::uvec counts(static_cast<arma::uword>(C), arma::fill::zeros);
+    if (C == 0) {
+        return counts;
+    }
+
+    const arma::uword total_outcomes_u = num_outcomes(observed_outcome_indices);
+    const std::size_t total_outcomes = static_cast<std::size_t>(total_outcomes_u);
+
+    std::vector<std::unordered_set<arma::uword>> membership_sets;
+    membership_sets.reserve(C);
+    for (const auto& outcomes : observed_outcome_indices) {
+        std::unordered_set<arma::uword> s;
+        s.reserve(outcomes.n_elem);
+        for (arma::uword v : outcomes) {
+            s.insert(v);
+        }
+        membership_sets.push_back(std::move(s));
+    }
+
+    std::vector<char> union_mask(total_outcomes, 0);
+    std::vector<arma::uword> touched;
+    touched.reserve(total_outcomes);
+
+    for (std::size_t i = 0; i < C; ++i) {
+        std::size_t count = 0;
+        const arma::uvec& focal = observed_outcome_indices[i];
+        for (std::size_t j = 0; j < C; ++j) {
+            const arma::uvec& comparison = observed_outcome_indices[j];
+            if (comparison.n_elem == 0) {
+                if (j != i) {
+                    continue;
+                }
+                // Focal cohort contributes nothing but still considered.
+            }
+
+            bool include_cohort = (i == j) || (rank == 0);
+            if (!include_cohort) {
+                const arma::uvec* smaller_vec = &focal;
+                const std::unordered_set<arma::uword>* other_set = &membership_sets[j];
+                bool focal_is_smaller = (focal.n_elem <= comparison.n_elem);
+                if (!focal_is_smaller) {
+                    smaller_vec = &comparison;
+                    other_set = &membership_sets[i];
+                }
+
+                std::size_t overlap = 0;
+                for (arma::uword val : *smaller_vec) {
+                    if (other_set->find(val) != other_set->end()) {
+                        ++overlap;
+                        if (overlap >= rank) {
+                            break;
+                        }
+                    }
+                }
+                include_cohort = (overlap >= rank);
+            }
+
+            if (!include_cohort) {
+                continue;
+            }
+
+            for (arma::uword outcome : comparison) {
+                if (outcome >= total_outcomes) {
+                    continue;
+                }
+                if (total_outcomes == 0) {
+                    break;
+                }
+                if (!union_mask[outcome]) {
+                    union_mask[outcome] = 1;
+                    touched.push_back(outcome);
+                    ++count;
+                }
+            }
+        }
+
+        counts(static_cast<arma::uword>(i)) = static_cast<arma::uword>(count);
+        for (arma::uword idx : touched) {
+            union_mask[idx] = 0;
+        }
+        touched.clear();
+    }
+
+    return counts;
 }
 
 } // namespace apm
