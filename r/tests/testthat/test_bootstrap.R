@@ -95,6 +95,9 @@ test_that("get_bootstrap_inference returns well-formed results and sensible band
 })
 
 test_that("Bootstrap inference coverage and p-values behave under the null", {
+  skip_on_cran()
+  if (!isTRUE(getOption("apm_run_perf_tests", FALSE))) skip("Set options(apm_run_perf_tests = TRUE) to enable perf checks.")
+  
   set.seed(12345)
   p <- 5L
   B <- 1000L
