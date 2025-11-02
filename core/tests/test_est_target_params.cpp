@@ -59,8 +59,8 @@ TEST(EstMaskedOutcomeMeanErrMetrics, ComputesBiasSeRmseForMaskedPairs) {
     ome_map.emplace("specA", omeA);
     ome_map.emplace("specB", omeB);
 
-    OutcomeMeanSufficientStatistics ss0(arma::vec(0), std::nullopt); ss0.cohort_pop_share = 0.4;
-    OutcomeMeanSufficientStatistics ss1(arma::vec(0), std::nullopt); ss1.cohort_pop_share = 0.6;
+    OutcomeMeanSufficientStatistics ss0(arma::vec(), std::nullopt); ss0.cohort_pop_share = 0.4;
+    OutcomeMeanSufficientStatistics ss1(arma::vec(), std::nullopt); ss1.cohort_pop_share = 0.6;
     std::vector<OutcomeMeanSuffStatEstimates> cohort_stats { OutcomeMeanSuffStatEstimates(ss0), OutcomeMeanSuffStatEstimates(ss1) };
 
     TargetParamComponents comps;
@@ -91,7 +91,7 @@ TEST(EstMaskedOutcomeMeanErrMetrics, ComputesBiasSeRmseForMaskedPairs) {
         EXPECT_NEAR(m.cohort_pop_share, 0.4, 1e-12);
         for (const auto& sname : {std::string("specA"), std::string("specB")}) {
             EXPECT_NEAR(m.bias_by_spec.at(sname), 1.0/3.0, 1e-12);
-            EXPECT_NEAR(m.se_by_spec.at(sname), std::sqrt(17.0/18.0), 1e-12);
+            EXPECT_NEAR(m.se_by_spec.at(sname), std::sqrt(4.0/3.0), 1e-12);
             EXPECT_NEAR(m.rmse_by_spec.at(sname), 1.0, 1e-12);
         }
     }
@@ -109,7 +109,7 @@ TEST(EstMaskedOutcomeMeanErrMetrics, ThrowsWhenSpecMissingBootstrap) {
     OutcomeMeansEstimates omeA(point, {}); // no bootstrap
     std::unordered_map<std::string, OutcomeMeansEstimates> ome_map; ome_map.emplace("specA", omeA);
 
-    OutcomeMeanSufficientStatistics ss0(arma::vec(0), std::nullopt); ss0.cohort_pop_share = 1.0;
+    OutcomeMeanSufficientStatistics ss0(arma::vec(), std::nullopt); ss0.cohort_pop_share = 1.0;
     std::vector<OutcomeMeanSuffStatEstimates> cohort_stats { OutcomeMeanSuffStatEstimates(ss0) };
 
     TargetParamComponents comps;
@@ -136,7 +136,7 @@ TEST(EstMaskedOutcomeMeanErrMetrics, ThrowsOnMaskLengthMismatch) {
     OutcomeMeansEstimates ome = make_ome(C, T, defs, B);
     std::unordered_map<std::string, OutcomeMeansEstimates> ome_map; ome_map.emplace("spec", ome);
 
-    OutcomeMeanSufficientStatistics ss0(arma::vec(0), std::nullopt); ss0.cohort_pop_share = 1.0;
+    OutcomeMeanSufficientStatistics ss0(arma::vec(), std::nullopt); ss0.cohort_pop_share = 1.0;
     std::vector<OutcomeMeanSuffStatEstimates> cohort_stats { OutcomeMeanSuffStatEstimates(ss0) };
 
     TargetParamComponents comps;
@@ -161,7 +161,7 @@ TEST(EstMaskedOutcomeMeanErrMetrics, ThrowsOnOutcomeIndexOutOfRange) {
     OutcomeMeansEstimates ome = make_ome(C, T, defs, B);
     std::unordered_map<std::string, OutcomeMeansEstimates> ome_map; ome_map.emplace("spec", ome);
 
-    OutcomeMeanSufficientStatistics ss0(arma::vec(0), std::nullopt); ss0.cohort_pop_share = 1.0;
+    OutcomeMeanSufficientStatistics ss0(arma::vec(), std::nullopt); ss0.cohort_pop_share = 1.0;
     std::vector<OutcomeMeanSuffStatEstimates> cohort_stats { OutcomeMeanSuffStatEstimates(ss0) };
 
     TargetParamComponents comps;
