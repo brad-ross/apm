@@ -77,4 +77,28 @@ TEST(SummarizeIdentificationTest, AlignedFactorsNotIdentified_NoMerges) {
     ASSERT_FALSE(apm::aligned_factors_identified(ooi, r));
 }
 
+TEST(SummarizeIdentificationTest, CountOutcomesWithRankOverlap_BasicScenario) {
+    std::vector<arma::uvec> ooi = make_ooi({{0,1,2}, {1,2,3}, {4}});
+    const std::size_t rank = 2;
+
+    arma::uvec counts = apm::count_outcomes_with_rank_overlap_per_cohort(ooi, rank);
+    ASSERT_EQ(counts.n_elem, static_cast<arma::uword>(3));
+    EXPECT_EQ(counts(0), static_cast<arma::uword>(4));
+    EXPECT_EQ(counts(1), static_cast<arma::uword>(4));
+    // The focal cohort always contributes its own outcomes even when it has
+    // fewer than `rank` observed outcomes.
+    EXPECT_EQ(counts(2), static_cast<arma::uword>(1));
+}
+
+TEST(SummarizeIdentificationTest, CountOutcomesWithRankOverlap_RankZeroIncludesAll) {
+    std::vector<arma::uvec> ooi = make_ooi({{0}, {1,2}, {2,3}});
+    const std::size_t rank = 0;
+
+    arma::uvec counts = apm::count_outcomes_with_rank_overlap_per_cohort(ooi, rank);
+    ASSERT_EQ(counts.n_elem, static_cast<arma::uword>(3));
+    EXPECT_EQ(counts(0), static_cast<arma::uword>(4));
+    EXPECT_EQ(counts(1), static_cast<arma::uword>(4));
+    EXPECT_EQ(counts(2), static_cast<arma::uword>(4));
+}
+
 
