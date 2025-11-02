@@ -90,7 +90,7 @@ test_that("recovers true cohort mean outcomes on staircase data", {
   
   # Take the single spec from the list and aggregate
   fmes_by_cohort <- est1$cohort_specific_factor_ests[[1]]
-  # Equal weights by size are default when not specified; construct equal weights explicitly
+  # Default weighting is by_size; construct explicit equal weights for the aggregation step
   w_equal <- CohortWeightEstimates$new(make_cohort_weight_estimates_cpp(rep(1, C)))
   fme_agg <- aggregate_factor_model_params(fmes_by_cohort, panel_obj$get_observed_outcome_indices(), w_equal)
   imp_comps <- comp_imputation_components(panel_obj, fme_agg, est1$cohort_outcome_means, num_threads = 1L)

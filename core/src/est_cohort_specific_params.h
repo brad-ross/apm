@@ -20,7 +20,7 @@ struct EstimatorSpecification {
     std::string factor_model_estimator; // e.g., "principal_components"
     bool include_outcome_fes;
     std::size_t r;
-    std::string cohort_weighting = "equal"; // "equal" or "by_size"
+    std::string cohort_weighting = "by_size"; // "by_size" (default) or "equal"
 };
 
 struct CohortSpecificEstimates {

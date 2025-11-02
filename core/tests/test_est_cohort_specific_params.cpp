@@ -105,7 +105,8 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
     ASSERT_TRUE(arma::approx_equal(oms0.observed_outcome_means, expected_means, "absdiff", 1e-12));
     EXPECT_FALSE(oms0.has_covar_means());
 
-    // Cohort weights: default is equal => 1/C, no bootstrap
+    // Cohort weights: default is by_size; with equal units per cohort this reduces to 1/C and
+    // there are no bootstrap replicates without a bootstrap input.
     ASSERT_EQ(out.cohort_weights.size(), 2u);
     arma::vec eq = arma::ones(ctx.C) / static_cast<double>(ctx.C);
     {
