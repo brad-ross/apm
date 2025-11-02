@@ -155,6 +155,29 @@ Rcpp::List summarize_identification_many_cpp(
 }
 
 //'
+//' Count outcomes with sufficient overlap across cohorts
+//'
+//' For each focal cohort, counts the number of unique outcomes that are observed
+//' in any cohort whose observed outcomes overlap with the focal cohort in at
+//' least `rank` outcomes. The focal cohort's own outcomes always contribute to
+//' its count.
+//'
+//' @param observed_outcome_indices A list of integer vectors (1-based) of
+//'   observed outcomes per cohort.
+//' @param rank Minimum number of overlapping observed outcomes required for a
+//'   cohort to contribute.
+//' @return An integer vector of counts, one per cohort.
+//' @export
+// [[Rcpp::export]]
+arma::uvec count_outcomes_with_rank_overlap_per_cohort(
+    Rcpp::List observed_outcome_indices,
+    std::size_t rank)
+{
+    apm::ObservedOutcomeIndices ooi0 = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+    return apm::count_outcomes_with_rank_overlap_per_cohort(ooi0, rank);
+}
+
+//'
 //' Mask observed outcome indices by cohort
 //'
 //' Applies a per-cohort outcome mask to a list of observed outcome indices.
