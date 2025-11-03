@@ -9,6 +9,7 @@ test_that("summarize_identification returns named list with expected fields", {
     "largest_super_cohort_size",
     "largest_super_cohort_share",
     "min_cohort_size_in_largest_super",
+    "num_outcomes_in_largest_super_cohort",
     "num_o3_iterations"
   ))
   expect_true(out$largest_super_cohort_size >= 0)
@@ -20,6 +21,8 @@ test_that("summarize_identification returns named list with expected fields", {
   expect_equal(out$largest_super_cohort_size, 50)
   expect_equal(out$min_cohort_size_in_largest_super, 50)
   expect_equal(out$largest_super_cohort_share, 50/90, tolerance = 1e-12)
+  # Largest super cohort is the larger single cohort {1,3} (1-based); union outcomes count is 2
+  expect_equal(out$num_outcomes_in_largest_super_cohort, 2)
 })
 
 test_that("summarize_identification returns list of named lists for many panels", {
@@ -33,6 +36,7 @@ test_that("summarize_identification returns list of named lists for many panels"
     "largest_super_cohort_size",
     "largest_super_cohort_share",
     "min_cohort_size_in_largest_super",
+    "num_outcomes_in_largest_super_cohort",
     "num_o3_iterations"
   ))
   # For this case, no merges occur; only initial state is present
@@ -40,6 +44,8 @@ test_that("summarize_identification returns list of named lists for many panels"
   expect_equal(el$largest_super_cohort_size, 25)
   expect_equal(el$min_cohort_size_in_largest_super, 25)
   expect_equal(el$largest_super_cohort_share, 25/35, tolerance = 1e-12)
+  # Largest super cohort is the larger single cohort {2,3} (1-based); union outcomes count is 2
+  expect_equal(el$num_outcomes_in_largest_super_cohort, 2)
 })
 
 test_that("aligned_factors_identified returns TRUE for staircase pattern", {

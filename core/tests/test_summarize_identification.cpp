@@ -30,11 +30,14 @@ TEST(SummarizeIdentificationTest, SinglePanel_NoMerges_FinalIteration) {
     EXPECT_GE(out.min_cohort_size_in_largest_super, static_cast<std::size_t>(0));
     EXPECT_GE(out.largest_super_cohort_share, 0.0);
     EXPECT_LE(out.largest_super_cohort_share, 1.0);
+    EXPECT_GE(out.num_outcomes_in_largest_super_cohort, static_cast<std::size_t>(0));
     // With r=2 and these cohorts, no merges; only initial state is present
     EXPECT_EQ(out.num_o3_iterations, static_cast<std::size_t>(1));
     EXPECT_EQ(out.largest_super_cohort_size, static_cast<std::size_t>(50));
     EXPECT_EQ(out.min_cohort_size_in_largest_super, static_cast<std::size_t>(50));
     EXPECT_NEAR(out.largest_super_cohort_share, 50.0/90.0, 1e-12);
+    // Largest super cohort is the larger single cohort {0,2}; union outcomes count is 2
+    EXPECT_EQ(out.num_outcomes_in_largest_super_cohort, static_cast<std::size_t>(2));
 }
 
 TEST(SummarizeIdentificationTest, ManyPanels_ListInputs_NoMerges) {
@@ -50,6 +53,8 @@ TEST(SummarizeIdentificationTest, ManyPanels_ListInputs_NoMerges) {
     EXPECT_EQ(el.largest_super_cohort_size, static_cast<std::size_t>(25));
     EXPECT_EQ(el.min_cohort_size_in_largest_super, static_cast<std::size_t>(25));
     EXPECT_NEAR(el.largest_super_cohort_share, 25.0/35.0, 1e-12);
+    // Largest super cohort is the larger single cohort {1,2}; union outcomes count is 2
+    EXPECT_EQ(el.num_outcomes_in_largest_super_cohort, static_cast<std::size_t>(2));
 }
 
 // Move aligned_factors_identified tests here from test_apm_core.cpp
