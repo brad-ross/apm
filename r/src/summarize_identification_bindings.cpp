@@ -12,6 +12,7 @@ inline Rcpp::List id_summary_to_r(const apm::IdentificationSummary& s) {
         Rcpp::Named("largest_super_cohort_size") = static_cast<double>(s.largest_super_cohort_size),
         Rcpp::Named("largest_super_cohort_share") = s.largest_super_cohort_share,
         Rcpp::Named("min_cohort_size_in_largest_super") = static_cast<double>(s.min_cohort_size_in_largest_super),
+        Rcpp::Named("num_outcomes_in_largest_super_cohort") = static_cast<double>(s.num_outcomes_in_largest_super_cohort),
         Rcpp::Named("num_o3_iterations") = static_cast<double>(s.num_o3_iterations)
     );
 }

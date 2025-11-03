@@ -20,6 +20,7 @@
 #'   - `largest_super_cohort_size`
 #'   - `largest_super_cohort_share`
 #'   - `min_cohort_size_in_largest_super`
+#'   - `num_outcomes_in_largest_super_cohort`
 #'   - `num_o3_iterations`
 #' @examples
 #' summarize_identification(list(c(1,3), c(2,3)), c(50, 40), r = 2)
