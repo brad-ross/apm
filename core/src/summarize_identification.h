@@ -16,6 +16,7 @@ struct IdentificationSummary {
   std::size_t largest_super_cohort_size;            // total units in largest final super cohort
   double       largest_super_cohort_share;          // share of panel units
   std::size_t  min_cohort_size_in_largest_super;    // min combined cohort size within that super cohort
+  std::size_t  num_outcomes_in_largest_super_cohort; // unique outcomes observed by at least one cohort in the largest super cohort
   std::size_t  num_o3_iterations;                   // number of O^3 iterations (length of super_cohort_iterates)
 };
 

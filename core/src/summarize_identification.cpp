@@ -5,6 +5,7 @@
 #include <limits>
 #include <unordered_set>
 #include <stdexcept>
+#include <vector>
 
 namespace apm {
 
@@ -28,6 +29,34 @@ SuperCohortStats super_cohort_stats(
         if (v < min_sz) min_sz = v;
     }
     return { total, (min_sz == std::numeric_limits<std::size_t>::max()) ? 0 : min_sz };
+}
+
+// Count unique outcomes observed by at least one cohort in the provided super cohort
+std::size_t count_observed_outcomes_for_super_cohort(
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::uvec& super_cohort_indices)
+{
+    const arma::uword total_outcomes_u = num_outcomes(observed_outcome_indices);
+    const std::size_t total_outcomes = static_cast<std::size_t>(total_outcomes_u);
+    if (total_outcomes == 0 || super_cohort_indices.n_elem == 0) {
+        return 0;
+    }
+
+    std::vector<char> seen(total_outcomes, 0);
+    std::size_t union_count = 0;
+    for (arma::uword cohort_idx : super_cohort_indices) {
+        const arma::uvec& outcomes = observed_outcome_indices[static_cast<std::size_t>(cohort_idx)];
+        for (arma::uword outcome : outcomes) {
+            if (outcome >= total_outcomes) {
+                continue;
+            }
+            if (!seen[outcome]) {
+                seen[outcome] = 1;
+                ++union_count;
+            }
+        }
+    }
+    return union_count;
 }
 
 } // anonymous namespace
@@ -108,13 +137,16 @@ IdentificationSummary summarize_identification(
 
     auto stats = super_cohort_stats(largest_super, cohort_sizes);
 
+    const std::size_t outcomes_union_count =
+        count_observed_outcomes_for_super_cohort(observed_outcome_indices, largest_super);
+
     auto super_cohort_iterates = o3_algorithm(observed_outcome_indices, static_cast<unsigned int>(max_model_rank));
     if (super_cohort_iterates.empty()) {
-        return IdentificationSummary{0, 0.0, 0, 0};
+        return IdentificationSummary{0, 0.0, 0, 0, 0};
     }
     const arma::uword total_units_u = arma::accu(cohort_sizes);
     double share = (total_units_u == 0) ? 0.0 : static_cast<double>(stats.total_size) / static_cast<double>(total_units_u);
-    return IdentificationSummary{stats.total_size, share, stats.min_cohort_size, super_cohort_iterates.size()};
+    return IdentificationSummary{stats.total_size, share, stats.min_cohort_size, outcomes_union_count, super_cohort_iterates.size()};
 }
 
 IdentificationSummary summarize_identification(
