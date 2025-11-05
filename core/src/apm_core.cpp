@@ -306,7 +306,17 @@ arma::mat align_factors_using_apm(
         effective_weights
     );
 
-    return arma::null(agg_proj_mat);
+    // Return the eigenvectors corresponding to the dims.r smallest eigenvalues
+    // TODO: use iterative algorithm taking advantage of agg_proj_mat being sum of sparse matrices for scale
+    arma::vec eigenvalues;
+    arma::mat eigenvectors;
+    if (!arma::eig_sym(eigenvalues, eigenvectors, agg_proj_mat)) {
+        throw std::runtime_error("Failed to compute eigendecomposition of aggregated projection matrix.");
+    }
+    if (dims.r == 0 || dims.r > eigenvectors.n_cols) {
+        throw std::invalid_argument("Requested number of factors (r) must be between 1 and the matrix rank.");
+    }
+    return eigenvectors.cols(0, dims.r - 1);
 }
 
 arma::vec aggregate_cohort_specific_outcome_fes(
