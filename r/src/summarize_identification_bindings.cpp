@@ -1,7 +1,6 @@
 #include <RcppArmadillo.h>
 #include "r_utils.h"
 #include "../../core/src/summarize_identification.h"
-#include <optional>
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
@@ -23,11 +22,11 @@ inline Rcpp::List id_summary_to_r(const apm::IdentificationSummary& s) {
 // Convert R-facing iteration selector to C++:
 // - Positive k is 1-based in R and becomes (k-1) for C++ level indexing
 // - Negative values (-1: final, -2: second-to-last, ...) are passed through
-// - If NULL, return std::nullopt so caller can select the overload without iter
-inline std::optional<int> r_iter_to_cpp(const Rcpp::Nullable<Rcpp::IntegerVector>& iter) {
-    if (iter.isNull()) return std::nullopt;
+// - If NULL, return -1 (final iteration)
+inline int r_iter_to_cpp(const Rcpp::Nullable<Rcpp::IntegerVector>& iter) {
+    if (iter.isNull()) return -1;
     const int it = Rcpp::as<int>(iter.get());
-    return (it > 0) ? std::optional<int>(it - 1) : std::optional<int>(it);
+    return (it > 0) ? (it - 1) : it;
 }
 
 } // anonymous namespace
@@ -73,13 +72,8 @@ arma::uvec get_largest_super_cohort(
     Rcpp::Nullable<Rcpp::IntegerVector> iter = R_NilValue)
 {
     apm::ObservedOutcomeIndices ooi0 = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
-    arma::uvec res0;
-    std::optional<int> it0 = r_iter_to_cpp(iter);
-    if (!it0.has_value()) {
-        res0 = apm::get_largest_super_cohort(ooi0, cohort_sizes, max_model_rank);
-    } else {
-        res0 = apm::get_largest_super_cohort(ooi0, cohort_sizes, max_model_rank, *it0);
-    }
+    const int it0 = r_iter_to_cpp(iter);
+    arma::uvec res0 = apm::get_largest_super_cohort(ooi0, cohort_sizes, max_model_rank, it0);
     // Return 1-based indices to R
     return res0 + 1;
 }
@@ -105,20 +99,13 @@ Rcpp::List summarize_identification_cpp(
 {
     apm::ObservedOutcomeIndices ooi0 = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
     apm::IdentificationSummary s;
-    std::optional<int> it0 = r_iter_to_cpp(iter);
+    const int it0 = r_iter_to_cpp(iter);
+    std::cout << "it0: " << it0 << std::endl;
     if (outcome_weights.isNull()) {
-        if (!it0.has_value()) {
-            s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank);
-        } else {
-            s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, *it0);
-        }
+        s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, it0);
     } else {
         arma::vec weights = Rcpp::as<arma::vec>(outcome_weights.get());
-        if (!it0.has_value()) {
-            s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, weights);
-        } else {
-            s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, *it0, weights);
-        }
+        s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, it0, weights);
     }
     return id_summary_to_r(s);
 }
@@ -174,19 +161,11 @@ Rcpp::List summarize_identification_many_cpp(
     }
 
     std::vector<apm::IdentificationSummary> v;
-    std::optional<int> it0 = r_iter_to_cpp(iter);
-    if (!it0.has_value()) {
-        if (has_weights) {
-            v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank, all_weights);
-        } else {
-            v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank);
-        }
+    const int it0 = r_iter_to_cpp(iter);
+    if (has_weights) {
+        v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank, it0, all_weights);
     } else {
-        if (has_weights) {
-            v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank, *it0, all_weights);
-        } else {
-            v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank, *it0);
-        }
+        v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank, it0);
     }
     Rcpp::List out(n);
     for (int i = 0; i < n; ++i) out[i] = id_summary_to_r(v[static_cast<std::size_t>(i)]);
