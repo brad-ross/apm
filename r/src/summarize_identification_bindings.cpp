@@ -13,6 +13,9 @@ inline Rcpp::List id_summary_to_r(const apm::IdentificationSummary& s) {
         Rcpp::Named("largest_super_cohort_share") = s.largest_super_cohort_share,
         Rcpp::Named("min_cohort_size_in_largest_super") = static_cast<double>(s.min_cohort_size_in_largest_super),
         Rcpp::Named("num_outcomes_in_largest_super_cohort") = static_cast<double>(s.num_outcomes_in_largest_super_cohort),
+        Rcpp::Named("total_outcome_weight_in_largest_super_cohort") = s.total_outcome_weight_in_largest_super_cohort,
+        Rcpp::Named("share_outcomes_in_largest_super_cohort") = s.share_outcomes_in_largest_super_cohort,
+        Rcpp::Named("share_outcome_weight_in_largest_super_cohort") = s.share_outcome_weight_in_largest_super_cohort,
         Rcpp::Named("num_o3_iterations") = static_cast<double>(s.num_o3_iterations)
     );
 }
@@ -89,6 +92,7 @@ arma::uvec get_largest_super_cohort(
 //' @param max_model_rank Maximum model rank (r)
 //' @param iter Optional iteration selector, defaults to -1 (final iteration):
 //'   Positive k refers to the k-th iteration (1-based). -1 for final, -2 second-to-last, etc. Non-negative clamps.
+//' @param outcome_weights Optional numeric vector of outcome weights. Defaults to all ones.
 //' @return A named list with identification summary fields
 //' @export
 // [[Rcpp::export]]
@@ -96,15 +100,25 @@ Rcpp::List summarize_identification_cpp(
     Rcpp::List observed_outcome_indices,
     const arma::uvec& cohort_sizes,
     std::size_t max_model_rank,
-    Rcpp::Nullable<Rcpp::IntegerVector> iter = R_NilValue)
+    Rcpp::Nullable<Rcpp::IntegerVector> iter = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue)
 {
     apm::ObservedOutcomeIndices ooi0 = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
     apm::IdentificationSummary s;
     std::optional<int> it0 = r_iter_to_cpp(iter);
-    if (!it0.has_value()) {
-        s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank);
+    if (outcome_weights.isNull()) {
+        if (!it0.has_value()) {
+            s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank);
+        } else {
+            s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, *it0);
+        }
     } else {
-        s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, *it0);
+        arma::vec weights = Rcpp::as<arma::vec>(outcome_weights.get());
+        if (!it0.has_value()) {
+            s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, weights);
+        } else {
+            s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, *it0, weights);
+        }
     }
     return id_summary_to_r(s);
 }
@@ -117,6 +131,7 @@ Rcpp::List summarize_identification_cpp(
 //' @param max_model_rank Maximum model rank (r)
 //' @param iter Optional iteration selector, defaults to -1 (final iteration):
 //'   Positive k refers to the k-th iteration (1-based). -1 for final, -2 second-to-last, etc. Non-negative clamps.
+//' @param outcome_weights_list Optional list of numeric vectors of outcome weights. Defaults to all ones.
 //' @return A list of named lists, one per input panel
 //' @export
 // [[Rcpp::export]]
@@ -124,7 +139,8 @@ Rcpp::List summarize_identification_many_cpp(
     Rcpp::List observed_outcome_indices_list,
     Rcpp::List cohort_sizes_list,
     std::size_t max_model_rank,
-    Rcpp::Nullable<Rcpp::IntegerVector> iter = R_NilValue)
+    Rcpp::Nullable<Rcpp::IntegerVector> iter = R_NilValue,
+    Rcpp::Nullable<Rcpp::List> outcome_weights_list = R_NilValue)
 {
     if (observed_outcome_indices_list.size() != cohort_sizes_list.size()) {
         Rcpp::stop("observed_outcome_indices_list and cohort_sizes_list must have same length");
@@ -143,12 +159,34 @@ Rcpp::List summarize_identification_many_cpp(
         all_sizes.push_back(std::move(sz_i));
     }
 
+    std::vector<arma::vec> all_weights;
+    bool has_weights = !outcome_weights_list.isNull();
+    if (has_weights) {
+        Rcpp::List weights_list(outcome_weights_list.get());
+        if (weights_list.size() != n) {
+            Rcpp::stop("outcome_weights_list must have same length as observed_outcome_indices_list");
+        }
+        all_weights.reserve(n);
+        for (int i = 0; i < n; ++i) {
+            Rcpp::NumericVector w_i = weights_list[i];
+            all_weights.push_back(Rcpp::as<arma::vec>(w_i));
+        }
+    }
+
     std::vector<apm::IdentificationSummary> v;
     std::optional<int> it0 = r_iter_to_cpp(iter);
     if (!it0.has_value()) {
-        v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank);
+        if (has_weights) {
+            v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank, all_weights);
+        } else {
+            v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank);
+        }
     } else {
-        v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank, *it0);
+        if (has_weights) {
+            v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank, *it0, all_weights);
+        } else {
+            v = apm::summarize_identification(all_ooi, all_sizes, max_model_rank, *it0);
+        }
     }
     Rcpp::List out(n);
     for (int i = 0; i < n; ++i) out[i] = id_summary_to_r(v[static_cast<std::size_t>(i)]);
@@ -167,15 +205,21 @@ Rcpp::List summarize_identification_many_cpp(
 //'   observed outcomes per cohort.
 //' @param rank Minimum number of overlapping observed outcomes required for a
 //'   cohort to contribute.
-//' @return An integer vector of counts, one per cohort.
+//' @param outcome_weights Optional numeric vector of outcome weights. Defaults to all ones.
+//' @return A numeric vector of weighted counts, one per cohort.
 //' @export
 // [[Rcpp::export]]
-arma::uvec count_outcomes_with_rank_overlap_per_cohort(
+arma::vec count_outcomes_with_rank_overlap_per_cohort(
     Rcpp::List observed_outcome_indices,
-    std::size_t rank)
+    std::size_t rank,
+    Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue)
 {
     apm::ObservedOutcomeIndices ooi0 = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
-    return apm::count_outcomes_with_rank_overlap_per_cohort(ooi0, rank);
+    if (outcome_weights.isNull()) {
+        return apm::count_outcomes_with_rank_overlap_per_cohort(ooi0, rank);
+    }
+    arma::vec weights = Rcpp::as<arma::vec>(outcome_weights.get());
+    return apm::count_outcomes_with_rank_overlap_per_cohort(ooi0, rank, weights);
 }
 
 //'

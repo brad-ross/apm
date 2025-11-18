@@ -10,6 +10,9 @@ test_that("summarize_identification returns named list with expected fields", {
     "largest_super_cohort_share",
     "min_cohort_size_in_largest_super",
     "num_outcomes_in_largest_super_cohort",
+    "total_outcome_weight_in_largest_super_cohort",
+    "share_outcomes_in_largest_super_cohort",
+    "share_outcome_weight_in_largest_super_cohort",
     "num_o3_iterations"
   ))
   expect_true(out$largest_super_cohort_size >= 0)
@@ -23,6 +26,9 @@ test_that("summarize_identification returns named list with expected fields", {
   expect_equal(out$largest_super_cohort_share, 50/90, tolerance = 1e-12)
   # Largest super cohort is the larger single cohort {1,3} (1-based); union outcomes count is 2
   expect_equal(out$num_outcomes_in_largest_super_cohort, 2)
+  expect_equal(out$total_outcome_weight_in_largest_super_cohort, 2, tolerance = 1e-12)
+  expect_equal(out$share_outcomes_in_largest_super_cohort, 2/3, tolerance = 1e-12)
+  expect_equal(out$share_outcome_weight_in_largest_super_cohort, 2/3, tolerance = 1e-12)
 })
 
 test_that("summarize_identification returns list of named lists for many panels", {
@@ -37,6 +43,9 @@ test_that("summarize_identification returns list of named lists for many panels"
     "largest_super_cohort_share",
     "min_cohort_size_in_largest_super",
     "num_outcomes_in_largest_super_cohort",
+    "total_outcome_weight_in_largest_super_cohort",
+    "share_outcomes_in_largest_super_cohort",
+    "share_outcome_weight_in_largest_super_cohort",
     "num_o3_iterations"
   ))
   # For this case, no merges occur; only initial state is present
@@ -46,6 +55,20 @@ test_that("summarize_identification returns list of named lists for many panels"
   expect_equal(el$largest_super_cohort_share, 25/35, tolerance = 1e-12)
   # Largest super cohort is the larger single cohort {2,3} (1-based); union outcomes count is 2
   expect_equal(el$num_outcomes_in_largest_super_cohort, 2)
+  expect_equal(el$total_outcome_weight_in_largest_super_cohort, 2, tolerance = 1e-12)
+  expect_equal(el$share_outcomes_in_largest_super_cohort, 2/3, tolerance = 1e-12)
+  expect_equal(el$share_outcome_weight_in_largest_super_cohort, 2/3, tolerance = 1e-12)
+})
+
+test_that("summarize_identification handles outcome weights", {
+  ooi <- list(c(1L, 3L), c(2L, 3L))
+  sizes <- c(50L, 40L)
+  weights <- c(1, 5, 10)
+  out <- summarize_identification(ooi, sizes, r = 2L, outcome_weights = weights)
+  expect_equal(out$num_outcomes_in_largest_super_cohort, 2)
+  expect_equal(out$total_outcome_weight_in_largest_super_cohort, 11, tolerance = 1e-12)
+  expect_equal(out$share_outcomes_in_largest_super_cohort, 2/3, tolerance = 1e-12)
+  expect_equal(out$share_outcome_weight_in_largest_super_cohort, 11/16, tolerance = 1e-12)
 })
 
 test_that("aligned_factors_identified returns TRUE for staircase pattern", {
@@ -95,10 +118,14 @@ test_that("count_outcomes_with_rank_overlap_per_cohort matches expected counts",
     c(5L)
   )
   counts <- count_outcomes_with_rank_overlap_per_cohort(ooi, rank = 2L)
-  expect_equal(as.integer(counts), c(4L, 4L, 1L))
+  expect_equal(as.numeric(counts), c(4, 4, 1))
 
   counts_all <- count_outcomes_with_rank_overlap_per_cohort(ooi, rank = 0L)
-  expect_equal(as.integer(counts_all), c(5L, 5L, 5L))
+  expect_equal(as.numeric(counts_all), c(5, 5, 5))
+
+  weights <- c(1, 2, 3, 4, 5)
+  weighted_counts <- count_outcomes_with_rank_overlap_per_cohort(ooi, rank = 1L, outcome_weights = weights)
+  expect_equal(as.numeric(weighted_counts), c(10, 10, 5))
 })
 
 test_that("get_masked_observed_outcome_indices masks per cohort as expected", {

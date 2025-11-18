@@ -13,11 +13,14 @@
 namespace apm {
 
 struct IdentificationSummary {
-  std::size_t largest_super_cohort_size;            // total units in largest final super cohort
-  double       largest_super_cohort_share;          // share of panel units
-  std::size_t  min_cohort_size_in_largest_super;    // min combined cohort size within that super cohort
+  std::size_t largest_super_cohort_size;             // total units in largest final super cohort
+  double       largest_super_cohort_share;           // share of panel units
+  std::size_t  min_cohort_size_in_largest_super;     // min combined cohort size within that super cohort
   std::size_t  num_outcomes_in_largest_super_cohort; // unique outcomes observed by at least one cohort in the largest super cohort
-  std::size_t  num_o3_iterations;                   // number of O^3 iterations (length of super_cohort_iterates)
+  double       total_outcome_weight_in_largest_super_cohort;  // sum of weights across union outcomes in largest super cohort
+  double       share_outcomes_in_largest_super_cohort;        // union outcome count divided by total outcomes
+  double       share_outcome_weight_in_largest_super_cohort;  // union outcome weight divided by total outcome weight
+  std::size_t  num_o3_iterations;                    // number of O^3 iterations (length of super_cohort_iterates)
 };
 
 // Returns the sorted cohort indices (arma::uvec) of the largest super cohort
@@ -59,6 +62,14 @@ summarize_identification(
     std::size_t max_model_rank,
     int iter);
 
+IdentificationSummary
+summarize_identification(
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::uvec& cohort_sizes,
+    std::size_t max_model_rank,
+    int iter,
+    const arma::vec& outcome_weights);
+
 // Wrapper: defaults iter to -1 (final iteration)
 IdentificationSummary
 summarize_identification(
@@ -66,19 +77,48 @@ summarize_identification(
     const arma::uvec& cohort_sizes,
     std::size_t max_model_rank);
 
+IdentificationSummary
+summarize_identification(
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::uvec& cohort_sizes,
+    std::size_t max_model_rank,
+    const arma::vec& outcome_weights);
+
+std::vector<IdentificationSummary>
+summarize_identification(
+    const std::vector<ObservedOutcomeIndices>& observed_outcome_indices_vec,
+    const std::vector<arma::uvec>& cohort_sizes_vec,
+    std::size_t max_model_rank,
+    int iter,
+    const std::vector<arma::vec>& outcome_weights_vec);
+
+std::vector<IdentificationSummary>
+summarize_identification(
+    const std::vector<ObservedOutcomeIndices>& observed_outcome_indices_vec,
+    const std::vector<arma::uvec>& cohort_sizes_vec,
+    std::size_t max_model_rank,
+    const std::vector<arma::vec>& outcome_weights_vec);
+
 // Checks if the factors are identified across all cohorts using the O^3 algorithm
 bool aligned_factors_identified(
     const ObservedOutcomeIndices& observed_outcome_indices,
     unsigned int r);
 
-// For each focal cohort, count the number of unique outcomes that appear in any
-// cohort whose overlap with the focal cohort contains at least `rank`
-// outcomes. The focal cohort's own outcomes always contribute to its count.
-// Cohort indices are 0-based.
-arma::uvec
+// For each focal cohort, accumulate the total outcome weight of the unique
+// outcomes that appear in any cohort whose overlap with the focal cohort
+// contains at least `rank` outcomes. The focal cohort's own outcomes always
+// contribute to its total. Cohort indices are 0-based. When no weights are
+// supplied, each outcome weighs 1.
+arma::vec
 count_outcomes_with_rank_overlap_per_cohort(
     const ObservedOutcomeIndices& observed_outcome_indices,
     std::size_t rank);
+
+arma::vec
+count_outcomes_with_rank_overlap_per_cohort(
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::size_t rank,
+    const arma::vec& outcome_weights);
 
 } // namespace apm
 
