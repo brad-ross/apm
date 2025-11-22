@@ -30,11 +30,17 @@ TEST(SummarizeIdentificationTest, SinglePanel_NoMerges_FinalIteration) {
     EXPECT_GE(out.min_cohort_size_in_largest_super, static_cast<std::size_t>(0));
     EXPECT_GE(out.largest_super_cohort_share, 0.0);
     EXPECT_LE(out.largest_super_cohort_share, 1.0);
+    EXPECT_GE(out.num_outcomes_in_largest_super_cohort, static_cast<std::size_t>(0));
     // With r=2 and these cohorts, no merges; only initial state is present
     EXPECT_EQ(out.num_o3_iterations, static_cast<std::size_t>(1));
     EXPECT_EQ(out.largest_super_cohort_size, static_cast<std::size_t>(50));
     EXPECT_EQ(out.min_cohort_size_in_largest_super, static_cast<std::size_t>(50));
     EXPECT_NEAR(out.largest_super_cohort_share, 50.0/90.0, 1e-12);
+    // Largest super cohort is the larger single cohort {0,2}; union outcomes count is 2
+    EXPECT_EQ(out.num_outcomes_in_largest_super_cohort, static_cast<std::size_t>(2));
+    EXPECT_DOUBLE_EQ(out.total_outcome_weight_in_largest_super_cohort, 2.0);
+    EXPECT_NEAR(out.share_outcomes_in_largest_super_cohort, 2.0/3.0, 1e-12);
+    EXPECT_NEAR(out.share_outcome_weight_in_largest_super_cohort, 2.0/3.0, 1e-12);
 }
 
 TEST(SummarizeIdentificationTest, ManyPanels_ListInputs_NoMerges) {
@@ -50,6 +56,11 @@ TEST(SummarizeIdentificationTest, ManyPanels_ListInputs_NoMerges) {
     EXPECT_EQ(el.largest_super_cohort_size, static_cast<std::size_t>(25));
     EXPECT_EQ(el.min_cohort_size_in_largest_super, static_cast<std::size_t>(25));
     EXPECT_NEAR(el.largest_super_cohort_share, 25.0/35.0, 1e-12);
+    // Largest super cohort is the larger single cohort {1,2}; union outcomes count is 2
+    EXPECT_EQ(el.num_outcomes_in_largest_super_cohort, static_cast<std::size_t>(2));
+    EXPECT_DOUBLE_EQ(el.total_outcome_weight_in_largest_super_cohort, 2.0);
+    EXPECT_NEAR(el.share_outcomes_in_largest_super_cohort, 2.0/3.0, 1e-12);
+    EXPECT_NEAR(el.share_outcome_weight_in_largest_super_cohort, 2.0/3.0, 1e-12);
 }
 
 // Move aligned_factors_identified tests here from test_apm_core.cpp
@@ -77,4 +88,44 @@ TEST(SummarizeIdentificationTest, AlignedFactorsNotIdentified_NoMerges) {
     ASSERT_FALSE(apm::aligned_factors_identified(ooi, r));
 }
 
+TEST(SummarizeIdentificationTest, CountOutcomesWithRankOverlap_BasicScenario) {
+    std::vector<arma::uvec> ooi = make_ooi({{0,1,2}, {1,2,3}, {4}});
+    const std::size_t rank = 2;
 
+    arma::vec counts = apm::count_outcomes_with_rank_overlap_per_cohort(ooi, rank);
+    ASSERT_EQ(counts.n_elem, static_cast<arma::uword>(3));
+    EXPECT_DOUBLE_EQ(counts(0), 4.0);
+    EXPECT_DOUBLE_EQ(counts(1), 4.0);
+    // The focal cohort always contributes its own outcomes even when it has
+    // fewer than `rank` observed outcomes.
+    EXPECT_DOUBLE_EQ(counts(2), 1.0);
+}
+
+TEST(SummarizeIdentificationTest, CountOutcomesWithRankOverlap_RankZeroIncludesAll) {
+    std::vector<arma::uvec> ooi = make_ooi({{0}, {1,2}, {2,3}});
+    const std::size_t rank = 0;
+
+    arma::vec counts = apm::count_outcomes_with_rank_overlap_per_cohort(ooi, rank);
+    ASSERT_EQ(counts.n_elem, static_cast<arma::uword>(3));
+    EXPECT_DOUBLE_EQ(counts(0), 4.0);
+    EXPECT_DOUBLE_EQ(counts(1), 4.0);
+    EXPECT_DOUBLE_EQ(counts(2), 4.0);
+}
+
+TEST(SummarizeIdentificationTest, WeightedSummariesAndCounts) {
+    std::vector<arma::uvec> ooi = make_ooi({{0,2}, {1,2}});
+    arma::uvec sizes = {50u, 40u};
+    arma::vec weights = {1.0, 5.0, 10.0};
+    const std::size_t r = 2;
+
+    apm::IdentificationSummary out = apm::summarize_identification(ooi, sizes, r, -1, weights);
+    EXPECT_EQ(out.num_outcomes_in_largest_super_cohort, static_cast<std::size_t>(2));
+    EXPECT_DOUBLE_EQ(out.total_outcome_weight_in_largest_super_cohort, 11.0);
+    EXPECT_NEAR(out.share_outcomes_in_largest_super_cohort, 2.0/3.0, 1e-12);
+    EXPECT_NEAR(out.share_outcome_weight_in_largest_super_cohort, 11.0/16.0, 1e-12);
+
+    arma::vec weighted_counts = apm::count_outcomes_with_rank_overlap_per_cohort(ooi, 1, weights);
+    ASSERT_EQ(weighted_counts.n_elem, static_cast<arma::uword>(2));
+    EXPECT_DOUBLE_EQ(weighted_counts(0), 16.0);
+    EXPECT_DOUBLE_EQ(weighted_counts(1), 16.0);
+}

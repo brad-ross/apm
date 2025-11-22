@@ -43,6 +43,24 @@ arma::mat align_factors_using_apm(
     const arma::vec& cohort_weights = arma::vec());
 
 /**
+ * @brief Constructs the weighted aggregated projection matrix used by APM.
+ *
+ * Builds sum_c w_c (I_T - P_c), where P_c is the projection onto the span of
+ * the cohort-specific factors padded to T rows. Weights default to equal across
+ * cohorts when omitted, are required nonnegative, and are normalized to sum to 1.
+ *
+ * @param cohort_factor_matrices Vector of cohort-specific factor matrices; rows correspond
+ *        to observed outcomes for that cohort, columns to factors (common r across cohorts).
+ * @param observed_outcome_indices Observed outcomes per cohort (0-based indices).
+ * @param cohort_weights Optional cohort weights (length C); defaults to equal weights.
+ * @return T x T aggregated projection matrix.
+ */
+arma::mat compute_aggregated_projection_matrix(
+    const std::vector<arma::mat>& cohort_factor_matrices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    const arma::vec& cohort_weights = arma::vec());
+
+/**
  * @brief Aggregates cohort-specific outcome fixed effect estimates.
  *
  * This function computes the average of outcome fixed effect estimates across cohorts

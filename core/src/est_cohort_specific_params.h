@@ -20,7 +20,7 @@ struct EstimatorSpecification {
     std::string factor_model_estimator; // e.g., "principal_components"
     bool include_outcome_fes;
     std::size_t r;
-    std::string cohort_weighting = "equal"; // "equal" or "by_size"
+    std::string cohort_weighting = "by_size"; // "by_size" (default) or "equal"
 };
 
 struct CohortSpecificEstimates {
@@ -32,6 +32,7 @@ struct CohortSpecificEstimates {
     // Optional: present only when masking is applied
     std::optional<ObservedOutcomeIndices> masked_observed_outcome_indices;
     std::unordered_map<int, OutcomeMeanSufficientStatistics> masked_cohort_outcome_means;
+    std::optional<CohortOutcomeMask> cohort_outcome_mask;
 };
 
 // New panel-based entry point. Indices inside panel may be 0- or 1-based; panel handles it.

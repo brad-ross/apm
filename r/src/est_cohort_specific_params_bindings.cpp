@@ -189,6 +189,10 @@ static Rcpp::List build_return_list(apm::CohortSpecificEstimates&& ests) {
         res.push_back(apm::r_utils::masked_means_to_r_list(ests.masked_cohort_outcome_means),
                       "masked_cohort_outcome_means");
     }
+    if (ests.cohort_outcome_mask.has_value()) {
+        res.push_back(apm::r_utils::mask_to_r_list(*ests.cohort_outcome_mask),
+                      "cohort_outcome_mask");
+    }
     return res;
 }
 

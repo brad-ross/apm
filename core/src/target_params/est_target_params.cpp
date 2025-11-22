@@ -199,6 +199,7 @@ TargetParamComponents est_target_param_components_from_panel(
     res.cohort_auxiliary_means = std::move(ests.cohort_auxiliary_means);
     res.masked_cohort_outcome_means = std::move(ests.masked_cohort_outcome_means);
     res.masked_observed_outcome_indices = std::move(ests.masked_observed_outcome_indices);
+    res.cohort_outcome_mask = std::move(ests.cohort_outcome_mask);
     return res;
 }
 

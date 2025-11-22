@@ -23,12 +23,11 @@ validate_mask_arg <- function(mask) {
 #'       (g_0) in estimation and results; if FALSE, estimate factors only.
 #'   - r: integer(1). The factor model rank (number of latent factors) to estimate
 #'       within each cohort.
-#'   - cohort_weighting: character(1), one of "equal" or "by_size" (default "equal").
-#'       If "equal", cohorts are weighted equally with 1/C both for the point estimate and,
-#'       when bootstrap is present, for each bootstrap draw. If "by_size", the point cohort
-#'       weights equal the average across bootstrap draws of the per-draw cohort shares of total
-#'       unit weight; each bootstrap replicate weight vector equals the per-draw cohort shares.
-#'       When no bootstrap is provided, "by_size" uses cohort unit-count shares (n_c / sum n_c).
+#'   - cohort_weighting: character(1), one of "by_size" (default) or "equal".
+#'       Under "by_size", the point cohort weights equal the shares of total units in 
+#'       each cohort (or the shares of total bootstrap weights assigned to units in the
+#'       each cohort for bootstrap replicates). Choosing "equal" enforces uniform 1/C 
+#'       weights for the point estimate and, when present, each bootstrap draw.
 #' @param bootstrap optional WeightedBootstrap
 #' @param num_threads integer number of threads (default 1L). If NULL, uses the
 #'   core default (serial or TBB default, depending on build).
@@ -39,6 +38,7 @@ validate_mask_arg <- function(mask) {
 #'   - cohort_outcome_means: list over cohorts of OutcomeMeanSuffStatEstimates
 #'   - cohort_weights: named list over spec keys of CohortWeightEstimates
 #'   - optionally masked_observed_outcome_indices, masked_cohort_outcome_means when masking is used
+#'   - optionally cohort_outcome_mask (named list of masked outcome indices per cohort) when masking is used
 #' @export
 est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_threads = 1L,
                                        cohort_outcomes_to_mask = NULL) {
@@ -79,6 +79,9 @@ est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_t
     }
     if ("masked_cohort_outcome_means" %in% names(res)) {
         out$masked_cohort_outcome_means <- res$masked_cohort_outcome_means
+    }
+    if ("cohort_outcome_mask" %in% names(res)) {
+        out$cohort_outcome_mask <- res$cohort_outcome_mask
     }
     if ("cohort_auxiliary_means" %in% names(res)) {
         wrapped_aux <- lapply(res$cohort_auxiliary_means, function(xp) CohortAuxiliaryDataMeanEstimates$new(xp))

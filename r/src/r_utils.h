@@ -11,6 +11,7 @@
 #include <vector>
 #include <memory>
 #include <utility>
+#include "../../core/src/target_params/est_target_params.h" // TargetParamComponents
 namespace apm { class WeightedBootstrap; }
 
 // [[Rcpp::depends(RcppArmadillo)]]
@@ -46,6 +47,9 @@ std::unordered_map<std::string, apm::EstimatorSpecification> to_cpp_specs(const 
 
 // Convert mask R list (names = cohort ids 1-based, values = integer vectors 1-based outcomes) to C++ 0-based
 apm::CohortOutcomeMask to_cpp_mask(Rcpp::Nullable<Rcpp::List> mask_in);
+
+// Convert mask map (0-based cohort ids -> 0-based outcome indices) back to R named list (1-based)
+Rcpp::List mask_to_r_list(const apm::CohortOutcomeMask& mask);
 
 // Resolve num_threads optional parameter (returns optional value flag and size)
 std::pair<bool, std::size_t> resolve_num_threads(Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in);
@@ -117,6 +121,10 @@ const apm::InMemoryUnbalancedPanel& panel_ref_from_panel_holder(SEXP panel_holde
 
 // Access observed_outcome_indices (0-based) from a panel holder XPtr
 apm::ObservedOutcomeIndices observed_outcome_indices_from_panel_holder(SEXP panel_holder_xptr);
+
+// Rebuild TargetParamComponents from the list returned by
+// est_target_param_components_from_panel_cpp
+apm::TargetParamComponents target_param_components_from_r_list(const Rcpp::List& comps);
 
 } // namespace r_utils
 } // namespace apm

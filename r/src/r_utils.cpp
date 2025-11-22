@@ -55,6 +55,92 @@ Rcpp::List masked_means_to_r_list(const std::unordered_map<int, apm::OutcomeMean
     return masked_means;
 }
 
+Rcpp::List mask_to_r_list(const apm::CohortOutcomeMask& mask) {
+    Rcpp::List out(static_cast<int>(mask.size()));
+    Rcpp::CharacterVector keys(static_cast<int>(mask.size()));
+    int i = 0;
+    for (const auto& kv : mask) {
+        int cohort1 = kv.first + 1;
+        const arma::uvec& idx0 = kv.second;
+        Rcpp::IntegerVector idx1(static_cast<int>(idx0.n_elem));
+        for (arma::uword k = 0; k < idx0.n_elem; ++k) idx1[k] = static_cast<int>(idx0[k] + 1);
+        out[i] = idx1;
+        keys[i] = std::to_string(cohort1);
+        ++i;
+    }
+    out.attr("names") = keys;
+    return out;
+}
+
+apm::TargetParamComponents target_param_components_from_r_list(const Rcpp::List& comps) {
+    apm::TargetParamComponents out;
+
+    // outcome_means: named list of XPtr<OutcomeMeansEstimates>
+    if (!comps.containsElementNamed("outcome_means")) {
+        Rcpp::stop("target_param_components_from_r_list: missing 'outcome_means'");
+    }
+    {
+        Rcpp::List L(comps["outcome_means"]);
+        Rcpp::CharacterVector nms = L.names();
+        for (int i = 0; i < L.size(); ++i) {
+            std::string key = Rcpp::as<std::string>(nms[i]);
+            Rcpp::XPtr<apm::OutcomeMeansEstimates> xp(L[i]);
+            out.outcome_means_by_spec.emplace(std::move(key), *xp);
+        }
+    }
+
+    // cohort_outcome_mean_ests: list of XPtr<OutcomeMeanSuffStatEstimates> (optional)
+    if (comps.containsElementNamed("cohort_outcome_mean_ests") && !Rf_isNull(comps["cohort_outcome_mean_ests"])) {
+        Rcpp::List L(comps["cohort_outcome_mean_ests"]);
+        out.cohort_outcome_mean_ests.reserve(L.size());
+        for (int i = 0; i < L.size(); ++i) {
+            Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates> xp(L[i]);
+            out.cohort_outcome_mean_ests.push_back(*xp);
+        }
+    }
+
+    // cohort_auxiliary_means: list of XPtr<CohortAuxiliaryDataMeanEstimates> (optional)
+    if (comps.containsElementNamed("cohort_auxiliary_means") && !Rf_isNull(comps["cohort_auxiliary_means"])) {
+        Rcpp::List L(comps["cohort_auxiliary_means"]);
+        out.cohort_auxiliary_means.reserve(L.size());
+        for (int i = 0; i < L.size(); ++i) {
+            Rcpp::XPtr<apm::CohortAuxiliaryDataMeanEstimates> xp(L[i]);
+            out.cohort_auxiliary_means.push_back(*xp);
+        }
+    }
+
+    // masked_observed_outcome_indices: 1-based integer list -> ObservedOutcomeIndices (0-based)
+    if (comps.containsElementNamed("masked_observed_outcome_indices") && !Rf_isNull(comps["masked_observed_outcome_indices"])) {
+        Rcpp::List L(comps["masked_observed_outcome_indices"]);
+        out.masked_observed_outcome_indices = apm::r_utils::to_cpp_observed_outcome_indices(L);
+    }
+
+    // masked_cohort_outcome_means: named list of numeric vectors (means only)
+    if (comps.containsElementNamed("masked_cohort_outcome_means") && !Rf_isNull(comps["masked_cohort_outcome_means"])) {
+        Rcpp::List L(comps["masked_cohort_outcome_means"]);
+        Rcpp::CharacterVector nms = L.names();
+        for (int i = 0; i < L.size(); ++i) {
+            std::string s = Rcpp::as<std::string>(nms[i]);
+            int cohort1 = std::stoi(s);
+            int c0 = cohort1 - 1;
+
+            Rcpp::NumericVector mu(L[i]);
+            arma::vec v(static_cast<arma::uword>(mu.size()));
+            std::copy(mu.begin(), mu.end(), v.begin());
+            apm::OutcomeMeanSufficientStatistics stats(std::move(v), std::nullopt);
+            out.masked_cohort_outcome_means.emplace(c0, std::move(stats));
+        }
+    }
+
+    // cohort_outcome_mask: named list (1-based) -> CohortOutcomeMask (0-based)
+    if (comps.containsElementNamed("cohort_outcome_mask") && !Rf_isNull(comps["cohort_outcome_mask"])) {
+        Rcpp::List L(comps["cohort_outcome_mask"]);
+        Rcpp::Nullable<Rcpp::List> nL(L);
+        out.cohort_outcome_mask = apm::r_utils::to_cpp_mask(nL);
+    }
+
+    return out;
+}
 // Convert est_specs: named list → unordered_map<string, EstimatorSpecification>
 std::unordered_map<std::string, apm::EstimatorSpecification> to_cpp_specs(const Rcpp::List& est_specs_r) {
     std::unordered_map<std::string, apm::EstimatorSpecification> out;

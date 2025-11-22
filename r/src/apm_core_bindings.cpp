@@ -54,6 +54,49 @@ arma::mat align_factors_using_apm(
     return apm::align_factors_using_apm(cpp_factor_matrices, cpp_observed_outcome_indices);
 } 
 
+//' Constructs the weighted aggregated projection matrix used by APM.
+//'
+//' Builds sum_c w_c (I_T - P_c), where P_c is the projection onto the span of
+//' the cohort-specific factors padded to T rows. Weights default to equal across
+//' cohorts when omitted, must be nonnegative, and are normalized to sum to 1.
+//'
+//' @param cohort_factor_matrices A list of matrices, one per cohort. Each matrix has
+//'   rows corresponding to observed outcomes for that cohort and the same number of
+//'   columns r across cohorts.
+//' @param observed_outcome_indices A list of integer vectors (1-based indices) indicating
+//'   which outcomes were observed for each cohort. Each vector's length must match the
+//'   number of rows of the corresponding factor matrix.
+//' @param cohort_weights Optional numeric vector of length C with cohort weights.
+//'   If omitted, cohorts are weighted equally. Weights are normalized to sum to 1.
+//' @return A T x T numeric matrix representing the aggregated projection matrix.
+//' @export
+// [[Rcpp::export]]
+arma::mat compute_aggregated_projection_matrix(
+    Rcpp::List cohort_factor_matrices,
+    Rcpp::List observed_outcome_indices,
+    Rcpp::Nullable<Rcpp::NumericVector> cohort_weights = R_NilValue) {
+
+    std::vector<arma::mat> cpp_factor_matrices;
+    cpp_factor_matrices.reserve(cohort_factor_matrices.size());
+    for (SEXP mat : cohort_factor_matrices) {
+        cpp_factor_matrices.push_back(Rcpp::as<arma::mat>(mat));
+    }
+
+    apm::ObservedOutcomeIndices cpp_observed_outcome_indices =
+        apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
+
+    if (cohort_weights.isNotNull()) {
+        arma::vec w = Rcpp::as<arma::vec>(cohort_weights);
+        return apm::compute_aggregated_projection_matrix(
+            cpp_factor_matrices, cpp_observed_outcome_indices, w
+        );
+    }
+
+    return apm::compute_aggregated_projection_matrix(
+        cpp_factor_matrices, cpp_observed_outcome_indices
+    );
+}
+
 //' Aggregates cohort-specific covariate coefficient estimates.
 //'
 //' This function takes a vector of cohort-specific covariate coefficient estimates

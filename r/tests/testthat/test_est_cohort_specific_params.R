@@ -56,12 +56,15 @@ test_that("wrapper returns FactorModelEstimates with expected dimensions", {
     expect_equal(nrow(out$G()), length(cohort_indices[[1]]))
 })
 
-test_that("cohort weights default to equal (1/C) without bootstrap", {
+test_that("cohort weights default to by_size without bootstrap", {
     T <- 4L
     T_c <- 3L
     outcomes <- make_outcomes(T)
     cohort_indices <- make_staircase_observed_indices(T, T_c)
-    units_by_cohort <- make_units_by_cohort(length(cohort_indices), T_c)
+    units_by_cohort <- list(
+        c("u1", "u2"),
+        c("u3", "u4", "u5", "u6")
+    )
 
     ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
     panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
@@ -82,8 +85,8 @@ test_that("cohort weights default to equal (1/C) without bootstrap", {
     w <- res$cohort_weights[["spec"]]
     expect_true(inherits(w, "CohortWeightEstimates"))
     expect_false(w$has_bootstrap())
-    C <- length(cohort_indices)
-    expect_equal(as.numeric(w$cohort_weights()), rep(1 / C, C))
+    cohort_counts <- vapply(units_by_cohort, length, integer(1))
+    expect_equal(as.numeric(w$cohort_weights()), cohort_counts / sum(cohort_counts))
 })
 
 test_that("covariate means are computed with expected dimensions and values", {
