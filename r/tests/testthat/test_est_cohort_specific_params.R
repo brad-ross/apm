@@ -56,7 +56,7 @@ test_that("wrapper returns FactorModelEstimates with expected dimensions", {
     expect_equal(nrow(out$G()), length(cohort_indices[[1]]))
 })
 
-test_that("cohort weights default to by_size without bootstrap", {
+test_that("cohort weights default to equal without bootstrap", {
     T <- 4L
     T_c <- 3L
     outcomes <- make_outcomes(T)
@@ -85,8 +85,39 @@ test_that("cohort weights default to by_size without bootstrap", {
     w <- res$cohort_weights[["spec"]]
     expect_true(inherits(w, "CohortWeightEstimates"))
     expect_false(w$has_bootstrap())
-    cohort_counts <- vapply(units_by_cohort, length, integer(1))
-    expect_equal(as.numeric(w$cohort_weights()), cohort_counts / sum(cohort_counts))
+    expect_equal(as.numeric(w$cohort_weights()), rep(1 / length(units_by_cohort), length(units_by_cohort)))
+})
+
+test_that("default cohort weighting remains equal even when cohort sizes differ", {
+    T <- 6L
+    T_c <- 2L
+    outcomes <- make_outcomes(T)
+    cohort_indices <- make_staircase_observed_indices(T, T_c)
+    units_by_cohort <- list(
+        c("c1_u1", "c1_u2", "c1_u3"),
+        c("c2_u1"),
+        c("c3_u1", "c3_u2", "c3_u3", "c3_u4"),
+        c("c4_u1", "c4_u2"),
+        c("c5_u1", "c5_u2", "c5_u3", "c5_u4", "c5_u5")
+    )
+
+    ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 1L, rotate = TRUE)
+    panel_dt <- build_panel_from_indices_factor(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, ctx = ctx)
+    panel <- UnbalancedPanel$new(
+        panel_df = panel_dt,
+        unit_id_col = "unit_id",
+        outcome_id_col = "outcome_id",
+        outcome_value_col = "y",
+        model_rank = 1,
+        min_cohort_size = 1,
+        sort_cohorts_lexicographically = TRUE
+    )
+
+    est_specs <- list(spec = list(factor_model_estimator = "principal_components", include_outcome_fes = FALSE, r = 1L))
+    res <- est_cohort_specific_params(panel, est_specs)
+    w <- res$cohort_weights[["spec"]]
+    expect_true(inherits(w, "CohortWeightEstimates"))
+    expect_equal(as.numeric(w$cohort_weights()), rep(1 / length(cohort_indices), length(cohort_indices)))
 })
 
 test_that("covariate means are computed with expected dimensions and values", {

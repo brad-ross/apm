@@ -32,6 +32,11 @@ TEST(CohortSpecificRawTest, InvalidEstimatorNameThrows) {
         std::invalid_argument);
 }
 
+TEST(CohortSpecificRawTest, DefaultEstimatorSpecificationWeightsAreEqual) {
+    apm::EstimatorSpecification spec{"principal_components", false, 1};
+    EXPECT_EQ(spec.cohort_weighting, "equal");
+}
+
 TEST(CohortSpecificRawTest, RGreaterThanTcThrows) {
     auto ctx = make_staircase_panel_context(/*T=*/5, /*r=*/2, /*T_c=*/3);
     auto rp = make_raw_panel(ctx);
@@ -105,7 +110,7 @@ TEST(CohortSpecificRawTest, IntegratesEstimators_NoCovariates) {
     ASSERT_TRUE(arma::approx_equal(oms0.observed_outcome_means, expected_means, "absdiff", 1e-12));
     EXPECT_FALSE(oms0.has_covar_means());
 
-    // Cohort weights: default is by_size; with equal units per cohort this reduces to 1/C and
+    // Cohort weights: default is equal, so with any unit counts this yields 1/C and
     // there are no bootstrap replicates without a bootstrap input.
     ASSERT_EQ(out.cohort_weights.size(), 2u);
     arma::vec eq = arma::ones(ctx.C) / static_cast<double>(ctx.C);
