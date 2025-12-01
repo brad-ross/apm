@@ -116,7 +116,7 @@ construct_cohort_observed_outcomes_df <- function(outcome_ids, observed_outcome_
 #' @param model_rank Integer model rank
 #' @param min_cohort_size Minimum units per cohort to keep (default: 0)
 #' @param subset_to_largest_super_cohort Logical; if TRUE, subset the panel to the largest super cohort at 
-#' the final iteration of the O^3 algorithm (default: FALSE)
+#' the final iteration of the O^3 algorithm; if FALSE, subsequent estimation may fail without warning (default: TRUE)
 #' @param sort_cohorts_lexicographically Logical; if TRUE, sort the cohorts lexicographically by 
 #' the outcome indices (default: FALSE)
 #' @param cohort_observed_outcomes_as_df Logical; if TRUE (default), return a
@@ -140,7 +140,7 @@ construct_cohorts_from_panel <- function(panel_df,
                                          outcome_value_col,
                                          model_rank = 1,
                                          min_cohort_size = 0,
-                                         subset_to_largest_super_cohort = FALSE,
+                                         subset_to_largest_super_cohort = TRUE,
                                          sort_cohorts_lexicographically = FALSE,
                                          cohort_observed_outcomes_as_df = TRUE,
                                          verbose = FALSE) {
@@ -357,7 +357,7 @@ UnbalancedPanel <- R6Class(
                               outcome_value_col,
                               model_rank = 1,
                               min_cohort_size = 0,
-                              subset_to_largest_super_cohort = FALSE,
+                              subset_to_largest_super_cohort = TRUE,
                               sort_cohorts_lexicographically = FALSE,
                               covar_cols = character(0),
                               auxiliary_cols = character(0),

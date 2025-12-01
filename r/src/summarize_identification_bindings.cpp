@@ -100,13 +100,14 @@ Rcpp::List summarize_identification_cpp(
     apm::ObservedOutcomeIndices ooi0 = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices);
     apm::IdentificationSummary s;
     const int it0 = r_iter_to_cpp(iter);
-    std::cout << "it0: " << it0 << std::endl;
+
     if (outcome_weights.isNull()) {
         s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, it0);
     } else {
         arma::vec weights = Rcpp::as<arma::vec>(outcome_weights.get());
         s = apm::summarize_identification(ooi0, cohort_sizes, max_model_rank, it0, weights);
     }
+    
     return id_summary_to_r(s);
 }
 

@@ -23,11 +23,11 @@ validate_mask_arg <- function(mask) {
 #'       (g_0) in estimation and results; if FALSE, estimate factors only.
 #'   - r: integer(1). The factor model rank (number of latent factors) to estimate
 #'       within each cohort.
-#'   - cohort_weighting: character(1), one of "by_size" (default) or "equal".
-#'       Under "by_size", the point cohort weights equal the shares of total units in 
-#'       each cohort (or the shares of total bootstrap weights assigned to units in the
-#'       each cohort for bootstrap replicates). Choosing "equal" enforces uniform 1/C 
-#'       weights for the point estimate and, when present, each bootstrap draw.
+#'   - cohort_weighting: character(1), one of "equal" (default) or "by_size".
+#'       Under "equal", the cohort weights are uniform 1/C for the point estimate and,
+#'       when present, each bootstrap draw. Choosing "by_size" weights cohorts by their
+#'       share of total units (or total bootstrap weight masses) when computing point
+#'       and bootstrap replicate weights.
 #' @param bootstrap optional WeightedBootstrap
 #' @param num_threads integer number of threads (default 1L). If NULL, uses the
 #'   core default (serial or TBB default, depending on build).
