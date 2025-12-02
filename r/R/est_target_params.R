@@ -44,6 +44,25 @@ est_target_params <- function(outcome_means, fn, aux_means = NULL, suff_stats = 
   stop("Invalid 'outcome_means': expected an OutcomeMeansEstimates object or a named list of them.")
 }
 
+#' Difference between two target parameter estimates
+#'
+#' Computes `target_params_1 - target_params_2` entrywise for the point estimates
+#' and, when available, for each bootstrap replicate.
+#'
+#' @param target_params_1 `TargetParameterEstimates`
+#' @param target_params_2 `TargetParameterEstimates`
+#' @return `TargetParameterEstimates`
+#' @export
+get_target_param_diff_ests <- function(target_params_1, target_params_2) {
+  stopifnot(inherits(target_params_1, "TargetParameterEstimates"))
+  stopifnot(inherits(target_params_2, "TargetParameterEstimates"))
+  xp <- get_target_param_diff_ests_cpp(
+    target_params_1$.__enclos_env__$private$xp,
+    target_params_2$.__enclos_env__$private$xp
+  )
+  TargetParameterEstimates$new(xp)
+}
+
 # -----------------------------------------------------------------------------
 # End-to-end wrapper
 # -----------------------------------------------------------------------------

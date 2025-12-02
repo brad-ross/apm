@@ -173,4 +173,38 @@ TEST(EstMaskedOutcomeMeanErrMetrics, ThrowsOnOutcomeIndexOutOfRange) {
     EXPECT_THROW(est_masked_outcome_mean_err_metrics(comps), std::invalid_argument);
 }
 
+TEST(TargetParamDiff, ComputesEntrywiseDifference) {
+    arma::vec point_a = {1.0, 2.0, 3.0};
+    arma::vec point_b = {0.5, 1.5, 2.5};
+
+    arma::mat boots_a(3, 2);
+    boots_a.col(0) = arma::vec({1.0, 2.0, 3.0});
+    boots_a.col(1) = arma::vec({4.0, 5.0, 6.0});
+
+    arma::mat boots_b(3, 2);
+    boots_b.col(0) = arma::vec({0.1, 0.2, 0.3});
+    boots_b.col(1) = arma::vec({0.4, 0.5, 0.6});
+
+    TargetParameterEstimates tpe_a(point_a, boots_a);
+    TargetParameterEstimates tpe_b(point_b, boots_b);
+
+    TargetParameterEstimates diff = get_target_param_diff_ests(tpe_a, tpe_b);
+
+    arma::vec expected_point = point_a - point_b;
+    arma::mat expected_boots = boots_a - boots_b;
+    EXPECT_TRUE(arma::approx_equal(diff.point, expected_point, "absdiff", 1e-12));
+    EXPECT_TRUE(arma::approx_equal(diff.bootstrap_replicates, expected_boots, "absdiff", 1e-12));
+}
+
+TEST(TargetParamDiff, ThrowsOnBootstrapMismatch) {
+    arma::vec point = {1.0, 2.0, 3.0};
+    arma::mat boots_two(3, 2, arma::fill::zeros);
+    arma::mat boots_one(3, 1, arma::fill::zeros);
+
+    TargetParameterEstimates tpe_a(point, boots_two);
+    TargetParameterEstimates tpe_b(point, boots_one);
+
+    EXPECT_THROW(get_target_param_diff_ests(tpe_a, tpe_b), std::invalid_argument);
+}
+
 

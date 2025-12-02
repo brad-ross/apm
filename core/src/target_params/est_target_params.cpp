@@ -137,6 +137,46 @@ std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
     return out;
 }
 
+TargetParameterEstimates get_target_param_diff_ests(
+    const TargetParameterEstimates& target_params_1,
+    const TargetParameterEstimates& target_params_2)
+{
+    const std::size_t p1 = static_cast<std::size_t>(target_params_1.point.n_elem);
+    const std::size_t p2 = static_cast<std::size_t>(target_params_2.point.n_elem);
+    if (p1 != p2) {
+        throw std::invalid_argument("get_target_param_diff_ests: point vectors must have matching length.");
+    }
+
+    arma::vec point = target_params_1.point - target_params_2.point;
+
+    const bool has_boots_1 = target_params_1.has_bootstrap_replicates();
+    const bool has_boots_2 = target_params_2.has_bootstrap_replicates();
+
+    if (!has_boots_1 && !has_boots_2) {
+        arma::mat boots;
+        boots.set_size(static_cast<arma::uword>(p1), arma::uword(0));
+        return TargetParameterEstimates(std::move(point), std::move(boots));
+    }
+
+    if (has_boots_1 != has_boots_2) {
+        throw std::invalid_argument("get_target_param_diff_ests: both inputs must either include or omit bootstrap replicates.");
+    }
+
+    const std::size_t B1 = target_params_1.n_bootstrap_replicates();
+    const std::size_t B2 = target_params_2.n_bootstrap_replicates();
+    if (B1 != B2) {
+        throw std::invalid_argument("get_target_param_diff_ests: bootstrap replicate counts must match.");
+    }
+
+    if (static_cast<std::size_t>(target_params_1.bootstrap_replicates.n_rows) != p1 ||
+        static_cast<std::size_t>(target_params_2.bootstrap_replicates.n_rows) != p1) {
+        throw std::invalid_argument("get_target_param_diff_ests: bootstrap matrices must have p rows.");
+    }
+
+    arma::mat boots = target_params_1.bootstrap_replicates - target_params_2.bootstrap_replicates;
+    return TargetParameterEstimates(std::move(point), std::move(boots));
+}
+
 TargetParamComponents est_target_param_components_from_panel(
     const InMemoryUnbalancedPanel& panel,
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,

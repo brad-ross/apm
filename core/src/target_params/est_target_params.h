@@ -64,6 +64,10 @@ std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
     const TargetFn& fn,
     std::optional<std::size_t> num_threads = std::nullopt);
 
+TargetParameterEstimates get_target_param_diff_ests(
+    const TargetParameterEstimates& target_params_1,
+    const TargetParameterEstimates& target_params_2);
+
 //------------------------------------------------------------------------------
 // End-to-end components from panel (used by R bindings)
 //------------------------------------------------------------------------------

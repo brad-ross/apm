@@ -189,6 +189,14 @@ Rcpp::List est_target_params_by_spec_cpp(Rcpp::List ome_by_spec,
     return out;
 }
 
+// [[Rcpp::export]]
+SEXP get_target_param_diff_ests_cpp(SEXP tpe1_xp, SEXP tpe2_xp) {
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe1(tpe1_xp);
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe2(tpe2_xp);
+    apm::TargetParameterEstimates out = apm::get_target_param_diff_ests(*tpe1, *tpe2);
+    return apm::r_utils::make_xptr(std::move(out));
+}
+
 //------------------------------------------------------------------------------
 // End-to-end: estimate target parameter components from panel (by spec)
 //------------------------------------------------------------------------------

@@ -207,6 +207,27 @@ test_that("est_masked_outcome_mean_err_metrics computes bias/se/rmse per spec fo
   expect_true(all(df1$cohort_pop_share >= 0 & df1$cohort_pop_share <= 1))
 })
 
+test_that("get_target_param_diff_ests returns zero vector when inputs match", {
+  fixture <- setup_target_fixture(num_specs = 1L)
+  comps <- fixture$comps
+  fn <- function(Y, shares, observed_means_list, covar_means_list, eta_list) {
+    colMeans(Y)
+  }
+  tpe <- est_target_params(
+    outcome_means = comps$outcome_means[[1]],
+    fn = fn,
+    aux_means = comps$cohort_auxiliary_means,
+    suff_stats = comps$cohort_outcome_mean_ests
+  )
+  diff <- get_target_param_diff_ests(tpe, tpe)
+  expect_true(inherits(diff, "TargetParameterEstimates"))
+  expect_equal(as.numeric(diff$target_params()), rep(0, tpe$p()), tolerance = 1e-12)
+  if (diff$has_bootstrap()) {
+    M <- diff$boots_matrix()
+    expect_true(all(abs(M) < 1e-12))
+  }
+})
+
 test_that("est_masked_outcome_mean_err_metrics errors when bootstrap missing", {
   T <- 5L; T_c <- 3L
   outcomes <- make_outcomes(T)
