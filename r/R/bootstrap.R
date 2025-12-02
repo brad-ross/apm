@@ -103,6 +103,9 @@ get_weighted_bootstrap_draws <- function(N, B, type = c("multinomial", "bayesian
 #' Bootstrap and target-parameter inference results
 #'
 #' R6 wrapper around simultaneous inference results computed from bootstrap replicates.
+#' Provides robust bootstrap standard errors computed via the IQR scale (same scale
+#' used for confidence intervals): `std_error()` returns row-wise IQR / sqrt(N),
+#' and `se()` is an alias for convenience.
 #'
 #' @export
 SimultaneousInferenceResults <- R6::R6Class(
@@ -114,6 +117,8 @@ SimultaneousInferenceResults <- R6::R6Class(
     point = function() sir_point_cpp(private$xp),
     t_stats = function() sir_pointwise_t_cpp(private$xp),
     p_vals = function() sir_pointwise_p_cpp(private$xp),
+    std_error = function() sir_std_error_cpp(private$xp),
+    se = function() self$std_error(),
     fwer_control_p_vals = function() sir_fwer_control_p_cpp(private$xp),
     sig_level = function() sir_sig_level_cpp(private$xp),
     ci = function() list(lb = sir_ci_lb_cpp(private$xp),
@@ -124,16 +129,18 @@ SimultaneousInferenceResults <- R6::R6Class(
       est <- self$point()
       t <- self$t_stats()
       p <- self$p_vals()
+      se <- self$std_error()
       ci <- self$ci()
       cb <- self$cb()
 
       n <- length(est)
-      if (!all(lengths(list(t, p, ci$lb, ci$ub, cb$lb, cb$ub)) == n)) {
+      if (!all(lengths(list(t, p, se, ci$lb, ci$ub, cb$lb, cb$ub)) == n)) {
         stop("Inconsistent lengths among inference components.")
       }
 
       df <- data.frame(
         estimate = est,
+        std_error = se,
         t_stat = t,
         p_value = p,
         ci_lb = ci$lb,

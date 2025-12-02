@@ -74,6 +74,7 @@ struct SimultaneousInferenceResults {
     arma::vec point_ests;
     arma::vec pointwise_t_stats;
     arma::vec pointwise_p_vals;
+    arma::vec std_errs;           // robust IQR-based SEs: row_sd / sqrt(N)
     double sig_level;
     arma::vec ci_lb;
     arma::vec ci_ub;

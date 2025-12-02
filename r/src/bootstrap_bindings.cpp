@@ -138,6 +138,15 @@ Rcpp::NumericVector sir_pointwise_p_cpp(SEXP xp) {
 }
 
 // [[Rcpp::export]]
+Rcpp::NumericVector sir_std_error_cpp(SEXP xp) {
+    Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
+    const arma::vec& v = p->std_errs;
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
+
+// [[Rcpp::export]]
 double sir_sig_level_cpp(SEXP xp) {
     Rcpp::XPtr<apm::SimultaneousInferenceResults> p(xp);
     return p->sig_level;

@@ -296,6 +296,7 @@ SimultaneousInferenceResults get_bootstrap_inference(
     arma::vec q25 = arma::quantile(z_stats, arma::vec{0.25}, 1); // p x 1, dim=1 for rowwise
     arma::vec q75 = arma::quantile(z_stats, arma::vec{0.75}, 1); // p x 1
     arma::vec row_sd = (q75 - q25) / kNormalIQR;
+    arma::vec std_errs = row_sd / sqrtN;
 
     // Guard against zero/negative scales for division
     arma::vec scale = row_sd;
@@ -328,6 +329,7 @@ SimultaneousInferenceResults get_bootstrap_inference(
         point_ests,
         pointwise_t_stats,
         pointwise_p_vals,
+        std_errs,
         sig_level,
         ci_lb,
         ci_ub,

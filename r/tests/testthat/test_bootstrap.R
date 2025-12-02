@@ -70,6 +70,8 @@ test_that("get_bootstrap_inference returns well-formed results and sensible band
   pvals <- sir$p_vals()
   ci <- sir$ci()
   cb <- sir$cb()
+  se <- sir$std_error()
+  sqrtN <- sqrt(N)
 
   expect_equal(length(est), p)
   expect_equal(length(t), p)
@@ -78,9 +80,13 @@ test_that("get_bootstrap_inference returns well-formed results and sensible band
   expect_equal(length(ci$ub), p)
   expect_equal(length(cb$lb), p)
   expect_equal(length(cb$ub), p)
+  expect_equal(length(se), p)
+  expect_true(all(is.finite(se)))
+  expect_equal(sir$se(), se)
 
   expect_true(all(ci$lb <= est & est <= ci$ub))
   expect_true(all(cb$lb <= est & est <= cb$ub))
+  expect_true(all(abs(se - 1 / sqrtN) < 0.02))
 
   ci_half <- (ci$ub - ci$lb) / 2
   cb_half <- (cb$ub - cb$lb) / 2
@@ -91,7 +97,8 @@ test_that("get_bootstrap_inference returns well-formed results and sensible band
   df <- sir$as_data_frame()
   expect_s3_class(df, "data.frame")
   expect_equal(nrow(df), p)
-  expect_true(all(c("parameter","estimate","t_stat","p_value","ci_lb","ci_ub","cb_lb","cb_ub") %in% names(df)))
+  expect_true(all(c("parameter","estimate","std_error","t_stat","p_value","ci_lb","ci_ub","cb_lb","cb_ub") %in% names(df)))
+  expect_equal(df$std_error, se)
 })
 
 test_that("Bootstrap inference coverage and p-values behave under the null", {

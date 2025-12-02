@@ -105,6 +105,7 @@ TEST(BootstrapInferenceTest, RepeatedBootstrapCoverageAndPValues) {
     
     // Store p-values in p x n_sims matrix (each row is a parameter, each column is a simulation)
     arma::mat p_value_matrix(p, n_sims);
+    arma::vec std_error_sum = arma::zeros<arma::vec>(p);
     
     for (std::size_t sim = 0; sim < n_sims; ++sim) {
         // True parameter is zero; point estimates are N(0, 1/sqrt(N))
@@ -117,6 +118,7 @@ TEST(BootstrapInferenceTest, RepeatedBootstrapCoverageAndPValues) {
         
         // Run bootstrap inference
         auto results = get_bootstrap_inference(point_ests, bootstrap_replicates, N, sig_level);
+        std_error_sum += results.std_errs;
         
         // Check simultaneous coverage: do ALL bands contain zero?
         bool all_covered = true;
@@ -161,7 +163,14 @@ TEST(BootstrapInferenceTest, RepeatedBootstrapCoverageAndPValues) {
             << "Pointwise coverage too high for param " << i << ": " << pointwise_rate;
     }
     
-    // Test 3: P-values should be uniformly distributed for each parameter
+    // Test 3: Average standard errors should match true 1/sqrt(N)
+    arma::vec std_error_mean = std_error_sum / static_cast<double>(n_sims);
+    for (arma::uword i = 0; i < p; ++i) {
+        EXPECT_NEAR(std_error_mean(i), 1.0 / sqrtN, 0.02)
+            << "Average std error too far from truth for param " << i;
+    }
+    
+    // Test 4: P-values should be uniformly distributed for each parameter
     // Check empirical CDF shares against theoretical uniform quantiles
     // Check all interior deciles: 0.1, 0.2, 0.3, ..., 0.9
     const double tolerance = 0.02;  // Allow 2% deviation
@@ -184,7 +193,7 @@ TEST(BootstrapInferenceTest, RepeatedBootstrapCoverageAndPValues) {
         }
     }
 
-    // Test 4: Family-wise error rate should be controlled at sig_level
+    // Test 5: Family-wise error rate should be controlled at sig_level
     double fwer = static_cast<double>(fwer_reject_count) / n_sims;
     EXPECT_LT(fwer, sig_level + 0.005)
         << "FWER too high: " << fwer << " (sig_level=" << sig_level << ")";
