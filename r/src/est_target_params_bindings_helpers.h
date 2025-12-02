@@ -18,12 +18,6 @@ std::vector<CohortAuxiliaryDataMeanEstimates> list_to_eta_vec(Rcpp::Nullable<Rcp
 
 std::unordered_map<std::string, OutcomeMeansEstimates> list_to_ome_map(Rcpp::List ome_by_spec);
 
-std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>> list_to_eta_map(
-    Rcpp::Nullable<Rcpp::List> eta_by_spec);
-
-std::unordered_map<std::string, std::vector<apm::OutcomeMeanSuffStatEstimates>> list_to_stats_map(
-    Rcpp::Nullable<Rcpp::List> stats_by_spec);
-
 } // namespace r_bindings
 } // namespace apm
 

@@ -241,8 +241,8 @@ TargetParameterEstimates est_fgw_bipartite_match_outcome_diff_params(
 
 std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_match_outcome_diff_params(
     const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
-    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
-    const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
+    const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
     const arma::uvec& outcome_indices_1,
     const arma::uvec& outcome_indices_2,
     const ObservedOutcomeIndices& observed_outcome_indices,
@@ -257,22 +257,17 @@ std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_matc
     std::unordered_map<std::string, TargetParameterEstimates> out;
     out.reserve(ome_map.size());
     for (const auto& kv : ome_map) {
-        const std::string& key = kv.first;
-        auto stats_it = stats_map.find(key);
-        auto eta_it = eta_map.find(key);
-        const std::vector<OutcomeMeanSuffStatEstimates> empty_stats;
-        const std::vector<CohortAuxiliaryDataMeanEstimates> empty_eta;
-        const auto& stats_vec = (stats_it == stats_map.end()) ? empty_stats : stats_it->second;
-        const auto& eta_vec = (eta_it == eta_map.end()) ? empty_eta : eta_it->second;
-        out.emplace(key, est_target_params(kv.second, stats_vec, eta_vec, fn, num_threads));
+        out.emplace(
+            kv.first,
+            est_target_params(kv.second, stats_by_cohort, eta_by_cohort, fn, num_threads));
     }
     return out;
 }
 
 std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_match_outcome_diff_params(
     const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
-    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
-    const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
+    const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
     std::size_t outcome_idx_1,
     std::size_t outcome_idx_2,
     const ObservedOutcomeIndices& observed_outcome_indices,
@@ -282,8 +277,8 @@ std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_matc
     arma::uvec outcome_indices_2({static_cast<arma::uword>(outcome_idx_2)});
     return est_fgw_bipartite_match_outcome_diff_params(
         ome_map,
-        stats_map,
-        eta_map,
+        stats_by_cohort,
+        eta_by_cohort,
         outcome_indices_1,
         outcome_indices_2,
         observed_outcome_indices,
@@ -409,8 +404,8 @@ TargetParameterEstimates est_avg_fgw_bipartite_match_outcome_diff_params(
 
 std::unordered_map<std::string, TargetParameterEstimates> est_avg_fgw_bipartite_match_outcome_diff_params(
     const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
-    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
-    const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
+    const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
     const std::vector<arma::uvec>& outcome_groupings,
     const ObservedOutcomeIndices& observed_outcome_indices,
     std::optional<arma::vec> outcome_weights,
@@ -423,22 +418,17 @@ std::unordered_map<std::string, TargetParameterEstimates> est_avg_fgw_bipartite_
     std::unordered_map<std::string, TargetParameterEstimates> out;
     out.reserve(ome_map.size());
     for (const auto& kv : ome_map) {
-        const std::string& key = kv.first;
-        auto stats_it = stats_map.find(key);
-        auto eta_it = eta_map.find(key);
-        const std::vector<OutcomeMeanSuffStatEstimates> empty_stats;
-        const std::vector<CohortAuxiliaryDataMeanEstimates> empty_eta;
-        const auto& stats_vec = (stats_it == stats_map.end()) ? empty_stats : stats_it->second;
-        const auto& eta_vec = (eta_it == eta_map.end()) ? empty_eta : eta_it->second;
-        out.emplace(key, est_target_params(kv.second, stats_vec, eta_vec, fn, num_threads));
+        out.emplace(
+            kv.first,
+            est_target_params(kv.second, stats_by_cohort, eta_by_cohort, fn, num_threads));
     }
     return out;
 }
 
 std::unordered_map<std::string, TargetParameterEstimates> est_avg_fgw_bipartite_match_outcome_diff_params(
     const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
-    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
-    const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
+    const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
     const arma::uvec& outcome_indices,
     const ObservedOutcomeIndices& observed_outcome_indices,
     std::optional<std::size_t> num_threads)
@@ -450,14 +440,9 @@ std::unordered_map<std::string, TargetParameterEstimates> est_avg_fgw_bipartite_
     std::unordered_map<std::string, TargetParameterEstimates> out;
     out.reserve(ome_map.size());
     for (const auto& kv : ome_map) {
-        const std::string& key = kv.first;
-        auto stats_it = stats_map.find(key);
-        auto eta_it = eta_map.find(key);
-        const std::vector<OutcomeMeanSuffStatEstimates> empty_stats;
-        const std::vector<CohortAuxiliaryDataMeanEstimates> empty_eta;
-        const auto& stats_vec = (stats_it == stats_map.end()) ? empty_stats : stats_it->second;
-        const auto& eta_vec = (eta_it == eta_map.end()) ? empty_eta : eta_it->second;
-        out.emplace(key, est_target_params(kv.second, stats_vec, eta_vec, fn, num_threads));
+        out.emplace(
+            kv.first,
+            est_target_params(kv.second, stats_by_cohort, eta_by_cohort, fn, num_threads));
     }
     return out;
 }

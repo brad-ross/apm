@@ -150,16 +150,16 @@ SEXP est_fgw_bipartite_match_outcome_diff_params_cpp(SEXP ome_xptr,
 // [[Rcpp::export]]
 Rcpp::List est_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
     Rcpp::List ome_by_spec,
-    Rcpp::Nullable<Rcpp::List> stats_by_spec,
-    Rcpp::Nullable<Rcpp::List> eta_by_spec,
+    Rcpp::Nullable<Rcpp::List> stats_xptrs_by_cohort,
+    Rcpp::Nullable<Rcpp::List> eta_xptrs_by_cohort,
     Rcpp::IntegerVector outcome_indices_1,
     Rcpp::IntegerVector outcome_indices_2,
     Rcpp::List observed_outcome_indices_list,
     Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue)
 {
     auto ome_map = apm::r_bindings::list_to_ome_map(ome_by_spec);
-    auto eta_map = apm::r_bindings::list_to_eta_map(eta_by_spec);
-    auto stats_map = apm::r_bindings::list_to_stats_map(stats_by_spec);
+    auto eta_vec = apm::r_bindings::list_to_eta_vec(eta_xptrs_by_cohort);
+    auto stats_vec = apm::r_utils::list_to_stats_vec(stats_xptrs_by_cohort);
 
     apm::ObservedOutcomeIndices ooi = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices_list);
     arma::uvec idx1 = to_zero_based_uvec(outcome_indices_1, "outcome_indices_1");
@@ -169,8 +169,8 @@ Rcpp::List est_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
 
     auto out_map = apm::est_fgw_bipartite_match_outcome_diff_params(
         ome_map,
-        stats_map,
-        eta_map,
+        stats_vec,
+        eta_vec,
         idx1,
         idx2,
         ooi,
@@ -192,8 +192,8 @@ Rcpp::List est_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
 // [[Rcpp::export]]
 Rcpp::List est_fgw_bipartite_match_outcome_diff_params_by_spec_cpp(
     Rcpp::List ome_by_spec,
-    Rcpp::Nullable<Rcpp::List> stats_by_spec,
-    Rcpp::Nullable<Rcpp::List> eta_by_spec,
+    Rcpp::Nullable<Rcpp::List> stats_xptrs_by_cohort,
+    Rcpp::Nullable<Rcpp::List> eta_xptrs_by_cohort,
     int outcome_idx_1,
     int outcome_idx_2,
     Rcpp::List observed_outcome_indices_list)
@@ -206,8 +206,8 @@ Rcpp::List est_fgw_bipartite_match_outcome_diff_params_by_spec_cpp(
     Rcpp::IntegerVector idx2 = Rcpp::IntegerVector::create(outcome_idx_2);
     return est_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
         ome_by_spec,
-        stats_by_spec,
-        eta_by_spec,
+        stats_xptrs_by_cohort,
+        eta_xptrs_by_cohort,
         idx1,
         idx2,
         observed_outcome_indices_list,
@@ -278,16 +278,16 @@ SEXP est_avg_fgw_bipartite_match_outcome_diff_params_cpp(
 // [[Rcpp::export]]
 Rcpp::List est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
     Rcpp::List ome_by_spec,
-    Rcpp::Nullable<Rcpp::List> stats_by_spec,
-    Rcpp::Nullable<Rcpp::List> eta_by_spec,
+    Rcpp::Nullable<Rcpp::List> stats_xptrs_by_cohort,
+    Rcpp::Nullable<Rcpp::List> eta_xptrs_by_cohort,
     Rcpp::List outcome_groupings,
     Rcpp::List observed_outcome_indices_list,
     Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue,
     int num_threads = 1)
 {
     auto ome_map = apm::r_bindings::list_to_ome_map(ome_by_spec);
-    auto eta_map = apm::r_bindings::list_to_eta_map(eta_by_spec);
-    auto stats_map = apm::r_bindings::list_to_stats_map(stats_by_spec);
+    auto eta_vec = apm::r_bindings::list_to_eta_vec(eta_xptrs_by_cohort);
+    auto stats_vec = apm::r_utils::list_to_stats_vec(stats_xptrs_by_cohort);
 
     apm::ObservedOutcomeIndices ooi = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices_list);
     std::vector<arma::uvec> groupings = to_zero_based_groupings(outcome_groupings, "outcome_groupings");
@@ -296,8 +296,8 @@ Rcpp::List est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
 
     auto out_map = apm::est_avg_fgw_bipartite_match_outcome_diff_params(
         ome_map,
-        stats_map,
-        eta_map,
+        stats_vec,
+        eta_vec,
         groupings,
         ooi,
         std::move(weights),
@@ -318,16 +318,16 @@ Rcpp::List est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
 // [[Rcpp::export]]
 Rcpp::List est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_cpp(
     Rcpp::List ome_by_spec,
-    Rcpp::Nullable<Rcpp::List> stats_by_spec,
-    Rcpp::Nullable<Rcpp::List> eta_by_spec,
+    Rcpp::Nullable<Rcpp::List> stats_xptrs_by_cohort,
+    Rcpp::Nullable<Rcpp::List> eta_xptrs_by_cohort,
     Rcpp::IntegerVector outcome_indices,
     Rcpp::List observed_outcome_indices_list,
     Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue,
     int num_threads = 1)
 {
     auto ome_map = apm::r_bindings::list_to_ome_map(ome_by_spec);
-    auto eta_map = apm::r_bindings::list_to_eta_map(eta_by_spec);
-    auto stats_map = apm::r_bindings::list_to_stats_map(stats_by_spec);
+    auto eta_vec = apm::r_bindings::list_to_eta_vec(eta_xptrs_by_cohort);
+    auto stats_vec = apm::r_utils::list_to_stats_vec(stats_xptrs_by_cohort);
 
     apm::ObservedOutcomeIndices ooi = apm::r_utils::to_cpp_observed_outcome_indices(observed_outcome_indices_list);
     arma::uvec indices = to_zero_based_uvec(outcome_indices, "outcome_indices");
@@ -337,8 +337,8 @@ Rcpp::List est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_cpp(
 
     auto out_map = apm::est_avg_fgw_bipartite_match_outcome_diff_params(
         ome_map,
-        stats_map,
-        eta_map,
+        stats_vec,
+        eta_vec,
         groupings,
         ooi,
         std::move(weights),

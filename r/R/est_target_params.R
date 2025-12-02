@@ -30,6 +30,11 @@ TargetParameterEstimates <- R6::R6Class(
 #' @param fn function(Y, eta = NULL) returning numeric vector length p.
 #' @param aux_means optional list of `CohortAuxiliaryDataMeanEstimates` (one per cohort) or
 #'   a named list whose values are lists (by spec, then per cohort). NULL is allowed.
+#'   When using the by-spec form, every spec must reference the same per-cohort
+#'   objects (e.g. reuse the exact lists) because the estimator shares those vectors.
+#' @param suff_stats optional list (per cohort) or named list (by spec) of
+#'   `OutcomeMeanSuffStatEstimates`. The by-spec form must share identical
+#'   per-cohort objects across specs.
 #' @return `TargetParameterEstimates` R6 object or named list of them (by spec).
 #' @export
 est_target_params <- function(outcome_means, fn, aux_means = NULL, suff_stats = NULL) {
@@ -121,16 +126,19 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
   TargetParameterEstimates$new(xp)
 }
 
-.tpe_by_spec <- function(outcome_means_by_spec, fn, aux_means_by_spec, suff_stats_by_spec) {
+.tpe_by_spec <- function(outcome_means_by_spec, fn, aux_means_input, suff_stats_input) {
   .validate_ome_by_spec(outcome_means_by_spec)
-  if (!is.null(aux_means_by_spec)) .validate_eta_by_spec(aux_means_by_spec)
-  if (!is.null(suff_stats_by_spec)) .validate_stats_by_spec(suff_stats_by_spec)
 
   ome_xp_by_spec <- lapply(outcome_means_by_spec, function(ome) ome$.__enclos_env__$private$xp)
-  eta_xp_by_spec <- .extract_aux_means_xptrs_by_spec(aux_means_by_spec)
-  stats_xp_by_spec <- .extract_suff_stats_xptrs_by_spec(suff_stats_by_spec)
+  eta_xp_shared <- .resolve_shared_aux_means_input(aux_means_input)
+  stats_xp_shared <- .resolve_shared_suff_stats_input(suff_stats_input)
 
-  res <- est_target_params_by_spec_cpp(ome_xp_by_spec, stats_xp_by_spec, eta_xp_by_spec, fn)
+  res <- est_target_params_by_spec_cpp(
+    ome_xp_by_spec,
+    stats_xp_shared,
+    eta_xp_shared,
+    fn
+  )
   .wrap_target_params_xptr_list(res)
 }
 
@@ -210,24 +218,62 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
   })
 }
 
-.extract_aux_means_xptrs_by_spec <- function(aux_means_by_spec) {
-  if (is.null(aux_means_by_spec)) return(NULL)
-  stopifnot(is.list(aux_means_by_spec))
-  lapply(aux_means_by_spec, function(lst) {
-    if (is.null(lst)) return(NULL)
-    stopifnot(is.list(lst))
-    .extract_aux_means_xptrs(lst)
-  })
+.resolve_shared_aux_means_input <- function(aux_means) {
+  if (is.null(aux_means)) return(NULL)
+  if (!is.list(aux_means)) {
+    stop("When provided, 'aux_means' must be a list.")
+  }
+  if (.is_cohort_aux_list(aux_means)) {
+    return(.extract_aux_means_xptrs(aux_means))
+  }
+  .validate_eta_by_spec(aux_means)
+  .resolve_shared_by_spec(aux_means, .extract_aux_means_xptrs, "aux_means")
 }
 
-.extract_suff_stats_xptrs_by_spec <- function(suff_stats_by_spec) {
-  if (is.null(suff_stats_by_spec)) return(NULL)
-  stopifnot(is.list(suff_stats_by_spec))
-  lapply(suff_stats_by_spec, function(lst) {
-    if (is.null(lst)) return(NULL)
-    stopifnot(is.list(lst))
-    .extract_suff_stats_xptrs(lst)
-  })
+.resolve_shared_suff_stats_input <- function(suff_stats) {
+  if (is.null(suff_stats)) return(NULL)
+  if (!is.list(suff_stats)) {
+    stop("When provided, 'suff_stats' must be a list.")
+  }
+  if (.is_cohort_suff_stats_list(suff_stats)) {
+    return(.extract_suff_stats_xptrs(suff_stats))
+  }
+  .validate_stats_by_spec(suff_stats)
+  .resolve_shared_by_spec(suff_stats, .extract_suff_stats_xptrs, "suff_stats")
+}
+
+.is_cohort_aux_list <- function(x) {
+  if (length(x) == 0L) return(TRUE)
+  all(vapply(x, function(e) is.null(e) || inherits(e, "CohortAuxiliaryDataMeanEstimates"), logical(1)))
+}
+
+.is_cohort_suff_stats_list <- function(x) {
+  if (length(x) == 0L) return(TRUE)
+  all(vapply(x, function(e) is.null(e) || inherits(e, "OutcomeMeanSuffStatEstimates"), logical(1)))
+}
+
+.resolve_shared_by_spec <- function(by_spec, extractor_fn, label) {
+  if (is.null(by_spec)) return(NULL)
+  stopifnot(is.list(by_spec))
+  if (length(by_spec) == 0L) return(NULL)
+  if (is.null(names(by_spec)) || any(!nzchar(names(by_spec)))) {
+    stop(sprintf("When providing by-spec inputs, '%s' must be a named list matching the spec keys.", label))
+  }
+  shared <- NULL
+  shared_set <- FALSE
+  for (spec in names(by_spec)) {
+    entry <- by_spec[[spec]]
+    current <- if (is.null(entry)) NULL else extractor_fn(entry)
+    if (!shared_set) {
+      shared <- current
+      shared_set <- TRUE
+      next
+    }
+    if (!identical(shared, current)) {
+      stop(sprintf("All specs must share identical %s; mismatch detected for spec '%s'.", label, spec))
+    }
+  }
+  shared
 }
 
 #' Target-parameter inference (single or by spec)

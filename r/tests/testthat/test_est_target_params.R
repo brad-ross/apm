@@ -1,5 +1,56 @@
 context("Testing estimation of target parameters")
 
+setup_target_fixture <- function(num_specs = 1L) {
+  T <- 5L
+  T_c <- 3L
+  outcomes <- make_outcomes(T)
+  cohort_indices <- make_staircase_observed_indices(T, T_c, add_no_missing_cohort = TRUE)
+  C <- length(cohort_indices)
+  units_by_cohort <- make_units_by_cohort(C, T_c)
+
+  ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE)
+  panel_dt <- build_panel_from_indices_factor(
+    outcomes = outcomes,
+    cohort_indices = cohort_indices,
+    units_by_cohort = units_by_cohort,
+    include_covariates = FALSE,
+    include_auxiliary = FALSE,
+    r = 2L,
+    rotate = FALSE,
+    ctx = ctx
+  )
+  set.seed(123)
+  panel_dt <- panel_dt[sample(nrow(panel_dt))]
+
+  panel <- UnbalancedPanel$new(
+    panel_df = panel_dt,
+    unit_id_col = "unit_id",
+    outcome_id_col = "outcome_id",
+    outcome_value_col = "y",
+    model_rank = 2,
+    min_cohort_size = 1,
+    sort_cohorts_lexicographically = TRUE
+  )
+
+  base_spec <- list(factor_model_estimator = "principal_components",
+                    include_outcome_fes = FALSE,
+                    r = 2L)
+  spec_names <- c("pc", if (num_specs > 1L) paste0("pc", seq_len(num_specs - 1L) + 1L))
+  est_specs <- setNames(vector("list", length(spec_names)), spec_names)
+  for (nm in spec_names) est_specs[[nm]] <- base_spec
+
+  comps <- est_target_param_components(
+    panel,
+    est_specs = est_specs,
+    num_threads = 1L,
+    cohort_outcomes_to_mask = setNames(list(as.integer(max(cohort_indices[[length(cohort_indices)]]))),
+                                       as.character(length(cohort_indices))),
+    bootstrap = get_weighted_bootstrap_draws(nrow(panel$get_unit_cohorts()), 2L, type = "multinomial", seed = 1L),
+    est_outcome_means_via_imputation = TRUE
+  )
+  list(panel = panel, comps = comps)
+}
+
 test_that("target param equals masked observed mean for last cohort/outcome", {
   # Staircase layout
   T <- 5L
@@ -245,4 +296,20 @@ test_that("est_masked_outcome_mean_err_metrics errors on out-of-range outcome in
   comps$cohort_outcome_mask <- setNames(list(as.integer(T + 10L)), "1")
   comps$masked_cohort_outcome_means <- list("1" = c(0))
   expect_error(est_masked_outcome_mean_err_metrics(comps))
+})
+
+test_that("est_target_params multi-spec reuses shared cohort inputs", {
+  fixture <- setup_target_fixture(num_specs = 2L)
+  comps <- fixture$comps
+  fn <- function(Y, shares, observed_means_list, covar_means_list, eta_list) {
+    colMeans(Y)
+  }
+  res <- est_target_params(
+    outcome_means = comps$outcome_means,
+    fn = fn,
+    aux_means = comps$cohort_auxiliary_means,
+    suff_stats = comps$cohort_outcome_mean_ests
+  )
+  expect_identical(sort(names(res)), sort(names(comps$outcome_means)))
+  expect_true(all(vapply(res, function(e) inherits(e, "TargetParameterEstimates"), logical(1))))
 })

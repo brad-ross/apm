@@ -122,23 +122,17 @@ TargetParameterEstimates est_target_params(
 
 std::unordered_map<std::string, TargetParameterEstimates> est_target_params(
     const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
-    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
-    const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
+    const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
     const TargetFn& fn,
     std::optional<std::size_t> num_threads)
 {
     std::unordered_map<std::string, TargetParameterEstimates> out;
     out.reserve(ome_map.size());
     for (const auto& kv : ome_map) {
-        const std::string& key = kv.first;
-        const OutcomeMeansEstimates& ome = kv.second;
-        auto it_eta = eta_map.find(key);
-        auto it_stats = stats_map.find(key);
-        const std::vector<CohortAuxiliaryDataMeanEstimates> empty_eta;
-        const std::vector<OutcomeMeanSuffStatEstimates> empty_stats;
-        const auto& eta_vec = (it_eta == eta_map.end() ? empty_eta : it_eta->second);
-        const auto& stats_vec = (it_stats == stats_map.end() ? empty_stats : it_stats->second);
-        out.emplace(key, est_target_params(ome, stats_vec, eta_vec, fn, num_threads));
+        out.emplace(
+            kv.first,
+            est_target_params(kv.second, stats_by_cohort, eta_by_cohort, fn, num_threads));
     }
     return out;
 }

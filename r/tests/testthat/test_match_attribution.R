@@ -1,6 +1,6 @@
 context("FGW bipartite match attribution")
 
-setup_match_attr_fixture <- function() {
+setup_match_attr_fixture <- function(num_specs = 1L) {
   T <- 3L
   cohort_indices <- list(
     as.integer(c(1L, 2L)),
@@ -24,11 +24,14 @@ setup_match_attr_fixture <- function() {
     min_cohort_size = 1,
     sort_cohorts_lexicographically = TRUE
   )
-  est_specs <- list(pc = list(
+  base_spec <- list(
     factor_model_estimator = "principal_components",
     include_outcome_fes = FALSE,
     r = 1L
-  ))
+  )
+  spec_names <- c("pc", if (num_specs > 1L) paste0("pc", seq_len(num_specs - 1L) + 1L))
+  est_specs <- setNames(vector("list", length(spec_names)), spec_names)
+  for (nm in spec_names) est_specs[[nm]] <- base_spec
   comps <- est_target_param_components(
     panel = panel,
     est_specs = est_specs,
@@ -139,5 +142,23 @@ test_that("FGW wrapper errors on invalid outcome index", {
     "not observed",
     ignore.case = TRUE
   )
+})
+
+test_that("FGW multi-spec wrapper reuses shared cohort inputs", {
+  fixture <- setup_match_attr_fixture(num_specs = 2L)
+  panel <- fixture$panel
+  comps <- fixture$comps
+  obs_idx <- panel$get_observed_outcome_indices()
+
+  res <- est_fgw_bipartite_match_outcome_diff_params(
+    outcome_means = comps$outcome_means,
+    outcome_idx_1 = 1L,
+    outcome_idx_2 = 2L,
+    observed_outcome_indices = obs_idx,
+    aux_means = comps$cohort_auxiliary_means,
+    suff_stats = comps$cohort_outcome_mean_ests
+  )
+  expect_identical(sort(names(res)), sort(names(comps$outcome_means)))
+  expect_true(all(vapply(res, function(e) inherits(e, "TargetParameterEstimates"), logical(1))))
 })
 

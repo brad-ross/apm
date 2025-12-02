@@ -49,38 +49,6 @@ std::unordered_map<std::string, OutcomeMeansEstimates> list_to_ome_map(Rcpp::Lis
     return ome_map;
 }
 
-std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>> list_to_eta_map(
-    Rcpp::Nullable<Rcpp::List> eta_by_spec)
-{
-    std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>> eta_map;
-    if (eta_by_spec.isNotNull()) {
-        Rcpp::List L(eta_by_spec);
-        Rcpp::CharacterVector nms = L.names();
-        for (int i = 0; i < L.size(); ++i) {
-            std::string key = Rcpp::as<std::string>(nms[i]);
-            std::vector<CohortAuxiliaryDataMeanEstimates> eta_vec = list_to_eta_vec(Rcpp::List(L[i]));
-            eta_map.emplace(std::move(key), std::move(eta_vec));
-        }
-    }
-    return eta_map;
-}
-
-std::unordered_map<std::string, std::vector<apm::OutcomeMeanSuffStatEstimates>> list_to_stats_map(
-    Rcpp::Nullable<Rcpp::List> stats_by_spec)
-{
-    std::unordered_map<std::string, std::vector<apm::OutcomeMeanSuffStatEstimates>> stats_map;
-    if (stats_by_spec.isNotNull()) {
-        Rcpp::List L(stats_by_spec);
-        Rcpp::CharacterVector nms = L.names();
-        for (int i = 0; i < L.size(); ++i) {
-            std::string key = Rcpp::as<std::string>(nms[i]);
-            std::vector<apm::OutcomeMeanSuffStatEstimates> stats_vec = apm::r_utils::list_to_stats_vec(Rcpp::List(L[i]));
-            stats_map.emplace(std::move(key), std::move(stats_vec));
-        }
-    }
-    return stats_map;
-}
-
 } // namespace r_bindings
 } // namespace apm
 
@@ -196,18 +164,18 @@ Rcpp::NumericMatrix tpe_boot_params_matrix_cpp(SEXP xp_) {
 // By-spec variant: named list of XPtr<TargetParameterEstimates>
 // [[Rcpp::export]]
 Rcpp::List est_target_params_by_spec_cpp(Rcpp::List ome_by_spec,
-                                         Rcpp::Nullable<Rcpp::List> stats_by_spec,
-                                         Rcpp::Nullable<Rcpp::List> eta_by_spec,
+                                         Rcpp::Nullable<Rcpp::List> stats_xptrs_by_cohort,
+                                         Rcpp::Nullable<Rcpp::List> eta_xptrs_by_cohort,
                                          Rcpp::Function r_fn) {
     auto ome_map = apm::r_bindings::list_to_ome_map(ome_by_spec);
-    auto eta_map = apm::r_bindings::list_to_eta_map(eta_by_spec);
-    auto stats_map = apm::r_bindings::list_to_stats_map(stats_by_spec);
+    auto eta_vec = apm::r_bindings::list_to_eta_vec(eta_xptrs_by_cohort);
+    auto stats_vec = apm::r_utils::list_to_stats_vec(stats_xptrs_by_cohort);
 
     apm::TargetFn cb = make_target_fn(r_fn);
     // NOTE: Calling R from multiple threads is unsafe. We therefore force single-threaded
     // execution (num_threads = 1) for target param estimation invoked via R bindings.
     std::optional<std::size_t> nt_opt = std::optional<std::size_t>(1); // single-thread for R safety
-    auto out_map = apm::est_target_params(ome_map, stats_map, eta_map, cb, nt_opt);
+    auto out_map = apm::est_target_params(ome_map, stats_vec, eta_vec, cb, nt_opt);
 
     Rcpp::List out(static_cast<int>(out_map.size()));
     Rcpp::CharacterVector names(static_cast<int>(out_map.size()));
