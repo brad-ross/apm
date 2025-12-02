@@ -8,6 +8,12 @@
 namespace apm {
 
 TargetFn get_fgw_bipartite_match_outcome_diff_params_fn(
+    const arma::uvec& outcome_indices_1,
+    const arma::uvec& outcome_indices_2,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<arma::vec> outcome_weights = std::nullopt);
+
+TargetFn get_fgw_bipartite_match_outcome_diff_params_fn(
     std::size_t outcome_idx_1,
     std::size_t outcome_idx_2,
     const ObservedOutcomeIndices& observed_outcome_indices);
@@ -16,9 +22,29 @@ TargetParameterEstimates est_fgw_bipartite_match_outcome_diff_params(
     const OutcomeMeansEstimates& ome,
     const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
     const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
+    const arma::uvec& outcome_indices_1,
+    const arma::uvec& outcome_indices_2,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<arma::vec> outcome_weights = std::nullopt,
+    std::optional<std::size_t> num_threads = std::nullopt);
+
+TargetParameterEstimates est_fgw_bipartite_match_outcome_diff_params(
+    const OutcomeMeansEstimates& ome,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
+    const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
     std::size_t outcome_idx_1,
     std::size_t outcome_idx_2,
     const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<std::size_t> num_threads = std::nullopt);
+
+std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_match_outcome_diff_params(
+    const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
+    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
+    const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
+    const arma::uvec& outcome_indices_1,
+    const arma::uvec& outcome_indices_2,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<arma::vec> outcome_weights = std::nullopt,
     std::optional<std::size_t> num_threads = std::nullopt);
 
 std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_match_outcome_diff_params(

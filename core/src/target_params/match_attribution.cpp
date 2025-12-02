@@ -1,7 +1,9 @@
 #include "match_attribution.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <string>
 #include <unordered_set>
 
 namespace apm {
@@ -29,26 +31,111 @@ bool any_cohort_observes(const std::vector<std::unordered_set<std::size_t>>& obs
     return false;
 }
 
+arma::uvec project_observed_subset(const std::unordered_set<std::size_t>& cohort_set,
+                                   const arma::uvec& outcome_indices)
+{
+    arma::uvec observed_subset(outcome_indices.n_elem);
+    arma::uword subset_size = 0;
+    for (arma::uword i = 0; i < outcome_indices.n_elem; ++i) {
+        const arma::uword idx = outcome_indices[i];
+        if (cohort_set.find(static_cast<std::size_t>(idx)) == cohort_set.end()) continue;
+        observed_subset[subset_size++] = idx;
+    }
+    observed_subset.set_size(subset_size);
+    return observed_subset;
+}
+
+arma::vec build_outcome_weights(const ObservedOutcomeIndices& observed_outcome_indices,
+                                std::optional<arma::vec> outcome_weights_opt)
+{
+    const arma::uword total_outcomes = num_outcomes(observed_outcome_indices);
+    if (total_outcomes == 0) {
+        throw std::invalid_argument("observed_outcome_indices must describe at least one outcome.");
+    }
+
+    arma::vec weights;
+    if (outcome_weights_opt.has_value()) {
+        weights = outcome_weights_opt.value();
+    } else {
+        weights = arma::vec(total_outcomes, arma::fill::ones);
+    }
+
+    if (weights.n_elem != total_outcomes) {
+        throw std::invalid_argument("outcome_weights length must equal the total number of outcomes.");
+    }
+
+    double positive_sum = 0.0;
+    for (arma::uword i = 0; i < weights.n_elem; ++i) {
+        const double w = weights[i];
+        if (w < 0.0) {
+            throw std::invalid_argument("outcome_weights entries must be nonnegative.");
+        }
+        positive_sum += w;
+    }
+    if (positive_sum <= 0.0) {
+        throw std::invalid_argument("outcome_weights entries must sum to a positive value.");
+    }
+
+    return weights;
+}
+
+double subset_weight_sum(const arma::vec& weights, const arma::uvec& outcome_indices) {
+    double sum = 0.0;
+    for (arma::uword i = 0; i < outcome_indices.n_elem; ++i) {
+        sum += weights[static_cast<arma::uword>(outcome_indices[i])];
+    }
+    return sum;
+}
+
+void validate_outcome_indices(const arma::uvec& outcome_indices,
+                              const std::vector<std::unordered_set<std::size_t>>& obs_sets,
+                              std::size_t total_outcomes,
+                              const arma::vec& outcome_weights,
+                              const char* arg_name)
+{
+    if (outcome_indices.n_elem == 0) {
+        throw std::invalid_argument(std::string(arg_name) + " must contain at least one outcome index.");
+    }
+    for (arma::uword i = 0; i < outcome_indices.n_elem; ++i) {
+        const std::size_t idx = static_cast<std::size_t>(outcome_indices[i]);
+        if (idx >= total_outcomes) {
+            throw std::invalid_argument(std::string(arg_name) + " contains an index that is not observed (exceeds available outcomes).");
+        }
+        if (!any_cohort_observes(obs_sets, idx)) {
+            throw std::invalid_argument(std::string(arg_name) + " contains an index that is not observed by any cohort.");
+        }
+    }
+    if (subset_weight_sum(outcome_weights, outcome_indices) <= 0.0) {
+        throw std::invalid_argument(std::string(arg_name) + " corresponds to zero total outcome weight.");
+    }
+}
+
 } // namespace
 
 TargetFn get_fgw_bipartite_match_outcome_diff_params_fn(
-    std::size_t outcome_idx_1,
-    std::size_t outcome_idx_2,
-    const ObservedOutcomeIndices& observed_outcome_indices)
+    const arma::uvec& outcome_indices_1,
+    const arma::uvec& outcome_indices_2,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<arma::vec> outcome_weights)
 {
     const std::vector<std::unordered_set<std::size_t>> obs_sets = build_observed_sets(observed_outcome_indices);
-    if (!any_cohort_observes(obs_sets, outcome_idx_1)) {
-        throw std::invalid_argument("outcome_idx_1 is not observed by any cohort.");
-    }
-    if (!any_cohort_observes(obs_sets, outcome_idx_2)) {
-        throw std::invalid_argument("outcome_idx_2 is not observed by any cohort.");
-    }
+    const arma::vec weights = build_outcome_weights(observed_outcome_indices, std::move(outcome_weights));
+    const std::size_t total_outcomes = static_cast<std::size_t>(weights.n_elem);
+    validate_outcome_indices(outcome_indices_1, obs_sets, total_outcomes, weights, "outcome_indices_1");
+    validate_outcome_indices(outcome_indices_2, obs_sets, total_outcomes, weights, "outcome_indices_2");
+    const arma::uword max_required_idx = std::max(
+        outcome_indices_1.max(),
+        outcome_indices_2.max());
 
-    return [outcome_idx_1, outcome_idx_2, obs_sets](
+    return [outcome_indices_1,
+            outcome_indices_2,
+            obs_sets,
+            weights,
+            max_required_idx](
                const arma::mat& Y,
                const std::vector<OutcomeMeanSufficientStatistics>& stats_all,
                const std::vector<CohortAuxiliaryDataMeans>& /*eta_all*/) -> arma::vec {
-        if (outcome_idx_1 >= static_cast<std::size_t>(Y.n_cols) || outcome_idx_2 >= static_cast<std::size_t>(Y.n_cols)) {
+        if (max_required_idx >= Y.n_cols) {
             throw std::invalid_argument("Outcome index exceeds Y column dimension.");
         }
         if (stats_all.size() != obs_sets.size()) {
@@ -60,35 +147,74 @@ TargetFn get_fgw_bipartite_match_outcome_diff_params_fn(
 
         const std::size_t C = stats_all.size();
 
-        auto compute_obs_weighted_avg = [&](std::size_t outcome_idx) {
+        auto compute_weighted_avg = [&](const arma::uvec& outcome_indices, bool observed_only) {
             double weight_sum = 0.0;
             double weighted_total = 0.0;
             for (std::size_t c = 0; c < C; ++c) {
-                if (obs_sets[c].find(outcome_idx) != obs_sets[c].end()) {
-                    const double w = stats_all[c].cohort_pop_share;
-                    weight_sum += w;
-                    weighted_total += w * Y(static_cast<arma::uword>(c), static_cast<arma::uword>(outcome_idx));
+                arma::uvec indices_for_row;
+                if (observed_only) {
+                    indices_for_row = project_observed_subset(obs_sets[c], outcome_indices);
+                    if (indices_for_row.n_elem == 0) continue;
+                } else {
+                    indices_for_row = outcome_indices;
                 }
+
+                double row_outcome_weight_sum = 0.0;
+                double row_outcome_weighted_total = 0.0;
+                for (arma::uword i = 0; i < indices_for_row.n_elem; ++i) {
+                    const arma::uword idx = indices_for_row[i];
+                    const double outcome_w = weights[idx];
+                    row_outcome_weight_sum += outcome_w;
+                    row_outcome_weighted_total += outcome_w * Y(static_cast<arma::uword>(c), idx);
+                }
+                if (row_outcome_weight_sum <= 0.0) continue;
+
+                const double row_weight = stats_all[c].cohort_pop_share;
+                weight_sum += row_weight * row_outcome_weight_sum;
+                weighted_total += row_weight * row_outcome_weighted_total;
             }
             return (weight_sum > 0.0) ? (weighted_total / weight_sum) : 0.0;
         };
 
-        auto compute_pop_weighted_avg = [&](std::size_t outcome_idx) {
-            double weight_sum = 0.0;
-            double weighted_total = 0.0;
-            for (std::size_t c = 0; c < C; ++c) {
-                const double w = stats_all[c].cohort_pop_share;
-                weight_sum += w;
-                weighted_total += w * Y(static_cast<arma::uword>(c), static_cast<arma::uword>(outcome_idx));
-            }
-            return (weight_sum > 0.0) ? (weighted_total / weight_sum) : 0.0;
-        };
-
-        const double obs_diff = compute_obs_weighted_avg(outcome_idx_1) - compute_obs_weighted_avg(outcome_idx_2);
-        const double pop_diff = compute_pop_weighted_avg(outcome_idx_1) - compute_pop_weighted_avg(outcome_idx_2);
+        const double obs_diff = compute_weighted_avg(outcome_indices_1, /*observed_only=*/true) -
+                                compute_weighted_avg(outcome_indices_2, /*observed_only=*/true);
+        const double pop_diff = compute_weighted_avg(outcome_indices_1, /*observed_only=*/false) -
+                                compute_weighted_avg(outcome_indices_2, /*observed_only=*/false);
         const double ratio = (std::abs(obs_diff) > 1e-15) ? (pop_diff / obs_diff) : 0.0;
         return arma::vec({ratio, 1.0 - ratio});
     };
+}
+
+TargetFn get_fgw_bipartite_match_outcome_diff_params_fn(
+    std::size_t outcome_idx_1,
+    std::size_t outcome_idx_2,
+    const ObservedOutcomeIndices& observed_outcome_indices)
+{
+    arma::uvec outcome_indices_1({static_cast<arma::uword>(outcome_idx_1)});
+    arma::uvec outcome_indices_2({static_cast<arma::uword>(outcome_idx_2)});
+    return get_fgw_bipartite_match_outcome_diff_params_fn(
+        outcome_indices_1,
+        outcome_indices_2,
+        observed_outcome_indices,
+        std::nullopt);
+}
+
+TargetParameterEstimates est_fgw_bipartite_match_outcome_diff_params(
+    const OutcomeMeansEstimates& ome,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
+    const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
+    const arma::uvec& outcome_indices_1,
+    const arma::uvec& outcome_indices_2,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<arma::vec> outcome_weights,
+    std::optional<std::size_t> num_threads)
+{
+    TargetFn fn = get_fgw_bipartite_match_outcome_diff_params_fn(
+        outcome_indices_1,
+        outcome_indices_2,
+        observed_outcome_indices,
+        std::move(outcome_weights));
+    return est_target_params(ome, stats_by_cohort, eta_by_cohort, fn, num_threads);
 }
 
 TargetParameterEstimates est_fgw_bipartite_match_outcome_diff_params(
@@ -100,20 +226,34 @@ TargetParameterEstimates est_fgw_bipartite_match_outcome_diff_params(
     const ObservedOutcomeIndices& observed_outcome_indices,
     std::optional<std::size_t> num_threads)
 {
-    TargetFn fn = get_fgw_bipartite_match_outcome_diff_params_fn(outcome_idx_1, outcome_idx_2, observed_outcome_indices);
-    return est_target_params(ome, stats_by_cohort, eta_by_cohort, fn, num_threads);
+    arma::uvec outcome_indices_1({static_cast<arma::uword>(outcome_idx_1)});
+    arma::uvec outcome_indices_2({static_cast<arma::uword>(outcome_idx_2)});
+    return est_fgw_bipartite_match_outcome_diff_params(
+        ome,
+        stats_by_cohort,
+        eta_by_cohort,
+        outcome_indices_1,
+        outcome_indices_2,
+        observed_outcome_indices,
+        std::nullopt,
+        num_threads);
 }
 
 std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_match_outcome_diff_params(
     const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
     const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
     const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
-    std::size_t outcome_idx_1,
-    std::size_t outcome_idx_2,
+    const arma::uvec& outcome_indices_1,
+    const arma::uvec& outcome_indices_2,
     const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<arma::vec> outcome_weights,
     std::optional<std::size_t> num_threads)
 {
-    TargetFn fn = get_fgw_bipartite_match_outcome_diff_params_fn(outcome_idx_1, outcome_idx_2, observed_outcome_indices);
+    TargetFn fn = get_fgw_bipartite_match_outcome_diff_params_fn(
+        outcome_indices_1,
+        outcome_indices_2,
+        observed_outcome_indices,
+        std::move(outcome_weights));
     std::unordered_map<std::string, TargetParameterEstimates> out;
     out.reserve(ome_map.size());
     for (const auto& kv : ome_map) {
@@ -129,5 +269,26 @@ std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_matc
     return out;
 }
 
-} // namespace apm
+std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_match_outcome_diff_params(
+    const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
+    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
+    const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
+    std::size_t outcome_idx_1,
+    std::size_t outcome_idx_2,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<std::size_t> num_threads)
+{
+    arma::uvec outcome_indices_1({static_cast<arma::uword>(outcome_idx_1)});
+    arma::uvec outcome_indices_2({static_cast<arma::uword>(outcome_idx_2)});
+    return est_fgw_bipartite_match_outcome_diff_params(
+        ome_map,
+        stats_map,
+        eta_map,
+        outcome_indices_1,
+        outcome_indices_2,
+        observed_outcome_indices,
+        std::nullopt,
+        num_threads);
+}
 
+} // namespace apm
