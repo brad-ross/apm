@@ -110,22 +110,8 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
 # -----------------------------------------------------------------------------
 
 .tpe_single <- function(outcome_means, fn, aux_means, suff_stats) {
-  if (!is.null(aux_means)) stopifnot(is.list(aux_means))
-  if (!is.null(suff_stats)) stopifnot(is.list(suff_stats))
-  if (!is.null(aux_means)) {
-    aux_means <- lapply(aux_means, function(e) {
-      if (is.null(e)) return(NULL)
-      stopifnot(inherits(e, "CohortAuxiliaryDataMeanEstimates"))
-      e$.__enclos_env__$private$xp
-    })
-  }
-  if (!is.null(suff_stats)) {
-    suff_stats <- lapply(suff_stats, function(e) {
-      if (is.null(e)) return(NULL)
-      stopifnot(inherits(e, "OutcomeMeanSuffStatEstimates"))
-      e$.__enclos_env__$private$xp
-    })
-  }
+  aux_means <- .extract_aux_means_xptrs(aux_means)
+  suff_stats <- .extract_suff_stats_xptrs(suff_stats)
   xp <- est_target_params_cpp(
     outcome_means$.__enclos_env__$private$xp,
     suff_stats,
@@ -141,32 +127,8 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
   if (!is.null(suff_stats_by_spec)) .validate_stats_by_spec(suff_stats_by_spec)
 
   ome_xp_by_spec <- lapply(outcome_means_by_spec, function(ome) ome$.__enclos_env__$private$xp)
-  if (!is.null(aux_means_by_spec)) {
-    eta_xp_by_spec <- lapply(aux_means_by_spec, function(lst) {
-      if (is.null(lst)) return(NULL)
-      stopifnot(is.list(lst))
-      lapply(lst, function(e) {
-        if (is.null(e)) return(NULL)
-        stopifnot(inherits(e, "CohortAuxiliaryDataMeanEstimates"))
-        e$.__enclos_env__$private$xp
-      })
-    })
-  } else {
-    eta_xp_by_spec <- NULL
-  }
-  if (!is.null(suff_stats_by_spec)) {
-    stats_xp_by_spec <- lapply(suff_stats_by_spec, function(lst) {
-      if (is.null(lst)) return(NULL)
-      stopifnot(is.list(lst))
-      lapply(lst, function(e) {
-        if (is.null(e)) return(NULL)
-        stopifnot(inherits(e, "OutcomeMeanSuffStatEstimates"))
-        e$.__enclos_env__$private$xp
-      })
-    })
-  } else {
-    stats_xp_by_spec <- NULL
-  }
+  eta_xp_by_spec <- .extract_aux_means_xptrs_by_spec(aux_means_by_spec)
+  stats_xp_by_spec <- .extract_suff_stats_xptrs_by_spec(suff_stats_by_spec)
 
   res <- est_target_params_by_spec_cpp(ome_xp_by_spec, stats_xp_by_spec, eta_xp_by_spec, fn)
   .wrap_target_params_xptr_list(res)
@@ -226,6 +188,46 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
     out[[i]] <- TargetParameterEstimates$new(res_named_xptr_list[[i]])
   }
   out
+}
+
+.extract_aux_means_xptrs <- function(aux_means) {
+  if (is.null(aux_means)) return(NULL)
+  stopifnot(is.list(aux_means))
+  lapply(aux_means, function(e) {
+    if (is.null(e)) return(NULL)
+    stopifnot(inherits(e, "CohortAuxiliaryDataMeanEstimates"))
+    e$.__enclos_env__$private$xp
+  })
+}
+
+.extract_suff_stats_xptrs <- function(suff_stats) {
+  if (is.null(suff_stats)) return(NULL)
+  stopifnot(is.list(suff_stats))
+  lapply(suff_stats, function(e) {
+    if (is.null(e)) return(NULL)
+    stopifnot(inherits(e, "OutcomeMeanSuffStatEstimates"))
+    e$.__enclos_env__$private$xp
+  })
+}
+
+.extract_aux_means_xptrs_by_spec <- function(aux_means_by_spec) {
+  if (is.null(aux_means_by_spec)) return(NULL)
+  stopifnot(is.list(aux_means_by_spec))
+  lapply(aux_means_by_spec, function(lst) {
+    if (is.null(lst)) return(NULL)
+    stopifnot(is.list(lst))
+    .extract_aux_means_xptrs(lst)
+  })
+}
+
+.extract_suff_stats_xptrs_by_spec <- function(suff_stats_by_spec) {
+  if (is.null(suff_stats_by_spec)) return(NULL)
+  stopifnot(is.list(suff_stats_by_spec))
+  lapply(suff_stats_by_spec, function(lst) {
+    if (is.null(lst)) return(NULL)
+    stopifnot(is.list(lst))
+    .extract_suff_stats_xptrs(lst)
+  })
 }
 
 #' Target-parameter inference (single or by spec)
