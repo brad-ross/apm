@@ -155,7 +155,6 @@ test_that("FGW multi-spec wrapper reuses shared cohort inputs", {
     outcome_idx_1 = 1L,
     outcome_idx_2 = 2L,
     observed_outcome_indices = obs_idx,
-    aux_means = comps$cohort_auxiliary_means,
     suff_stats = comps$cohort_outcome_mean_ests
   )
   expect_identical(sort(names(res)), sort(names(comps$outcome_means)))

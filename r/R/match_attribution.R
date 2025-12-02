@@ -9,8 +9,6 @@
 #' @param outcome_idx_2 Second (1-based) outcome index. Ignored when
 #'   `outcome_indices_2` is supplied.
 #' @param observed_outcome_indices List of integer vectors (1-based) indicating outcomes observed per cohort.
-#' @param aux_means Optional list (per cohort, or named list by spec) of `CohortAuxiliaryDataMeanEstimates`.
-#'   When supplying the by-spec form, each spec must reuse the same per-cohort objects.
 #' @param suff_stats Optional list (per cohort, or named list by spec) of `OutcomeMeanSuffStatEstimates`.
 #'   The by-spec form must reference the same per-cohort objects across specs.
 #' @param outcome_indices_1 Optional integer vector (1-based) of outcomes whose weighted average
@@ -25,7 +23,6 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                                                         outcome_idx_1 = NULL,
                                                         outcome_idx_2 = NULL,
                                                         observed_outcome_indices,
-                                                        aux_means = NULL,
                                                         suff_stats = NULL,
                                                         outcome_indices_1 = NULL,
                                                         outcome_indices_2 = NULL,
@@ -46,7 +43,6 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
       idx_resolved$outcome_indices_1,
       idx_resolved$outcome_indices_2,
       observed_outcome_indices,
-      aux_means,
       suff_stats,
       outcome_weights
     ))
@@ -57,7 +53,6 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
       idx_resolved$outcome_indices_1,
       idx_resolved$outcome_indices_2,
       observed_outcome_indices,
-      aux_means,
       suff_stats,
       outcome_weights
     ))
@@ -69,17 +64,14 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                         outcome_indices_1,
                         outcome_indices_2,
                         observed_outcome_indices,
-                        aux_means,
                         suff_stats,
                         outcome_weights) {
-  aux_means <- .extract_aux_means_xptrs(aux_means)
   suff_stats <- .extract_suff_stats_xptrs(suff_stats)
   idx1 <- as.integer(outcome_indices_1)
   idx2 <- as.integer(outcome_indices_2)
   xp <- est_fgw_bipartite_match_outcome_diff_params_multi_cpp(
     ome_xptr = outcome_means$.__enclos_env__$private$xp,
     stats_xptrs_by_cohort = suff_stats,
-    eta_xptrs_by_cohort = aux_means,
     outcome_indices_1 = idx1,
     outcome_indices_2 = idx2,
     observed_outcome_indices_list = observed_outcome_indices,
@@ -92,20 +84,17 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                          outcome_indices_1,
                          outcome_indices_2,
                          observed_outcome_indices,
-                         aux_means_input,
                          suff_stats_input,
                          outcome_weights) {
   .validate_ome_by_spec(outcome_means_by_spec)
 
   ome_xp_by_spec <- lapply(outcome_means_by_spec, function(ome) ome$.__enclos_env__$private$xp)
-  eta_xp_shared <- .resolve_shared_aux_means_input(aux_means_input)
   stats_xp_shared <- .resolve_shared_suff_stats_input(suff_stats_input)
   idx1 <- as.integer(outcome_indices_1)
   idx2 <- as.integer(outcome_indices_2)
   res <- est_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
     ome_by_spec = ome_xp_by_spec,
     stats_xptrs_by_cohort = stats_xp_shared,
-    eta_xptrs_by_cohort = eta_xp_shared,
     outcome_indices_1 = idx1,
     outcome_indices_2 = idx2,
     observed_outcome_indices_list = observed_outcome_indices,
@@ -153,8 +142,6 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
 #'
 #' @param outcome_means `OutcomeMeansEstimates` or named list of them (by spec).
 #' @param observed_outcome_indices List of integer vectors (1-based) indicating outcomes observed per cohort.
-#' @param aux_means Optional list (per cohort, or named list by spec) of `CohortAuxiliaryDataMeanEstimates`.
-#'   When using the by-spec form, every spec must reuse the same per-cohort objects.
 #' @param suff_stats Optional list (per cohort, or named list by spec) of `OutcomeMeanSuffStatEstimates`.
 #'   The by-spec form must reference the same per-cohort objects across specs.
 #' @param outcome_groupings Optional list of integer vectors (1-based) defining outcome groups. Must contain at least two groups.
@@ -165,7 +152,6 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
 #' @export
 est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                                                             observed_outcome_indices,
-                                                            aux_means = NULL,
                                                             suff_stats = NULL,
                                                             outcome_groupings = NULL,
                                                             outcome_indices = NULL,
@@ -181,7 +167,6 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
     return(.avg_fgw_single(
       outcome_means,
       observed_outcome_indices,
-      aux_means,
       suff_stats,
       resolved$outcome_groupings,
       resolved$outcome_indices,
@@ -193,7 +178,6 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
     return(.avg_fgw_by_spec(
       outcome_means,
       observed_outcome_indices,
-      aux_means,
       suff_stats,
       resolved$outcome_groupings,
       resolved$outcome_indices,
@@ -206,20 +190,17 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
 
 .avg_fgw_single <- function(outcome_means,
                             observed_outcome_indices,
-                            aux_means,
                             suff_stats,
                             outcome_groupings,
                             outcome_indices,
                             outcome_weights,
                             num_threads) {
-  aux_means <- .extract_aux_means_xptrs(aux_means)
   suff_stats <- .extract_suff_stats_xptrs(suff_stats)
   if (!is.null(outcome_groupings)) {
     groupings <- lapply(outcome_groupings, as.integer)
     xp <- est_avg_fgw_bipartite_match_outcome_diff_params_multi_cpp(
       ome_xptr = outcome_means$.__enclos_env__$private$xp,
       stats_xptrs_by_cohort = suff_stats,
-      eta_xptrs_by_cohort = aux_means,
       outcome_groupings = groupings,
       observed_outcome_indices_list = observed_outcome_indices,
       outcome_weights = outcome_weights,
@@ -230,7 +211,6 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
     xp <- est_avg_fgw_bipartite_match_outcome_diff_params_cpp(
       ome_xptr = outcome_means$.__enclos_env__$private$xp,
       stats_xptrs_by_cohort = suff_stats,
-      eta_xptrs_by_cohort = aux_means,
       outcome_indices = idx,
       observed_outcome_indices_list = observed_outcome_indices,
       outcome_weights = outcome_weights,
@@ -242,7 +222,6 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
 
 .avg_fgw_by_spec <- function(outcome_means_by_spec,
                              observed_outcome_indices,
-                             aux_means_input,
                              suff_stats_input,
                              outcome_groupings,
                              outcome_indices,
@@ -251,14 +230,12 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
   .validate_ome_by_spec(outcome_means_by_spec)
 
   ome_xp_by_spec <- lapply(outcome_means_by_spec, function(ome) ome$.__enclos_env__$private$xp)
-  eta_xp_shared <- .resolve_shared_aux_means_input(aux_means_input)
   stats_xp_shared <- .resolve_shared_suff_stats_input(suff_stats_input)
   if (!is.null(outcome_groupings)) {
     groupings <- lapply(outcome_groupings, as.integer)
     res <- est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
       ome_by_spec = ome_xp_by_spec,
       stats_xptrs_by_cohort = stats_xp_shared,
-      eta_xptrs_by_cohort = eta_xp_shared,
       outcome_groupings = groupings,
       observed_outcome_indices_list = observed_outcome_indices,
       outcome_weights = outcome_weights,
@@ -269,7 +246,6 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
     res <- est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_cpp(
       ome_by_spec = ome_xp_by_spec,
       stats_xptrs_by_cohort = stats_xp_shared,
-      eta_xptrs_by_cohort = eta_xp_shared,
       outcome_indices = idx,
       observed_outcome_indices_list = observed_outcome_indices,
       outcome_weights = outcome_weights,
