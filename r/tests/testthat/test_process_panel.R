@@ -196,6 +196,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         outcome_value_col = "y",
         model_rank = 1,         # only require at least 1 outcome
         min_cohort_size = 2,    # require at least 2 units per cohort
+        subset_to_largest_super_cohort = FALSE,  # keep all eligible cohorts for this test
         sort_cohorts_lexicographically = TRUE,
         cohort_observed_outcomes_as_df = FALSE
     )
@@ -238,6 +239,7 @@ test_that("drops cohort by size (min_cohort_size=2) and by rank (model_rank=2)",
         outcome_value_col = "y",
         model_rank = 2,         # now require at least 2 outcomes
         min_cohort_size = 1,    # size condition met for all cohorts
+        subset_to_largest_super_cohort = FALSE,  # keep all eligible cohorts for this test
         sort_cohorts_lexicographically = TRUE,
         cohort_observed_outcomes_as_df = FALSE
     )
