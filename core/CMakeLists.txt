@@ -40,6 +40,7 @@ add_library(apm
     src/panels/CohortLevelUnbalancedPanel.cpp
     src/utils.cpp
     src/target_params/est_target_params.cpp
+    src/target_params/match_attribution.cpp
     src/target_params/est_outcome_mean_err_metrics.cpp
 )
 target_include_directories(apm PUBLIC src)
