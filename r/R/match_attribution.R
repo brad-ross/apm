@@ -70,22 +70,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                         aux_means,
                         suff_stats,
                         outcome_weights) {
-  if (!is.null(aux_means)) stopifnot(is.list(aux_means))
-  if (!is.null(suff_stats)) stopifnot(is.list(suff_stats))
-  if (!is.null(aux_means)) {
-    aux_means <- lapply(aux_means, function(e) {
-      if (is.null(e)) return(NULL)
-      stopifnot(inherits(e, "CohortAuxiliaryDataMeanEstimates"))
-      e$.__enclos_env__$private$xp
-    })
-  }
-  if (!is.null(suff_stats)) {
-    suff_stats <- lapply(suff_stats, function(e) {
-      if (is.null(e)) return(NULL)
-      stopifnot(inherits(e, "OutcomeMeanSuffStatEstimates"))
-      e$.__enclos_env__$private$xp
-    })
-  }
+  aux_means <- .extract_aux_means_xptrs(aux_means)
+  suff_stats <- .extract_suff_stats_xptrs(suff_stats)
   idx1 <- as.integer(outcome_indices_1)
   idx2 <- as.integer(outcome_indices_2)
   xp <- est_fgw_bipartite_match_outcome_diff_params_multi_cpp(
@@ -112,32 +98,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
   if (!is.null(suff_stats_by_spec)) .validate_stats_by_spec(suff_stats_by_spec)
 
   ome_xp_by_spec <- lapply(outcome_means_by_spec, function(ome) ome$.__enclos_env__$private$xp)
-  if (!is.null(aux_means_by_spec)) {
-    eta_xp_by_spec <- lapply(aux_means_by_spec, function(lst) {
-      if (is.null(lst)) return(NULL)
-      stopifnot(is.list(lst))
-      lapply(lst, function(e) {
-        if (is.null(e)) return(NULL)
-        stopifnot(inherits(e, "CohortAuxiliaryDataMeanEstimates"))
-        e$.__enclos_env__$private$xp
-      })
-    })
-  } else {
-    eta_xp_by_spec <- NULL
-  }
-  if (!is.null(suff_stats_by_spec)) {
-    stats_xp_by_spec <- lapply(suff_stats_by_spec, function(lst) {
-      if (is.null(lst)) return(NULL)
-      stopifnot(is.list(lst))
-      lapply(lst, function(e) {
-        if (is.null(e)) return(NULL)
-        stopifnot(inherits(e, "OutcomeMeanSuffStatEstimates"))
-        e$.__enclos_env__$private$xp
-      })
-    })
-  } else {
-    stats_xp_by_spec <- NULL
-  }
+  eta_xp_by_spec <- .extract_aux_means_xptrs_by_spec(aux_means_by_spec)
+  stats_xp_by_spec <- .extract_suff_stats_xptrs_by_spec(suff_stats_by_spec)
   idx1 <- as.integer(outcome_indices_1)
   idx2 <- as.integer(outcome_indices_2)
   res <- est_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
@@ -182,4 +144,179 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
   list(outcome_indices_1 = idx1, outcome_indices_2 = idx2)
 }
 
+#' Averaged FGW bipartite match outcome difference parameters
+#'
+#' Computes the FGW bipartite match attribution parameters averaged across all unordered
+#' pairs of outcome groupings. Each grouping is averaged internally (using outcome weights)
+#' before forming pairwise contrasts, and the resulting parameter vectors are averaged with
+#' weights proportional to the total outcome weight of both groups in the pair.
+#'
+#' @param outcome_means `OutcomeMeansEstimates` or named list of them (by spec).
+#' @param observed_outcome_indices List of integer vectors (1-based) indicating outcomes observed per cohort.
+#' @param aux_means Optional list (per cohort, or named list by spec) of `CohortAuxiliaryDataMeanEstimates`.
+#' @param suff_stats Optional list (per cohort, or named list by spec) of `OutcomeMeanSuffStatEstimates`.
+#' @param outcome_groupings Optional list of integer vectors (1-based) defining outcome groups. Must contain at least two groups.
+#' @param outcome_indices Optional integer vector (1-based) of outcomes; treated as singleton groups when `outcome_groupings` is omitted.
+#' @param outcome_weights Optional numeric vector of nonnegative weights (length equals the total number of observed outcomes). Defaults to equal weights.
+#' @param num_threads Positive integer specifying threads passed to the underlying estimator. Defaults to 1.
+#' @return `TargetParameterEstimates` object or named list of them (by spec).
+#' @export
+est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
+                                                            observed_outcome_indices,
+                                                            aux_means = NULL,
+                                                            suff_stats = NULL,
+                                                            outcome_groupings = NULL,
+                                                            outcome_indices = NULL,
+                                                            outcome_weights = NULL,
+                                                            num_threads = 1) {
+  stopifnot(is.list(observed_outcome_indices))
+  resolved <- .resolve_avg_outcome_inputs(outcome_groupings, outcome_indices)
+  if (!is.null(outcome_weights)) {
+    outcome_weights <- as.numeric(outcome_weights)
+  }
+  num_threads <- .validate_num_threads(num_threads)
+  if (inherits(outcome_means, "OutcomeMeansEstimates")) {
+    return(.avg_fgw_single(
+      outcome_means,
+      observed_outcome_indices,
+      aux_means,
+      suff_stats,
+      resolved$outcome_groupings,
+      resolved$outcome_indices,
+      outcome_weights,
+      num_threads
+    ))
+  }
+  if (is.list(outcome_means)) {
+    return(.avg_fgw_by_spec(
+      outcome_means,
+      observed_outcome_indices,
+      aux_means,
+      suff_stats,
+      resolved$outcome_groupings,
+      resolved$outcome_indices,
+      outcome_weights,
+      num_threads
+    ))
+  }
+  stop("Invalid 'outcome_means': expected an OutcomeMeansEstimates object or a named list of them.")
+}
 
+.avg_fgw_single <- function(outcome_means,
+                            observed_outcome_indices,
+                            aux_means,
+                            suff_stats,
+                            outcome_groupings,
+                            outcome_indices,
+                            outcome_weights,
+                            num_threads) {
+  aux_means <- .extract_aux_means_xptrs(aux_means)
+  suff_stats <- .extract_suff_stats_xptrs(suff_stats)
+  if (!is.null(outcome_groupings)) {
+    groupings <- lapply(outcome_groupings, as.integer)
+    xp <- est_avg_fgw_bipartite_match_outcome_diff_params_multi_cpp(
+      ome_xptr = outcome_means$.__enclos_env__$private$xp,
+      stats_xptrs_by_cohort = suff_stats,
+      eta_xptrs_by_cohort = aux_means,
+      outcome_groupings = groupings,
+      observed_outcome_indices_list = observed_outcome_indices,
+      outcome_weights = outcome_weights,
+      num_threads = num_threads
+    )
+  } else {
+    idx <- as.integer(outcome_indices)
+    xp <- est_avg_fgw_bipartite_match_outcome_diff_params_cpp(
+      ome_xptr = outcome_means$.__enclos_env__$private$xp,
+      stats_xptrs_by_cohort = suff_stats,
+      eta_xptrs_by_cohort = aux_means,
+      outcome_indices = idx,
+      observed_outcome_indices_list = observed_outcome_indices,
+      outcome_weights = outcome_weights,
+      num_threads = num_threads
+    )
+  }
+  TargetParameterEstimates$new(xp)
+}
+
+.avg_fgw_by_spec <- function(outcome_means_by_spec,
+                             observed_outcome_indices,
+                             aux_means_by_spec,
+                             suff_stats_by_spec,
+                             outcome_groupings,
+                             outcome_indices,
+                             outcome_weights,
+                             num_threads) {
+  .validate_ome_by_spec(outcome_means_by_spec)
+  if (!is.null(aux_means_by_spec)) .validate_eta_by_spec(aux_means_by_spec)
+  if (!is.null(suff_stats_by_spec)) .validate_stats_by_spec(suff_stats_by_spec)
+
+  ome_xp_by_spec <- lapply(outcome_means_by_spec, function(ome) ome$.__enclos_env__$private$xp)
+  eta_xp_by_spec <- .extract_aux_means_xptrs_by_spec(aux_means_by_spec)
+  stats_xp_by_spec <- .extract_suff_stats_xptrs_by_spec(suff_stats_by_spec)
+  if (!is.null(outcome_groupings)) {
+    groupings <- lapply(outcome_groupings, as.integer)
+    res <- est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
+      ome_by_spec = ome_xp_by_spec,
+      stats_by_spec = stats_xp_by_spec,
+      eta_by_spec = eta_xp_by_spec,
+      outcome_groupings = groupings,
+      observed_outcome_indices_list = observed_outcome_indices,
+      outcome_weights = outcome_weights,
+      num_threads = num_threads
+    )
+  } else {
+    idx <- as.integer(outcome_indices)
+    res <- est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_cpp(
+      ome_by_spec = ome_xp_by_spec,
+      stats_by_spec = stats_xp_by_spec,
+      eta_by_spec = eta_xp_by_spec,
+      outcome_indices = idx,
+      observed_outcome_indices_list = observed_outcome_indices,
+      outcome_weights = outcome_weights,
+      num_threads = num_threads
+    )
+  }
+  .wrap_target_params_xptr_list(res)
+}
+
+.resolve_avg_outcome_inputs <- function(outcome_groupings,
+                                        outcome_indices) {
+  using_groupings <- !is.null(outcome_groupings)
+  using_indices <- !is.null(outcome_indices)
+  if (using_groupings && using_indices) {
+    stop("Provide either outcome_groupings or outcome_indices, not both.")
+  }
+  if (!using_groupings && !using_indices) {
+    stop("Either outcome_groupings or outcome_indices must be supplied.")
+  }
+  if (using_groupings) {
+    if (!is.list(outcome_groupings) || length(outcome_groupings) < 2L) {
+      stop("outcome_groupings must be a list with at least two elements.")
+    }
+    validated <- lapply(seq_along(outcome_groupings), function(i) {
+      grp <- outcome_groupings[[i]]
+      if (is.null(grp)) stop("Outcome groupings must not contain NULL entries.")
+      grp_int <- as.integer(grp)
+      if (length(grp_int) == 0L) stop("Outcome groupings must have positive length.")
+      if (any(is.na(grp_int))) stop("Outcome groupings must not contain NA values.")
+      grp_int
+    })
+    return(list(outcome_groupings = validated, outcome_indices = NULL))
+  }
+  idx <- as.integer(outcome_indices)
+  if (length(idx) < 2L) {
+    stop("outcome_indices must contain at least two entries.")
+  }
+  if (any(is.na(idx))) {
+    stop("outcome_indices must not contain NA values.")
+  }
+  list(outcome_groupings = NULL, outcome_indices = idx)
+}
+
+.validate_num_threads <- function(num_threads) {
+  nt <- as.integer(num_threads)
+  if (length(nt) != 1L || is.na(nt) || nt < 1L) {
+    stop("num_threads must be a positive integer.")
+  }
+  nt
+}
