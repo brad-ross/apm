@@ -75,6 +75,53 @@ test_that("FGW wrapper returns expected ratio", {
   expect_equal(params[2], 1 - expected_ratio, tolerance = 1e-8)
 })
 
+test_that("FGW wrapper handles grouped outcomes with weights", {
+  fixture <- setup_match_attr_fixture()
+  panel <- fixture$panel
+  comps <- fixture$comps
+  obs_idx <- panel$get_observed_outcome_indices()
+
+  outcome_weights <- c(1, 2, 3)
+  grp1 <- c(1L, 2L)
+  grp2 <- c(2L, 3L)
+
+  tpe <- est_fgw_bipartite_match_outcome_diff_params(
+    outcome_means = comps$outcome_means$pc,
+    observed_outcome_indices = obs_idx,
+    suff_stats = comps$cohort_outcome_mean_ests,
+    outcome_indices_1 = grp1,
+    outcome_indices_2 = grp2,
+    outcome_weights = outcome_weights
+  )
+
+  params <- tpe$target_params()
+  expect_length(params, 2L)
+  expect_equal(sum(params), 1.0, tolerance = 1e-8)
+
+  cohort_weights <- vapply(comps$cohort_outcome_mean_ests, function(s) s$cohort_pop_share(), numeric(1))
+  mean_outcomes <- comps$outcome_means$pc$mean_outcomes()
+
+  # Cohort-level calculations derived manually
+  obs_group1 <- (cohort_weights[1] * (1 * mean_outcomes[1, 1] + 2 * mean_outcomes[1, 2]) +
+                   cohort_weights[2] * (2 * mean_outcomes[2, 2])) /
+    (cohort_weights[1] * 3 + cohort_weights[2] * 2)
+  obs_group2 <- (cohort_weights[1] * (2 * mean_outcomes[1, 2]) +
+                   cohort_weights[2] * (2 * mean_outcomes[2, 2] + 3 * mean_outcomes[2, 3])) /
+    (cohort_weights[1] * 2 + cohort_weights[2] * 5)
+
+  pop_group1 <- (cohort_weights[1] * (1 * mean_outcomes[1, 1] + 2 * mean_outcomes[1, 2]) +
+                   cohort_weights[2] * (1 * mean_outcomes[2, 1] + 2 * mean_outcomes[2, 2])) /
+    ((cohort_weights[1] + cohort_weights[2]) * 3)
+  pop_group2 <- (cohort_weights[1] * (2 * mean_outcomes[1, 2] + 3 * mean_outcomes[1, 3]) +
+                   cohort_weights[2] * (2 * mean_outcomes[2, 2] + 3 * mean_outcomes[2, 3])) /
+    ((cohort_weights[1] + cohort_weights[2]) * 5)
+
+  expected_ratio <- (pop_group1 - pop_group2) / (obs_group1 - obs_group2)
+
+  expect_equal(params[1], expected_ratio, tolerance = 1e-8)
+  expect_equal(params[2], 1 - expected_ratio, tolerance = 1e-8)
+})
+
 test_that("FGW wrapper errors on invalid outcome index", {
   fixture <- setup_match_attr_fixture()
   panel <- fixture$panel
