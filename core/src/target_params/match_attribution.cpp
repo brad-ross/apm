@@ -291,4 +291,175 @@ std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_matc
         num_threads);
 }
 
+TargetFn get_avg_fgw_bipartite_match_outcome_diff_params_fn(
+    const std::vector<arma::uvec>& outcome_groupings,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<arma::vec> outcome_weights)
+{
+    if (outcome_groupings.size() < 2) {
+        throw std::invalid_argument("outcome_groupings must contain at least two groups.");
+    }
+
+    const std::vector<std::unordered_set<std::size_t>> obs_sets = build_observed_sets(observed_outcome_indices);
+    const arma::vec weights = build_outcome_weights(observed_outcome_indices, std::move(outcome_weights));
+    const std::size_t total_outcomes = static_cast<std::size_t>(weights.n_elem);
+
+    std::vector<double> group_weight_sums;
+    group_weight_sums.reserve(outcome_groupings.size());
+    for (std::size_t g = 0; g < outcome_groupings.size(); ++g) {
+        const std::string arg_name = "outcome_groupings[" + std::to_string(g) + "]";
+        validate_outcome_indices(outcome_groupings[g], obs_sets, total_outcomes, weights, arg_name.c_str());
+        group_weight_sums.push_back(subset_weight_sum(weights, outcome_groupings[g]));
+    }
+
+    struct PairFnData {
+        TargetFn fn;
+        double weight;
+    };
+
+    std::vector<PairFnData> pair_fns;
+    pair_fns.reserve(outcome_groupings.size() * (outcome_groupings.size() - 1) / 2);
+    double total_pair_weight = 0.0;
+    for (std::size_t i = 0; i < outcome_groupings.size(); ++i) {
+        for (std::size_t j = i + 1; j < outcome_groupings.size(); ++j) {
+            const double pair_weight = group_weight_sums[i] + group_weight_sums[j];
+            if (pair_weight <= 0.0) continue;
+            pair_fns.push_back(PairFnData{
+                get_fgw_bipartite_match_outcome_diff_params_fn(
+                    outcome_groupings[i],
+                    outcome_groupings[j],
+                    observed_outcome_indices,
+                    weights),
+                pair_weight});
+            total_pair_weight += pair_weight;
+        }
+    }
+
+    if (pair_fns.empty() || total_pair_weight <= 0.0) {
+        throw std::invalid_argument("outcome_groupings must yield at least one pair with positive total weight.");
+    }
+
+    return [pair_fns = std::move(pair_fns), total_pair_weight](
+               const arma::mat& Y,
+               const std::vector<OutcomeMeanSufficientStatistics>& stats_all,
+               const std::vector<CohortAuxiliaryDataMeans>& eta_all) -> arma::vec {
+        arma::vec weighted_sum(2, arma::fill::zeros);
+        for (const auto& pair_data : pair_fns) {
+            const arma::vec pair_value = pair_data.fn(Y, stats_all, eta_all);
+            if (pair_value.n_elem != 2) {
+                throw std::runtime_error("Pair function returned unexpected parameter length.");
+            }
+            weighted_sum += pair_data.weight * pair_value;
+        }
+        return weighted_sum / total_pair_weight;
+    };
+}
+
+TargetFn get_avg_fgw_bipartite_match_outcome_diff_params_fn(
+    const arma::uvec& outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<arma::vec> outcome_weights)
+{
+    if (outcome_indices.n_elem < 2) {
+        throw std::invalid_argument("outcome_indices must contain at least two elements.");
+    }
+    std::vector<arma::uvec> groupings;
+    groupings.reserve(outcome_indices.n_elem);
+    for (arma::uword i = 0; i < outcome_indices.n_elem; ++i) {
+        arma::uvec group(1);
+        group[0] = outcome_indices[i];
+        groupings.push_back(std::move(group));
+    }
+    return get_avg_fgw_bipartite_match_outcome_diff_params_fn(
+        groupings,
+        observed_outcome_indices,
+        std::move(outcome_weights));
+}
+
+TargetParameterEstimates est_avg_fgw_bipartite_match_outcome_diff_params(
+    const OutcomeMeansEstimates& ome,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
+    const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
+    const std::vector<arma::uvec>& outcome_groupings,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<arma::vec> outcome_weights,
+    std::optional<std::size_t> num_threads)
+{
+    TargetFn fn = get_avg_fgw_bipartite_match_outcome_diff_params_fn(
+        outcome_groupings,
+        observed_outcome_indices,
+        std::move(outcome_weights));
+    return est_target_params(ome, stats_by_cohort, eta_by_cohort, fn, num_threads);
+}
+
+TargetParameterEstimates est_avg_fgw_bipartite_match_outcome_diff_params(
+    const OutcomeMeansEstimates& ome,
+    const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
+    const std::vector<CohortAuxiliaryDataMeanEstimates>& eta_by_cohort,
+    const arma::uvec& outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<std::size_t> num_threads)
+{
+    TargetFn fn = get_avg_fgw_bipartite_match_outcome_diff_params_fn(
+        outcome_indices,
+        observed_outcome_indices,
+        std::nullopt);
+    return est_target_params(ome, stats_by_cohort, eta_by_cohort, fn, num_threads);
+}
+
+std::unordered_map<std::string, TargetParameterEstimates> est_avg_fgw_bipartite_match_outcome_diff_params(
+    const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
+    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
+    const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
+    const std::vector<arma::uvec>& outcome_groupings,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<arma::vec> outcome_weights,
+    std::optional<std::size_t> num_threads)
+{
+    TargetFn fn = get_avg_fgw_bipartite_match_outcome_diff_params_fn(
+        outcome_groupings,
+        observed_outcome_indices,
+        std::move(outcome_weights));
+    std::unordered_map<std::string, TargetParameterEstimates> out;
+    out.reserve(ome_map.size());
+    for (const auto& kv : ome_map) {
+        const std::string& key = kv.first;
+        auto stats_it = stats_map.find(key);
+        auto eta_it = eta_map.find(key);
+        const std::vector<OutcomeMeanSuffStatEstimates> empty_stats;
+        const std::vector<CohortAuxiliaryDataMeanEstimates> empty_eta;
+        const auto& stats_vec = (stats_it == stats_map.end()) ? empty_stats : stats_it->second;
+        const auto& eta_vec = (eta_it == eta_map.end()) ? empty_eta : eta_it->second;
+        out.emplace(key, est_target_params(kv.second, stats_vec, eta_vec, fn, num_threads));
+    }
+    return out;
+}
+
+std::unordered_map<std::string, TargetParameterEstimates> est_avg_fgw_bipartite_match_outcome_diff_params(
+    const std::unordered_map<std::string, OutcomeMeansEstimates>& ome_map,
+    const std::unordered_map<std::string, std::vector<OutcomeMeanSuffStatEstimates>>& stats_map,
+    const std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>>& eta_map,
+    const arma::uvec& outcome_indices,
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    std::optional<std::size_t> num_threads)
+{
+    TargetFn fn = get_avg_fgw_bipartite_match_outcome_diff_params_fn(
+        outcome_indices,
+        observed_outcome_indices,
+        std::nullopt);
+    std::unordered_map<std::string, TargetParameterEstimates> out;
+    out.reserve(ome_map.size());
+    for (const auto& kv : ome_map) {
+        const std::string& key = kv.first;
+        auto stats_it = stats_map.find(key);
+        auto eta_it = eta_map.find(key);
+        const std::vector<OutcomeMeanSuffStatEstimates> empty_stats;
+        const std::vector<CohortAuxiliaryDataMeanEstimates> empty_eta;
+        const auto& stats_vec = (stats_it == stats_map.end()) ? empty_stats : stats_it->second;
+        const auto& eta_vec = (eta_it == eta_map.end()) ? empty_eta : eta_it->second;
+        out.emplace(key, est_target_params(kv.second, stats_vec, eta_vec, fn, num_threads));
+    }
+    return out;
+}
+
 } // namespace apm
