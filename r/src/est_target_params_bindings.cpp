@@ -11,6 +11,7 @@
 #include "../../core/src/cohort_specific_param_structs.h"
 #include "cohort_specific_estimates_helpers.h"
 #include "../../core/src/outcome_imputation.h"
+#include "est_target_params_bindings_helpers.h"
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
@@ -20,7 +21,8 @@ using apm::CohortAuxiliaryDataMeanEstimates;
 using apm::CohortAuxiliaryDataMeans;
 using apm::r_utils::make_xptr;
 
-namespace {
+namespace apm {
+namespace r_bindings {
 
 std::vector<CohortAuxiliaryDataMeanEstimates> list_to_eta_vec(Rcpp::Nullable<Rcpp::List> maybe_list) {
     std::vector<CohortAuxiliaryDataMeanEstimates> out;
@@ -36,19 +38,53 @@ std::vector<CohortAuxiliaryDataMeanEstimates> list_to_eta_vec(Rcpp::Nullable<Rcp
     return out;
 }
 
-std::vector<apm::OutcomeMeanSuffStatEstimates> list_to_stats_vec(Rcpp::Nullable<Rcpp::List> maybe_list) {
-    std::vector<apm::OutcomeMeanSuffStatEstimates> out;
-    if (maybe_list.isNotNull()) {
-        Rcpp::List L(maybe_list);
-        out.reserve(L.size());
+std::unordered_map<std::string, OutcomeMeansEstimates> list_to_ome_map(Rcpp::List ome_by_spec) {
+    std::unordered_map<std::string, OutcomeMeansEstimates> ome_map;
+    Rcpp::CharacterVector nms = ome_by_spec.names();
+    for (int i = 0; i < ome_by_spec.size(); ++i) {
+        std::string key = Rcpp::as<std::string>(nms[i]);
+        Rcpp::XPtr<OutcomeMeansEstimates> xp(ome_by_spec[i]);
+        ome_map.emplace(std::move(key), *xp);
+    }
+    return ome_map;
+}
+
+std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>> list_to_eta_map(
+    Rcpp::Nullable<Rcpp::List> eta_by_spec)
+{
+    std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>> eta_map;
+    if (eta_by_spec.isNotNull()) {
+        Rcpp::List L(eta_by_spec);
+        Rcpp::CharacterVector nms = L.names();
         for (int i = 0; i < L.size(); ++i) {
-            if (Rf_isNull(L[i])) continue;
-            Rcpp::XPtr<apm::OutcomeMeanSuffStatEstimates> xp(L[i]);
-            out.push_back(*xp);
+            std::string key = Rcpp::as<std::string>(nms[i]);
+            std::vector<CohortAuxiliaryDataMeanEstimates> eta_vec = list_to_eta_vec(Rcpp::List(L[i]));
+            eta_map.emplace(std::move(key), std::move(eta_vec));
         }
     }
-    return out;
+    return eta_map;
 }
+
+std::unordered_map<std::string, std::vector<apm::OutcomeMeanSuffStatEstimates>> list_to_stats_map(
+    Rcpp::Nullable<Rcpp::List> stats_by_spec)
+{
+    std::unordered_map<std::string, std::vector<apm::OutcomeMeanSuffStatEstimates>> stats_map;
+    if (stats_by_spec.isNotNull()) {
+        Rcpp::List L(stats_by_spec);
+        Rcpp::CharacterVector nms = L.names();
+        for (int i = 0; i < L.size(); ++i) {
+            std::string key = Rcpp::as<std::string>(nms[i]);
+            std::vector<apm::OutcomeMeanSuffStatEstimates> stats_vec = apm::r_utils::list_to_stats_vec(Rcpp::List(L[i]));
+            stats_map.emplace(std::move(key), std::move(stats_vec));
+        }
+    }
+    return stats_map;
+}
+
+} // namespace r_bindings
+} // namespace apm
+
+namespace {
 
 apm::TargetFn make_target_fn(Rcpp::Function r_fn) {
     return [r_fn](const arma::mat& Y,
@@ -95,8 +131,8 @@ SEXP est_target_params_cpp(SEXP ome_xptr,
                           Rcpp::Nullable<Rcpp::List> eta_xptrs_by_cohort,
                           Rcpp::Function r_fn) {
     Rcpp::XPtr<OutcomeMeansEstimates> ome(ome_xptr);
-    auto stats_vec = list_to_stats_vec(stats_xptrs_by_cohort);
-    auto eta_vec = list_to_eta_vec(eta_xptrs_by_cohort);
+    auto stats_vec = apm::r_utils::list_to_stats_vec(stats_xptrs_by_cohort);
+    auto eta_vec = apm::r_bindings::list_to_eta_vec(eta_xptrs_by_cohort);
     apm::TargetFn cb = make_target_fn(r_fn);
     // NOTE: Calling R from multiple threads is unsafe. We therefore force single-threaded
     // execution (num_threads = 1) for target param estimation invoked via R bindings.
@@ -163,37 +199,9 @@ Rcpp::List est_target_params_by_spec_cpp(Rcpp::List ome_by_spec,
                                          Rcpp::Nullable<Rcpp::List> stats_by_spec,
                                          Rcpp::Nullable<Rcpp::List> eta_by_spec,
                                          Rcpp::Function r_fn) {
-    // Build maps
-std::unordered_map<std::string, OutcomeMeansEstimates> ome_map;
-    {
-        Rcpp::CharacterVector nms = ome_by_spec.names();
-        for (int i = 0; i < ome_by_spec.size(); ++i) {
-            std::string key = Rcpp::as<std::string>(nms[i]);
-            Rcpp::XPtr<OutcomeMeansEstimates> xp(ome_by_spec[i]);
-            ome_map.emplace(std::move(key), *xp);
-        }
-    }
-
-    std::unordered_map<std::string, std::vector<CohortAuxiliaryDataMeanEstimates>> eta_map;
-    std::unordered_map<std::string, std::vector<apm::OutcomeMeanSuffStatEstimates>> stats_map;
-    if (eta_by_spec.isNotNull()) {
-        Rcpp::List L(eta_by_spec);
-        Rcpp::CharacterVector nms = L.names();
-        for (int i = 0; i < L.size(); ++i) {
-            std::string key = Rcpp::as<std::string>(nms[i]);
-            std::vector<CohortAuxiliaryDataMeanEstimates> eta_vec = list_to_eta_vec(Rcpp::List(L[i]));
-            eta_map.emplace(std::move(key), std::move(eta_vec));
-        }
-    }
-    if (stats_by_spec.isNotNull()) {
-        Rcpp::List L(stats_by_spec);
-        Rcpp::CharacterVector nms = L.names();
-        for (int i = 0; i < L.size(); ++i) {
-            std::string key = Rcpp::as<std::string>(nms[i]);
-            std::vector<apm::OutcomeMeanSuffStatEstimates> stats_vec = list_to_stats_vec(Rcpp::List(L[i]));
-            stats_map.emplace(std::move(key), std::move(stats_vec));
-        }
-    }
+    auto ome_map = apm::r_bindings::list_to_ome_map(ome_by_spec);
+    auto eta_map = apm::r_bindings::list_to_eta_map(eta_by_spec);
+    auto stats_map = apm::r_bindings::list_to_stats_map(stats_by_spec);
 
     apm::TargetFn cb = make_target_fn(r_fn);
     // NOTE: Calling R from multiple threads is unsafe. We therefore force single-threaded

@@ -49,4 +49,5 @@ OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o \
            outcome_imputation_bindings.o \
            outcome_clustering_bindings.o ../../core/src/outcome_clustering/cluster_outcomes.o \
            ../../core/src/outcome_clustering/weighted_kmeans.o \
-           summarize_identification_bindings.o ../../core/src/summarize_identification.o
+           summarize_identification_bindings.o ../../core/src/summarize_identification.o \
+           match_attribution_bindings.o ../../core/src/target_params/match_attribution.o
