@@ -9,8 +9,8 @@
 #' @param outcome_idx_2 Second (1-based) outcome index. Ignored when
 #'   `outcome_indices_2` is supplied.
 #' @param observed_outcome_indices List of integer vectors (1-based) indicating outcomes observed per cohort.
-#' @param suff_stats Optional list (per cohort, or named list by spec) of `OutcomeMeanSuffStatEstimates`.
-#'   The by-spec form must reference the same per-cohort objects across specs.
+#' @param suff_stats Optional list (one entry per cohort) of `OutcomeMeanSuffStatEstimates`.
+#'   NULL indicates that sufficient statistics are unavailable.
 #' @param outcome_indices_1 Optional integer vector (1-based) of outcomes whose weighted average
 #'   defines the first contrast. Defaults to `outcome_idx_1` when unspecified.
 #' @param outcome_indices_2 Optional integer vector (1-based) of outcomes whose weighted average
@@ -142,8 +142,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
 #'
 #' @param outcome_means `OutcomeMeansEstimates` or named list of them (by spec).
 #' @param observed_outcome_indices List of integer vectors (1-based) indicating outcomes observed per cohort.
-#' @param suff_stats Optional list (per cohort, or named list by spec) of `OutcomeMeanSuffStatEstimates`.
-#'   The by-spec form must reference the same per-cohort objects across specs.
+#' @param suff_stats Optional list (one entry per cohort) of `OutcomeMeanSuffStatEstimates`.
+#'   NULL indicates that sufficient statistics are unavailable.
 #' @param outcome_groupings Optional list of integer vectors (1-based) defining outcome groups. Must contain at least two groups.
 #' @param outcome_indices Optional integer vector (1-based) of outcomes; treated as singleton groups when `outcome_groupings` is omitted.
 #' @param outcome_weights Optional numeric vector of nonnegative weights (length equals the total number of observed outcomes). Defaults to equal weights.

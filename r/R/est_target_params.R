@@ -28,13 +28,10 @@ TargetParameterEstimates <- R6::R6Class(
 #'
 #' @param outcome_means `OutcomeMeansEstimates` or named list of them (by spec).
 #' @param fn function(Y, eta = NULL) returning numeric vector length p.
-#' @param aux_means optional list of `CohortAuxiliaryDataMeanEstimates` (one per cohort) or
-#'   a named list whose values are lists (by spec, then per cohort). NULL is allowed.
-#'   When using the by-spec form, every spec must reference the same per-cohort
-#'   objects (e.g. reuse the exact lists) because the estimator shares those vectors.
-#' @param suff_stats optional list (per cohort) or named list (by spec) of
-#'   `OutcomeMeanSuffStatEstimates`. The by-spec form must share identical
-#'   per-cohort objects across specs.
+#' @param aux_means optional list (one entry per cohort) of `CohortAuxiliaryDataMeanEstimates`.
+#'   NULL is allowed when no auxiliary statistics are needed.
+#' @param suff_stats optional list (one entry per cohort) of `OutcomeMeanSuffStatEstimates`.
+#'   NULL indicates that sufficient statistics are unavailable.
 #' @return `TargetParameterEstimates` R6 object or named list of them (by spec).
 #' @export
 est_target_params <- function(outcome_means, fn, aux_means = NULL, suff_stats = NULL) {
