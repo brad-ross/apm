@@ -1,6 +1,10 @@
 #ifndef APM_EST_OUTCOME_MEANS_H
 #define APM_EST_OUTCOME_MEANS_H
 
+//==============================================================================
+// Outcome mean estimation across cohorts using factor model parameters.
+//==============================================================================
+
 #ifdef USING_R
 #include <RcppArmadillo.h>
 #else
