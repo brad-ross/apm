@@ -1,6 +1,21 @@
 #ifndef APM_FACTOR_MODEL_PARAMETERS_H
 #define APM_FACTOR_MODEL_PARAMETERS_H
 
+//==============================================================================
+// Cohort-specific parameter containers for the APM factor model.
+//
+// These lightweight structs transport estimated factors, fixed effects,
+// covariate coefficients, and sufficient statistics across the estimation
+// pipeline. They are intentionally header-only to keep the core API obvious to
+// callers (e.g., language bindings) while the implementation lives in .cpp
+// files. Unless noted otherwise, dimensions follow the notation:
+//   - T: total outcomes, 
+//   - T_c: outcomes observed in a cohort
+//   - r: factor rank, 
+//   - q: number of covariates, 
+//   - d: auxiliary columns
+//==============================================================================
+
 #include <optional>
 #include <limits>
 #include <stdexcept>
@@ -26,14 +41,23 @@ namespace apm {
  *  - a: optional q vector of covariate coefficient estimates.
  */
 struct FactorModelParameters {
-    arma::mat G;                           // T_c x r
-    std::optional<arma::vec> g_0;          // length T_c (if present)
-    std::optional<arma::vec> a;            // length q (if present)
-    std::optional<arma::mat> L;            // optional N x r matrix of unit factor scores
+    arma::mat G;                           ///< T_c x r factor matrix.
+    std::optional<arma::vec> g_0;          ///< Optional length-T_c outcome fixed effects.
+    std::optional<arma::vec> a;            ///< Optional length-q covariate coefficients.
+    std::optional<arma::mat> L;            ///< Optional N x r matrix of unit factor scores.
 
     // Constructors
     FactorModelParameters() = default;
 
+    /**
+     * @brief Construct parameters with optional fixed effects and covariates.
+     *
+     * @param G_in T_c x r factor matrix.
+     * @param g0_in Optional outcome fixed effects (length T_c).
+     * @param a_in Optional covariate coefficients (length q).
+     *
+     * @throws std::invalid_argument if g_0 length does not equal rows of G.
+     */
     FactorModelParameters(arma::mat G_in,
                           std::optional<arma::vec> g0_in = std::nullopt,
                           std::optional<arma::vec> a_in = std::nullopt)
@@ -83,8 +107,8 @@ struct FactorModelParameters {
  *    or empty if no bootstrap is attached.
  */
 struct FactorModelEstimates {
-    FactorModelParameters parameter_estimates;                 // point estimates
-    std::vector<FactorModelParameters> bootstrap_replicates;  // length B if bootstrap is present; otherwise 0
+    FactorModelParameters parameter_estimates;                 ///< Point estimates.
+    std::vector<FactorModelParameters> bootstrap_replicates;   ///< Bootstrap replicates (length B or empty).
 
     /**
      * @brief Move-construct from a precomputed vector of bootstrap replicates.
@@ -115,9 +139,9 @@ struct FactorModelEstimates {
  *  - covar_means: optional T x q matrix of covariate means (per outcome).
  */
 struct OutcomeMeanSufficientStatistics {
-    arma::vec observed_outcome_means;                   // length T_c
-    std::optional<arma::mat> covar_means;               // T x q (if present)
-    double cohort_pop_share;                            // proportion of all rows belonging to this cohort
+    arma::vec observed_outcome_means;                   ///< Length T_c observed outcome means.
+    std::optional<arma::mat> covar_means;               ///< Optional T x q covariate means.
+    double cohort_pop_share;                            ///< Share of all rows belonging to this cohort.
 
     // Constructors
     OutcomeMeanSufficientStatistics() = default;
@@ -157,8 +181,8 @@ struct OutcomeMeanSufficientStatistics {
  * @brief Aggregated sufficient statistics estimates with optional bootstrap replicates.
  */
 struct OutcomeMeanSuffStatEstimates {
-    OutcomeMeanSufficientStatistics suff_stat_estimates;                  // point sufficient stats
-    std::vector<OutcomeMeanSufficientStatistics> bootstrap_replicates;   // length B if present; otherwise 0
+    OutcomeMeanSufficientStatistics suff_stat_estimates;                  ///< Point sufficient stats.
+    std::vector<OutcomeMeanSufficientStatistics> bootstrap_replicates;   ///< Bootstrap sufficient stats (length B or empty).
 
     OutcomeMeanSuffStatEstimates(OutcomeMeanSufficientStatistics stats,
                                  std::vector<OutcomeMeanSufficientStatistics> boot_reps = {})
@@ -186,8 +210,8 @@ struct OutcomeMeanSuffStatEstimates {
  *  - bootstrap_cohort_weights: optional vector of length-B replicate weight vectors (each length C).
  */
 struct CohortWeightEstimates {
-    arma::vec cohort_weights;
-    std::vector<arma::vec> bootstrap_cohort_weights;
+    arma::vec cohort_weights;                    ///< Length-C cohort weights (point estimate).
+    std::vector<arma::vec> bootstrap_cohort_weights; ///< Optional bootstrap weights (length B, each length C).
 
     bool has_bootstrap_replicates() const noexcept { return !bootstrap_cohort_weights.empty(); }
     std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_cohort_weights.size(); }
@@ -200,7 +224,13 @@ struct CohortWeightEstimates {
  *  - auxiliary_means:  T x d matrix of means over auxiliary columns
  */
 struct CohortAuxiliaryDataMeans {
-    arma::mat auxiliary_means; // T x d matrix of means across outcomes and aux columns
+    /**
+     * @brief Row-outcome by column-auxiliary matrix of cohort means (T x d).
+     *
+     * Rows correspond to outcomes in the panel-wide outcome index; columns
+     * correspond to auxiliary data series supplied alongside the panel.
+     */
+    arma::mat auxiliary_means; ///< T x d matrix of auxiliary means.
 
     CohortAuxiliaryDataMeans() = default;
 
@@ -215,8 +245,8 @@ struct CohortAuxiliaryDataMeans {
  * @brief Aggregated cohort auxiliary data mean estimates with optional bootstrap replicates.
  */
 struct CohortAuxiliaryDataMeanEstimates {
-    CohortAuxiliaryDataMeans estimates;                          // point estimate
-    std::vector<CohortAuxiliaryDataMeans> bootstrap_replicates;  // length B if present; else empty
+    CohortAuxiliaryDataMeans estimates;                          ///< Point estimate.
+    std::vector<CohortAuxiliaryDataMeans> bootstrap_replicates;  ///< Bootstrap replicates (length B or empty).
 
     CohortAuxiliaryDataMeanEstimates() = default;
 
