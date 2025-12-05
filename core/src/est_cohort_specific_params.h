@@ -56,7 +56,7 @@ class InMemoryUnbalancedPanel; // fwd
  * @param panel In-memory unbalanced panel (handles 0/1-based indices internally).
  * @param est_specs Map from estimator name -> specification (rank, estimator kind, etc.).
  * @param bootstrap Optional weighted bootstrap controller shared across estimators.
- * @param num_threads Optional thread cap for parallel sections.
+ * @param num_threads Optional thread cap for parallel sections; defaults to library concurrency (see get_cpp_default_concurrency()).
  * @param cohort_outcomes_to_mask Outcomes to drop per cohort (e.g., for holdout tasks).
  * @return CohortSpecificEstimates containing per-spec factor estimates, outcome sufficient
  *         statistics, cohort weights, and optional auxiliary means / masks.
