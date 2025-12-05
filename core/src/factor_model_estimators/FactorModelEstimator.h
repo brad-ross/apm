@@ -144,6 +144,10 @@ protected:
      *  - Y must be N x T_c where N = unit_idxs.n_elem
      *  - X must be N x T_c x q
      *  - If a bootstrap is present, unit indices are not range-checked here (left to subclasses).
+     *
+     * @param unit_idxs Unit indices for the batch (length N).
+     * @param Y N x T_c outcome matrix.
+     * @param X N x T_c x q covariate cube.
      */
     void validate_data_dimensions(const arma::uvec& unit_idxs,
                                   const arma::mat& Y,
@@ -157,15 +161,19 @@ protected:
 
     /**
      * @brief Subclass hook for adding a batch (pre-validated inputs).
+     *
+     * @param unit_idxs Unit indices for the batch (length N).
+     * @param Y N x T_c outcome matrix.
+     * @param X N x T_c x q covariate cube (may be empty when q==0).
      */
     virtual void add_data_(const arma::uvec& unit_idxs,
                            const arma::mat& Y,
                            const arma::cube& X) = 0;
 
-    std::size_t r_;                                        // model rank
-    std::size_t T_c_;                                      // outcome dimension
-    std::shared_ptr<const WeightedBootstrap> bootstrap_;   // optional bootstrap weights
-    std::size_t q_;                                        // covariate dimension
+    std::size_t r_;                                        ///< Model rank.
+    std::size_t T_c_;                                      ///< Outcome dimension.
+    std::shared_ptr<const WeightedBootstrap> bootstrap_;   ///< Optional bootstrap weights.
+    std::size_t q_;                                        ///< Covariate dimension.
 };
 
 } // namespace apm

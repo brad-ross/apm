@@ -1,14 +1,30 @@
 #ifndef APM_PC_ESTIMATORS_H
 #define APM_PC_ESTIMATORS_H
 
+//==============================================================================
+// Principal components-based factor model estimators.
+//==============================================================================
+
 #include "FactorModelEstimator.h"
 
 namespace apm {
 
+/**
+ * @brief Base class implementing accumulation for principal-components estimators.
+ *
+ * Maintains second-moment matrices (and bootstrap variants) and provides
+ * utilities to extract top-r eigenvectors.
+ */
 class PCBase : public FactorModelEstimator {
 public:
-    // Forwarding constructor that calls the base class then initializes
-    // outcome_second_moment_mat to a T_c x T_c zero matrix
+    /**
+     * @brief Construct PCBase and initialize accumulators.
+     *
+     * @param r Factor rank.
+     * @param T_c Outcome dimension.
+     * @param bootstrap Optional bootstrap weights (shared across batches).
+     * @param q Covariate dimension (default 0).
+     */
     explicit PCBase(std::size_t r,
                     std::size_t T_c,
                     std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
@@ -19,31 +35,46 @@ protected:
                    const arma::mat& Y,
                    const arma::cube& X) override;
 
-    // Helper: combine current second-moment with a new batch using row weights
+    /**
+     * @brief Combine second-moment matrix with a weighted batch.
+     *
+     * @param Y N x T_c outcomes.
+     * @param row_weights Length-N weights.
+     * @param current_second_moment_mat Running second-moment (T_c x T_c).
+     * @param current_total_weight Running total weight.
+     * @return Pair {updated second-moment, updated total weight}.
+     */
     static std::pair<arma::mat, double> weighted_combine_second_moment_mats(
         const arma::mat& Y,
         const arma::vec& row_weights,
         const arma::mat& current_second_moment_mat,
         double current_total_weight);
 
-    // Returns n x r matrix whose columns are eigenvectors associated with the
-    // largest r eigenvalues of a symmetric PSD matrix S. Assumes S is PSD
-    // and symmetric; does not symmetrize.
+    /**
+     * @brief Top-r eigenvectors of a symmetric PSD matrix (no symmetrization).
+     *
+     * @param S Symmetric PSD matrix.
+     * @param r Number of eigenvectors to return.
+     * @return n x r matrix of eigenvectors (columns).
+     */
     static arma::mat top_r_eigenvectors_psd(const arma::mat& S, std::size_t r);
 
-    std::size_t N; // number of observations
+    std::size_t N; ///< Number of observations accumulated.
 
     // Accessor for subclasses to read the accumulated second moment matrix
     const arma::mat& outcome_second_moment() const { return outcome_second_moment_mat; }
 
     // Bootstrap aggregates accessible to subclasses
-    arma::vec total_boot_weights;                // length B (if bootstrap present)
-    arma::cube boot_outcome_second_moment_mats;  // T_c x T_c x B
+    arma::vec total_boot_weights;                ///< Bootstrap total weights (length B, if bootstrap present).
+    arma::cube boot_outcome_second_moment_mats;  ///< Bootstrap second moments (T_c x T_c x B).
 
 private:
-    arma::mat outcome_second_moment_mat;         // T_c x T_c
+    arma::mat outcome_second_moment_mat;         ///< Accumulated second-moment matrix (T_c x T_c).
 };
 
+/**
+ * @brief Standard PC estimator returning factors only (no fixed effects).
+ */
 class PCEstimator : public PCBase {
 public:
     using PCBase::PCBase;
@@ -51,8 +82,19 @@ public:
     FactorModelEstimates estimate() override;
 };
 
+/**
+ * @brief PC estimator with outcome fixed effects (g_0) in addition to factors.
+ */
 class PCEstimatorWithFEs : public PCBase {
 public:
+    /**
+     * @brief Construct PC estimator with outcome fixed effects.
+     *
+     * @param r Factor rank.
+     * @param T_c Outcome dimension.
+     * @param bootstrap Optional bootstrap weights.
+     * @param q Covariate dimension (default 0).
+     */
     explicit PCEstimatorWithFEs(std::size_t r,
                                 std::size_t T_c,
                                 std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
@@ -65,6 +107,15 @@ protected:
                    const arma::mat& Y,
                    const arma::cube& X) override;
 
+    /**
+     * @brief Combine mean vector with a weighted batch.
+     *
+     * @param Y N x T_c outcomes.
+     * @param row_weights Length-N weights.
+     * @param current_mean Running mean (length T_c).
+     * @param current_total_weight Running total weight.
+     * @return Updated mean vector.
+     */
     static arma::vec weighted_combine_means(
         const arma::mat& Y,
         const arma::vec& row_weights,
@@ -72,8 +123,8 @@ protected:
         double current_total_weight);
 
 private:
-    arma::vec outcome_means;
-    arma::mat boot_outcome_means; // T_c x B
+    arma::vec outcome_means;      ///< Running means (length T_c).
+    arma::mat boot_outcome_means; ///< Bootstrap outcome means (T_c x B).
 };
 
 } // namespace apm
