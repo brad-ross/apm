@@ -10,6 +10,6 @@ The method identifies all counterfactual outcome means, including those not esti
 
 ## Getting Started
 
-The primary interface is through the R package, which you can find in the `r` directory. See the [R package documentation](r/README.md) for installation and usage instructions.
+The primary interface is through the R package, which you can find in the [`r`](r) directory. See the [R package documentation](r/README.md) for installation and usage instructions.
 
-For developers interested in the core C++ implementation housed in the `core` directory, see the [C++ core documentation](core/README.md). 
+For developers interested in the core C++ implementation housed in the [`core`](core) directory, see the [C++ core documentation](core/README.md). 
