@@ -22,6 +22,10 @@
 #'         If `b` is NULL, returns point estimate; otherwise returns bootstrap
 #'         replicate `b` (1-indexed).}
 #'   \item{\code{boots_matrix()}}{Returns p x B matrix of all bootstrap replicates.}
+#'   \item{\code{subset(indices)}}{Returns a new `TargetParameterEstimates` object
+#'         containing only the elements at the specified indices. Both point estimates
+#'         and bootstrap replicates (if present) are subsetted. `indices` must be a
+#'         non-empty integer vector with values in `[1, p()]`.}
 #' }
 #'
 #' @seealso \code{\link{est_target_params}} for computing target parameters.
@@ -36,6 +40,10 @@
 #' tpe$p()              # Dimension of target
 #' tpe$target_params()  # Point estimate
 #' tpe$has_bootstrap()  # Check for bootstrap
+#'
+#' # Subset to first 3 parameters
+#' tpe_sub <- tpe$subset(1:3)
+#' tpe_sub$p()          # Now 3
 #' }
 #'
 #' @export
@@ -157,14 +165,36 @@ est_target_params <- function(outcome_means, fn, aux_means = NULL, suff_stats = 
   stop("Invalid 'outcome_means': expected an OutcomeMeansEstimates object or a named list of them.")
 }
 
-#' Difference between two target parameter estimates
+#' Difference Between Two Target Parameter Estimates
 #'
-#' Computes `target_params_1 - target_params_2` entrywise for the point estimates
-#' and, when available, for each bootstrap replicate.
+#' Computes the elementwise difference `target_params_1 - target_params_2` for
+#' point estimates and, when available, for each bootstrap replicate.
 #'
-#' @param target_params_1 `TargetParameterEstimates`
-#' @param target_params_2 `TargetParameterEstimates`
-#' @return `TargetParameterEstimates`
+#' @details
+#' Both inputs must have the same dimension `p()`. If bootstrap replicates are
+#' present, both inputs must have bootstrap replicates with the same number of
+#' draws `B`. The resulting object has the same `p()` and `B` as the inputs.
+#'
+#' This is useful for computing treatment effects or contrasts between two
+#' estimators or specifications.
+#'
+#' @param target_params_1 A \code{\link{TargetParameterEstimates}} R6 object.
+#' @param target_params_2 A \code{\link{TargetParameterEstimates}} R6 object
+#'   with the same `p()` and bootstrap structure as `target_params_1`.
+#'
+#' @return A \code{\link{TargetParameterEstimates}} R6 object containing the
+#'   elementwise difference.
+#'
+#' @seealso \code{\link{combine_target_param_ests}} for concatenating estimates.
+#' @seealso \code{\link{TargetParameterEstimates}} for the returned object.
+#'
+#' @examples
+#' \dontrun{
+#' # Compare two estimation specifications
+#' tpe_diff <- get_target_param_diff_ests(tpe_spec1, tpe_spec2)
+#' tpe_diff$target_params()  # Difference in point estimates
+#' }
+#'
 #' @export
 get_target_param_diff_ests <- function(target_params_1, target_params_2) {
   stopifnot(inherits(target_params_1, "TargetParameterEstimates"))
@@ -176,16 +206,49 @@ get_target_param_diff_ests <- function(target_params_1, target_params_2) {
   TargetParameterEstimates$new(xp)
 }
 
-#' Combine target parameter estimates
+#' Combine Target Parameter Estimates
 #'
-#' If `target_params_1` is a list of `TargetParameterEstimates`, combines all
-#' elements by concatenating their point vectors and stacking bootstrap
-#' replicate matrices. Otherwise, combines two `TargetParameterEstimates`
-#' provided in `target_params_1` and `target_params_2`.
+#' Concatenates multiple target parameter estimate objects into a single object
+#' by stacking their point estimate vectors and bootstrap replicate matrices.
 #'
-#' @param target_params_1 `TargetParameterEstimates` or a non-empty list of them
-#' @param target_params_2 optional `TargetParameterEstimates` when combining two
-#' @return `TargetParameterEstimates`
+#' @description
+#' This function supports two calling conventions:
+#' \itemize{
+#'   \item **List input**: Pass a list of `TargetParameterEstimates` objects as
+#'         `target_params_1` (with `target_params_2 = NULL`).
+#'   \item **Pairwise input**: Pass two `TargetParameterEstimates` objects as
+#'         `target_params_1` and `target_params_2`.
+#' }
+#'
+#' @details
+#' All inputs must have the same bootstrap structure: either all have bootstrap
+#' replicates with the same number of draws `B`, or none have bootstrap replicates.
+#' The resulting object has dimension equal to the sum of the input dimensions.
+#'
+#' This is useful for aggregating target parameters across different outcomes,
+#' cohorts, or analysis components.
+#'
+#' @param target_params_1 A \code{\link{TargetParameterEstimates}} R6 object, or
+#'   a non-empty list of such objects.
+#' @param target_params_2 A \code{\link{TargetParameterEstimates}} R6 object when
+#'   combining two objects. Must be `NULL` when `target_params_1` is a list.
+#'
+#' @return A \code{\link{TargetParameterEstimates}} R6 object with `p()` equal to
+#'   the sum of the input dimensions.
+#'
+#' @seealso \code{\link{get_target_param_diff_ests}} for computing differences.
+#' @seealso \code{\link{TargetParameterEstimates}} for the returned object.
+#'
+#' @examples
+#' \dontrun{
+#' # Combine two estimate objects
+#' tpe_combined <- combine_target_param_ests(tpe1, tpe2)
+#'
+#' # Combine a list of estimate objects
+#' tpe_all <- combine_target_param_ests(list(tpe1, tpe2, tpe3))
+#' tpe_all$p()  # Sum of individual p() values
+#' }
+#'
 #' @export
 combine_target_param_ests <- function(target_params_1, target_params_2 = NULL) {
   if (is.list(target_params_1)) {
