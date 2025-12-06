@@ -1,6 +1,6 @@
 # APM: Aggregated Projection Matrix
 
-A high-performance implementation of the Aggregated Projection Matrix (APM) method for counterfactual outcome mean estimation with short, unbalanced panel data proposed in Lei and Ross [(2025+)](https://arxiv.org/abs/2312.07520).
+A high-performance implementation of the Aggregated Projection Matrix (APM) method for counterfactual outcome mean estimation with short, unbalanced panel data proposed in [Lei and Ross (2025+)](https://arxiv.org/abs/2312.07520).
 
 ## Overview
 
