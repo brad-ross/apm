@@ -7,6 +7,13 @@
 
 
 //' Get the version of the apm library
+//'
+//' Returns a string containing the version number of the underlying C++ apm
+//' library. This is useful for debugging and ensuring compatibility.
+//'
+//' @return A character string containing the library version (e.g., "0.1.0").
+//' @examples
+//' get_version()
 //' @export
 // [[Rcpp::export]]
 std::string get_version() {
