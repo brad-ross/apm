@@ -63,8 +63,8 @@ public:
     /**
      * @brief Add a batch of units' data.
      * @param unit_idxs Indexes of units included in this batch (used for bootstrap weighting).
-     * @param Y Matrix of outcomes with shape T_c x N_batch, where each column corresponds to a unit.
-     * @param X Optional cube of covariates with shape T x q x N_batch, aligned to Y's unit order.
+     * @param Y Matrix of outcomes with shape N_batch x T_c, where each row corresponds to a unit.
+     * @param X Optional cube of covariates with shape N_batch x T x q, aligned to Y's unit order.
      *
      * Aggregates point-estimate means and, when a bootstrap is attached, aggregates bootstrap-weighted
      * means for each replicate using weights derived from `unit_idxs`.

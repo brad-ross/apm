@@ -63,7 +63,7 @@ struct FactorModelParameters {
                           std::optional<arma::vec> a_in = std::nullopt)
         : G(std::move(G_in)), g_0(std::move(g0_in)), a(std::move(a_in)), L(std::nullopt) {
         if (g_0 && g_0->n_elem != G.n_rows) {
-            throw std::invalid_argument("FactorModelParameters: g_0 length must equal number of ows in G (T_c).");
+            throw std::invalid_argument("FactorModelParameters: g_0 length must equal number of rows in G (T_c).");
         }
         // 'a' length validation requires external knowledge of q; callers may validate separately.
     }

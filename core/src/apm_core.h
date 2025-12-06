@@ -190,9 +190,9 @@ arma::vec impute_outcomes_from_obs_outcomes(
  *
  * Chooses the appropriate imputation routine based on the presence of outcome
  * fixed effects (g_0) and/or covariate coefficients (a) in
- * `apm::FactorModelParameters` (defined in `factor_model_parameter_structs.h`),
+ * `apm::FactorModelParameters` (defined in `cohort_specific_param_structs.h`),
  * and the presence of covariate means in
- * `apm::OutcomeMeanSufficientStatistics` (defined in `factor_model_parameter_structs.h`).
+ * `apm::OutcomeMeanSufficientStatistics` (defined in `cohort_specific_param_structs.h`).
  * Throws if covariate-related fields are inconsistent between inputs or if
  * dimensions are incompatible.
  *
