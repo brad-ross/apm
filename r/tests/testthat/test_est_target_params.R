@@ -381,3 +381,47 @@ test_that("est_target_params multi-spec reuses shared cohort inputs", {
   expect_identical(sort(names(res)), sort(names(comps$outcome_means)))
   expect_true(all(vapply(res, function(e) inherits(e, "TargetParameterEstimates"), logical(1))))
 })
+
+test_that("subset method extracts vector of indices", {
+  fixture <- setup_target_fixture(num_specs = 1L)
+  comps <- fixture$comps
+  fn <- function(Y, shares, observed_means_list, covar_means_list, eta_list) colMeans(Y)
+  tpe <- est_target_params(comps$outcome_means[[1]], fn,
+                           aux_means = comps$cohort_auxiliary_means,
+                           suff_stats = comps$cohort_outcome_mean_ests)
+
+  idx <- c(1L, 3L)
+  sub <- tpe$subset(idx)
+
+  expect_true(inherits(sub, "TargetParameterEstimates"))
+  expect_equal(sub$p(), length(idx))
+  expect_equal(as.numeric(sub$target_params()), as.numeric(tpe$target_params()[idx]), tolerance = 1e-12)
+  if (tpe$has_bootstrap()) {
+    expect_equal(sub$num_bootstraps(), tpe$num_bootstraps())
+    expect_equal(sub$boots_matrix(), tpe$boots_matrix()[idx, , drop = FALSE], tolerance = 1e-12)
+  }
+})
+
+test_that("subset method handles single index and validates inputs", {
+  fixture <- setup_target_fixture(num_specs = 1L)
+  comps <- fixture$comps
+  fn <- function(Y, shares, observed_means_list, covar_means_list, eta_list) colMeans(Y)
+  tpe <- est_target_params(comps$outcome_means[[1]], fn,
+                           aux_means = comps$cohort_auxiliary_means,
+                           suff_stats = comps$cohort_outcome_mean_ests)
+
+  idx <- 2L
+  sub <- tpe$subset(idx)
+
+  expect_true(inherits(sub, "TargetParameterEstimates"))
+  expect_equal(sub$p(), 1L)
+  expect_equal(as.numeric(sub$target_params()), as.numeric(tpe$target_params()[idx]), tolerance = 1e-12)
+  if (tpe$has_bootstrap()) {
+    expect_equal(sub$num_bootstraps(), tpe$num_bootstraps())
+    expect_equal(sub$boots_matrix(), matrix(tpe$boots_matrix()[idx, , drop = FALSE], nrow = 1),
+                 tolerance = 1e-12)
+  }
+
+  expect_error(tpe$subset(c(0L, 1L)))
+  expect_error(tpe$subset(c(1L, tpe$p() + 1L)))
+})

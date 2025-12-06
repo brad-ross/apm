@@ -279,3 +279,61 @@ TEST(TargetParamCombine, ThrowsOnEmptyVector) {
     std::vector<TargetParameterEstimates> empty;
     EXPECT_THROW(combine_target_param_ests(empty), std::invalid_argument);
 }
+
+TEST(TargetParamSubset, SubsetsPointAndBootstrapVector) {
+    arma::vec point = {10.0, 20.0, 30.0, 40.0};
+    arma::mat boots(4, 2);
+    boots.col(0) = arma::vec({1.0, 2.0, 3.0, 4.0});
+    boots.col(1) = arma::vec({5.0, 6.0, 7.0, 8.0});
+
+    TargetParameterEstimates tpe(point, boots);
+    arma::uvec idx = {1, 3};
+
+    TargetParameterEstimates sub = subset_target_param_ests(tpe, idx);
+
+    arma::vec expected_point = {20.0, 40.0};
+    arma::mat expected_boots(2, 2);
+    expected_boots.col(0) = arma::vec({2.0, 4.0});
+    expected_boots.col(1) = arma::vec({6.0, 8.0});
+
+    EXPECT_TRUE(arma::approx_equal(sub.point, expected_point, "absdiff", 1e-12));
+    EXPECT_TRUE(arma::approx_equal(sub.bootstrap_replicates, expected_boots, "absdiff", 1e-12));
+}
+
+TEST(TargetParamSubset, SubsetsSingleIndexOverload) {
+    arma::vec point = {5.0, 6.0};
+    arma::mat boots(2, 1);
+    boots.col(0) = arma::vec({50.0, 60.0});
+
+    TargetParameterEstimates tpe(point, boots);
+    TargetParameterEstimates sub = subset_target_param_ests(tpe, std::size_t(1));
+
+    arma::vec expected_point = {6.0};
+    arma::mat expected_boots(1, 1);
+    expected_boots.col(0) = arma::vec({60.0});
+
+    EXPECT_TRUE(arma::approx_equal(sub.point, expected_point, "absdiff", 1e-12));
+    EXPECT_TRUE(arma::approx_equal(sub.bootstrap_replicates, expected_boots, "absdiff", 1e-12));
+}
+
+TEST(TargetParamSubset, ThrowsOnInvalidIndex) {
+    arma::vec point = {1.0, 2.0};
+    TargetParameterEstimates tpe(point, arma::mat());
+    arma::uvec idx = {0, 5};
+    EXPECT_THROW(subset_target_param_ests(tpe, idx), std::invalid_argument);
+    EXPECT_THROW(subset_target_param_ests(tpe, std::size_t(10)), std::invalid_argument);
+}
+
+TEST(TargetParamSubset, HandlesNoBootstrap) {
+    arma::vec point = {1.0, 2.0, 3.0};
+    TargetParameterEstimates tpe(point, arma::mat());
+    arma::uvec idx = {0, 2};
+
+    TargetParameterEstimates sub = subset_target_param_ests(tpe, idx);
+
+    EXPECT_EQ(sub.n_bootstrap_replicates(), 0u);
+    arma::vec expected = {1.0, 3.0};
+    EXPECT_TRUE(arma::approx_equal(sub.point, expected, "absdiff", 1e-12));
+    EXPECT_EQ(static_cast<std::size_t>(sub.bootstrap_replicates.n_rows), 2u);
+    EXPECT_EQ(static_cast<std::size_t>(sub.bootstrap_replicates.n_cols), 0u);
+}
