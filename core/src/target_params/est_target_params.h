@@ -68,6 +68,13 @@ TargetParameterEstimates get_target_param_diff_ests(
     const TargetParameterEstimates& target_params_1,
     const TargetParameterEstimates& target_params_2);
 
+TargetParameterEstimates combine_target_param_ests(
+    const TargetParameterEstimates& target_params_1,
+    const TargetParameterEstimates& target_params_2);
+
+TargetParameterEstimates combine_target_param_ests(
+    const std::vector<TargetParameterEstimates>& targets);
+
 //------------------------------------------------------------------------------
 // End-to-end components from panel (used by R bindings)
 //------------------------------------------------------------------------------
