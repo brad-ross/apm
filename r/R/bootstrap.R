@@ -87,25 +87,123 @@ WeightedBootstrap <- R6::R6Class(
   )
 )
 
-#' Get weighted bootstrap draws (returns WeightedBootstrap R6 instance)
+#' Create Weighted Bootstrap Draws
 #'
-#' @param N Integer, number of observations (rows)
-#' @param B Integer, number of bootstrap draws (cols)
-#' @param type Character, either "multinomial" or "bayesian"
-#' @param seed Optional integer seed for reproducibility
-#' @return WeightedBootstrap R6 object with methods: n_obs, n_bootstraps, draw, obs, obs_rows, weights
+#' Convenience constructor for creating a \code{\link{WeightedBootstrap}} object.
+#'
+#' @description
+#' This is the recommended way to create bootstrap weights for use throughout
+#' the apm estimation pipeline. The resulting object can be passed to estimation
+#' functions to enable bootstrap-based inference.
+#'
+#' @param N Integer; number of observations (units) in the sample.
+#' @param B Integer; number of bootstrap draws to generate.
+#' @param type Character; bootstrap type, either:
+#'   \itemize{
+#'     \item `"multinomial"` (default): Classical Efron bootstrap. Each draw
+#'           samples N indices with replacement; weights are counts/N.
+#'     \item `"bayesian"`: Rubin's Bayesian bootstrap. Weights are drawn from
+#'           a Dirichlet(1,...,1) distribution (i.i.d. Exp(1), normalized).
+#'   }
+#' @param seed Optional integer; random seed for reproducibility. If provided,
+#'   `set.seed()` is called before generating weights.
+#'
+#' @return A \code{\link{WeightedBootstrap}} R6 object with methods:
+#'   `n_obs()`, `n_bootstraps()`, `draw(b)`, `obs(i)`, `obs_rows(idx)`, `weights()`.
+#'
+#' @seealso \code{\link{WeightedBootstrap}} for the returned class.
+#' @seealso \code{\link{est_cohort_specific_params}} for using bootstrap in estimation.
+#'
+#' @examples
+#' # Create 100 bootstrap draws for 50 observations
+#' wb <- get_weighted_bootstrap_draws(N = 50, B = 100, type = "bayesian", seed = 123)
+#' wb$n_obs()
+#' wb$n_bootstraps()
+#'
+#' # Get weights for first bootstrap draw
+#' w1 <- wb$draw(1)
+#' sum(w1)  # Should equal 1
+#'
 #' @export
 get_weighted_bootstrap_draws <- function(N, B, type = c("multinomial", "bayesian"), seed = NULL) {
   if (!is.null(seed)) set.seed(as.integer(seed))
   WeightedBootstrap$new(N, B, type, seed)
 }
 
-#' Bootstrap and target-parameter inference results
+#' Simultaneous Inference Results from Bootstrap
 #'
-#' R6 wrapper around simultaneous inference results computed from bootstrap replicates.
-#' Provides robust bootstrap standard errors computed via the IQR scale (same scale
-#' used for confidence intervals): `std_error()` returns row-wise IQR / sqrt(N),
-#' and `se()` is an alias for convenience.
+#' An R6 class that holds inference results computed from bootstrap replicates,
+#' providing point estimates, standard errors, t-statistics, p-values, and
+#' simultaneous confidence/credible bands.
+#'
+#' @description
+#' `SimultaneousInferenceResults` wraps bootstrap-based inference computations
+#' and provides both pointwise and simultaneous (FWER-controlling) inference.
+#' Standard errors are computed using a robust IQR-based scale estimator.
+#'
+#' @details
+#' The inference procedures implemented here follow the approach of using
+#' bootstrap quantiles to construct:
+#' \itemize{
+#'   \item **Pointwise confidence intervals (CI)**: For each parameter individually.
+#'   \item **Simultaneous confidence bands (CB)**: Controlling family-wise error rate
+#'         across all parameters jointly.
+#' }
+#'
+#' Standard errors are computed as `IQR / 1.349`, which is a robust estimator
+#' of the standard deviation for normally distributed data (1.349 is the 
+#' IQR of the standard normal distribution).
+#'
+#' @section Constructor:
+#' This class is typically not constructed directly by users. Instead, use
+#' \code{\link{get_bootstrap_inference}} or obtain results from
+#' \code{\link{target_param_inference}}.
+#'
+#' @section Public Methods:
+#' \describe{
+#'   \item{\code{point()}}{Returns numeric vector of point estimates (length p).}
+#'   \item{\code{t_stats()}}{Returns numeric vector of t-statistics (length p).}
+#'   \item{\code{p_vals()}}{Returns numeric vector of pointwise two-sided p-values
+#'         (length p).}
+#'   \item{\code{std_error()}}{Returns numeric vector of robust standard errors
+#'         (length p).}
+#'   \item{\code{se()}}{Alias for `std_error()`.}
+#'   \item{\code{fwer_control_p_vals()}}{Returns numeric vector of Romano-Wolf
+#'         stepdown adjusted p-values (length p), controlling the family-wise
+#'         error rate (FWER).}
+#'   \item{\code{sig_level()}}{Returns the significance level used for inference.}
+#'   \item{\code{ci()}}{Returns a list with `lb` (lower bound) and `ub` (upper bound)
+#'         numeric vectors for pointwise confidence intervals.}
+#'   \item{\code{cb()}}{Returns a list with `lb` and `ub` numeric vectors for
+#'         simultaneous confidence bands.}
+#'   \item{\code{as_data_frame(param_names = NULL)}}{Returns a data.frame with
+#'         columns: `parameter`, `estimate`, `std_error`, `t_stat`, `p_value`,
+#'         `p_value_fwer` (Romano-Wolf stepdown adjusted), `ci_lb`, `ci_ub`,
+#'         `cb_lb`, `cb_ub`. If `param_names` is provided, it is used for the
+#'         `parameter` column; otherwise 1-based indices are used.}
+#'   \item{\code{as.data.frame(...)}}{Alias for `as_data_frame(...)`.}
+#'   \item{\code{print(...)}}{Prints the results as a data.frame.}
+#' }
+#'
+#' @seealso \code{\link{get_bootstrap_inference}} for constructing from raw inputs.
+#' @seealso \code{\link{target_param_inference}} for inference on target parameters.
+#' @seealso \code{\link{combine_inference_results_across_specs}} for combining
+#'   results across multiple estimation specifications.
+#'
+#' @examples
+#' # Typically obtained from target_param_inference or get_bootstrap_inference
+#' # Example with synthetic data:
+#' set.seed(123)
+#' point <- c(1.0, 2.0, 3.0)
+#' boot <- matrix(rnorm(300, mean = rep(point, each = 100), sd = 0.5),
+#'                nrow = 3, ncol = 100, byrow = TRUE)
+#' sir <- get_bootstrap_inference(point, boot, N = 50, sig_level = 0.05)
+#'
+#' # Access results
+#' sir$point()
+#' sir$std_error()
+#' sir$ci()
+#' sir$as_data_frame(param_names = c("alpha", "beta", "gamma"))
 #'
 #' @export
 SimultaneousInferenceResults <- R6::R6Class(
@@ -129,12 +227,13 @@ SimultaneousInferenceResults <- R6::R6Class(
       est <- self$point()
       t <- self$t_stats()
       p <- self$p_vals()
+      p_fwer <- self$fwer_control_p_vals()
       se <- self$std_error()
       ci <- self$ci()
       cb <- self$cb()
 
       n <- length(est)
-      if (!all(lengths(list(t, p, se, ci$lb, ci$ub, cb$lb, cb$ub)) == n)) {
+      if (!all(lengths(list(t, p, p_fwer, se, ci$lb, ci$ub, cb$lb, cb$ub)) == n)) {
         stop("Inconsistent lengths among inference components.")
       }
 
@@ -143,6 +242,7 @@ SimultaneousInferenceResults <- R6::R6Class(
         std_error = se,
         t_stat = t,
         p_value = p,
+        p_value_fwer = p_fwer,
         ci_lb = ci$lb,
         ci_ub = ci$ub,
         cb_lb = cb$lb,
@@ -171,12 +271,48 @@ SimultaneousInferenceResults <- R6::R6Class(
   )
 )
 
-#' Compute bootstrap-based inference from raw inputs
-#' @param point numeric vector of point estimates
-#' @param boot numeric matrix p x B of bootstrap estimates
-#' @param N integer sample size
-#' @param sig_level significance level in (0,1)
-#' @return SimultaneousInferenceResults
+#' Compute Bootstrap-Based Inference from Raw Inputs
+#'
+#' Constructs a `SimultaneousInferenceResults` object from point estimates and
+#' a matrix of bootstrap replicates.
+#'
+#' @description
+#' This function computes pointwise and simultaneous inference (confidence
+#' intervals, confidence bands, t-statistics, p-values) from user-provided
+#' bootstrap replicates.
+#'
+#' @param point Numeric vector of point estimates (length p).
+#' @param boot Numeric matrix of bootstrap estimates with dimensions p x B,
+#'   where p is the number of parameters and B is the number of bootstrap draws.
+#'   Each column represents one bootstrap replicate.
+#' @param N Integer; the sample size used for computing standard errors.
+#' @param sig_level Numeric; significance level for confidence intervals and
+#'   bands, must be in (0, 1). Default is 0.05 for 95% intervals/bands.
+#'
+#' @return A \code{\link{SimultaneousInferenceResults}} R6 object with methods
+#'   for accessing point estimates, standard errors, t-statistics, p-values,
+#'   and confidence intervals/bands.
+#'
+#' @seealso \code{\link{SimultaneousInferenceResults}} for the returned object.
+#' @seealso \code{\link{target_param_inference}} for inference on estimated
+#'   target parameters.
+#'
+#' @examples
+#' # Simulate bootstrap replicates
+#' set.seed(42)
+#' true_params <- c(1.5, -0.5)
+#' point_est <- true_params + rnorm(2, sd = 0.1)
+#' boot_reps <- matrix(
+#'   rnorm(2 * 100, mean = rep(point_est, 100), sd = 0.2),
+#'   nrow = 2, ncol = 100
+#' )
+#'
+#' # Compute inference
+#' results <- get_bootstrap_inference(point_est, boot_reps, N = 100, sig_level = 0.05)
+#' results$point()
+#' results$std_error()
+#' results$ci()
+#'
 #' @export
 get_bootstrap_inference <- function(point, boot, N, sig_level = 0.05) {
   xp <- get_bootstrap_inference_cpp(as.numeric(point),
@@ -186,14 +322,57 @@ get_bootstrap_inference <- function(point, boot, N, sig_level = 0.05) {
   SimultaneousInferenceResults$new(xp)
 }
 
-#' Combine inference results across specs
+#' Combine Inference Results Across Estimation Specifications
 #'
-#' Stacks rows from multiple `SimultaneousInferenceResults` objects into a single
-#' data frame, adding a `spec` column that records the name of the spec for each
-#' row.
+#' Stacks inference results from multiple estimation specifications into a single
+#' data.frame, adding a `spec` column to identify which specification each row
+#' belongs to.
 #'
-#' @param results_by_spec named list of `SimultaneousInferenceResults` (one per spec)
-#' @return data.frame with a leading `spec` column followed by inference columns
+#' @description
+#' When running estimation with multiple specifications (e.g., different model
+#' ranks or weighting schemes), this function combines the inference results
+#' into a single tidy data.frame for easy comparison and reporting.
+#'
+#' @param results_by_spec A named list of \code{\link{SimultaneousInferenceResults}}
+#'   objects, one per estimation specification. Names become values in the `spec`
+#'   column of the output.
+#'
+#' @return A data.frame with columns:
+#'   \describe{
+#'     \item{spec}{Character; the specification name (from list names).}
+#'     \item{parameter}{Integer or character; parameter identifier.}
+#'     \item{estimate}{Numeric; point estimate.}
+#'     \item{std_error}{Numeric; robust standard error.}
+#'     \item{t_stat}{Numeric; t-statistic.}
+#'     \item{p_value}{Numeric; pointwise p-value.}
+#'     \item{p_value_fwer}{Numeric; Romano-Wolf stepdown adjusted p-value
+#'           (FWER-controlling).}
+#'     \item{ci_lb}{Numeric; pointwise confidence interval lower bound.}
+#'     \item{ci_ub}{Numeric; pointwise confidence interval upper bound.}
+#'     \item{cb_lb}{Numeric; simultaneous confidence band lower bound.}
+#'     \item{cb_ub}{Numeric; simultaneous confidence band upper bound.}
+#'   }
+#'
+#' @seealso \code{\link{SimultaneousInferenceResults}} for individual results.
+#' @seealso \code{\link{target_param_inference}} for computing inference.
+#'
+#' @examples
+#' # Create mock inference results for two specifications
+#' set.seed(1)
+#' point1 <- c(1.0, 2.0)
+#' boot1 <- matrix(rnorm(200, mean = rep(point1, 100)), nrow = 2)
+#' sir1 <- get_bootstrap_inference(point1, boot1, N = 50)
+#'
+#' point2 <- c(1.1, 1.9)
+#' boot2 <- matrix(rnorm(200, mean = rep(point2, 100)), nrow = 2)
+#' sir2 <- get_bootstrap_inference(point2, boot2, N = 50)
+#'
+#' # Combine results
+#' combined <- combine_inference_results_across_specs(
+#'   list(spec_A = sir1, spec_B = sir2)
+#' )
+#' print(combined)
+#'
 #' @export
 combine_inference_results_across_specs <- function(results_by_spec) {
   if (!is.list(results_by_spec) || length(results_by_spec) == 0L) {

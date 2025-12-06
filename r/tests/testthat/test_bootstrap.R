@@ -68,6 +68,7 @@ test_that("get_bootstrap_inference returns well-formed results and sensible band
   est <- sir$point()
   t <- sir$t_stats()
   pvals <- sir$p_vals()
+  pvals_fwer <- sir$fwer_control_p_vals()
   ci <- sir$ci()
   cb <- sir$cb()
   se <- sir$std_error()
@@ -76,6 +77,7 @@ test_that("get_bootstrap_inference returns well-formed results and sensible band
   expect_equal(length(est), p)
   expect_equal(length(t), p)
   expect_equal(length(pvals), p)
+  expect_equal(length(pvals_fwer), p)
   expect_equal(length(ci$lb), p)
   expect_equal(length(ci$ub), p)
   expect_equal(length(cb$lb), p)
@@ -83,6 +85,8 @@ test_that("get_bootstrap_inference returns well-formed results and sensible band
   expect_equal(length(se), p)
   expect_true(all(is.finite(se)))
   expect_equal(sir$se(), se)
+  # FWER p-values should be at least as large as pointwise p-values
+  expect_true(all(pvals_fwer >= pvals - 1e-12))
 
   expect_true(all(ci$lb <= est & est <= ci$ub))
   expect_true(all(cb$lb <= est & est <= cb$ub))
@@ -97,7 +101,7 @@ test_that("get_bootstrap_inference returns well-formed results and sensible band
   df <- sir$as_data_frame()
   expect_s3_class(df, "data.frame")
   expect_equal(nrow(df), p)
-  expect_true(all(c("parameter","estimate","std_error","t_stat","p_value","ci_lb","ci_ub","cb_lb","cb_ub") %in% names(df)))
+  expect_true(all(c("parameter","estimate","std_error","t_stat","p_value","p_value_fwer","ci_lb","ci_ub","cb_lb","cb_ub") %in% names(df)))
   expect_equal(df$std_error, se)
 })
 
