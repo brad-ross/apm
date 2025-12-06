@@ -17,7 +17,18 @@ TargetParameterEstimates <- R6::R6Class(
       if (is.null(b)) tpe_point_params_cpp(private$xp)
       else tpe_boot_params_cpp(private$xp, as.integer(b))
     },
-    boots_matrix = function() tpe_boot_params_matrix_cpp(private$xp)
+    boots_matrix = function() tpe_boot_params_matrix_cpp(private$xp),
+    subset = function(indices) {
+      stopifnot(!missing(indices))
+      indices <- as.integer(indices)
+      if (length(indices) == 0L) stop("indices must be non-empty")
+      if (any(is.na(indices))) stop("indices must not be NA")
+      if (any(indices < 1L) || any(indices > self$p())) {
+        stop("indices must be in range [1, p()]")
+      }
+      xp <- subset_target_param_ests_cpp(private$xp, indices - 1L)
+      TargetParameterEstimates$new(xp)
+    }
   ),
   private = list(xp = NULL)
 )
