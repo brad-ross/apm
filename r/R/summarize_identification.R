@@ -1,36 +1,85 @@
-#' Summarize identification for one or many panels
+#' Summarize Factor Identification via O^3 Algorithm
 #'
-#' This computes summary diagnostics of factor identification using the
-#' O^3 super-cohort merging process for either a single panel or many panels.
+#' Computes summary diagnostics of factor model identification using the
+#' O^3 (Observed Outcome Overlap) super-cohort merging algorithm.
 #'
-#' - If `observed_outcome_indices` is a list of integer vectors and
-#'   `cohort_sizes` is an integer vector, dispatches to the singleton C++ binding.
-#' - If `observed_outcome_indices` is a list of lists and `cohort_sizes` is a
-#'   list of integer vectors, dispatches to the vectorized C++ binding.
+#' @description
+#' This function analyzes whether factors are identified in an unbalanced panel
+#' by examining the overlap structure of observed outcomes across cohorts. It
+#' uses the O^3 algorithm to iteratively merge cohorts that share sufficient
+#' outcome overlap, then reports summary statistics about the largest resulting
+#' super cohort.
 #'
-#' @param observed_outcome_indices Either a list of integer vectors (single panel)
-#'   or a list of such lists (many panels). Indices are 1-based.
-#' @param cohort_sizes Either an integer vector (single panel) or a list of
-#'   integer vectors (many panels).
-#' @param r The maximum model rank.
-#' @param iter Iteration to summarize. Use -1 for the final super cohort(s)
-#'   (default), -2 for second-to-last, etc. Positive values are 1-based and
-#'   clamp to the last available iteration.
+#' @details
+#' **The O^3 Algorithm:**
+#'
+#' The O^3 algorithm iteratively merges cohorts based on outcome overlap:
+#' \enumerate{
+#'   \item Start with each cohort as its own super cohort.
+#'   \item Merge any two super cohorts that share at least r outcomes.
+#'   \item Repeat until no more merges are possible.
+#' }
+#'
+#' Factors are identified if and only if all cohorts end up in a single super
+#' cohort at the final iteration.
+#'
+#' **Summary Statistics:**
+#'
+#' The function reports on the largest super cohort at the specified iteration,
+#' including its size (in units), outcome coverage, and the number of algorithm
+#' iterations.
+#'
+#' **Vectorized Interface:**
+#'
+#' For efficiency, you can analyze multiple panels simultaneously by passing
+#' lists of lists for `observed_outcome_indices` and lists of vectors for
+#' `cohort_sizes`.
+#'
+#' @param observed_outcome_indices For a single panel: a list of integer vectors
+#'   where element c contains 1-based outcome indices for cohort c. For multiple
+#'   panels: a list of such lists.
+#' @param cohort_sizes For a single panel: an integer vector of cohort sizes.
+#'   For multiple panels: a list of such vectors.
+#' @param r Integer; the model rank (minimum overlap threshold for merging).
+#' @param iter Integer; iteration to summarize. Use -1 (default) for the final
+#'   iteration, -2 for second-to-last, etc. Positive values are 1-based and
+#'   clamped to available iterations.
 #' @param outcome_weights Optional numeric vector (single panel) or list of
-#'   numeric vectors (many panels) giving per-outcome weights. Defaults to all
-#'   ones.
-#' @return Either a single named list or a list of named lists, each with:
-#'   - `largest_super_cohort_size`
-#'   - `largest_super_cohort_share`
-#'   - `min_cohort_size_in_largest_super`
-#'   - `num_outcomes_in_largest_super_cohort`
-#'   - `total_outcome_weight_in_largest_super_cohort`
-#'   - `share_outcomes_in_largest_super_cohort`
-#'   - `share_outcome_weight_in_largest_super_cohort`
-#'   - `num_o3_iterations`
+#'   vectors (multiple panels) of per-outcome weights. Defaults to 1 for all.
+#'
+#' @return For a single panel: a named list with summary statistics.
+#'
+#'   For multiple panels: a list of such named lists.
+#'
+#'   Each summary contains:
+#'   \describe{
+#'     \item{largest_super_cohort_size}{Total units in the largest super cohort.}
+#'     \item{largest_super_cohort_share}{Share of panel units in largest super cohort.}
+#'     \item{min_cohort_size_in_largest_super}{Minimum cohort size within the
+#'           largest super cohort.}
+#'     \item{num_outcomes_in_largest_super_cohort}{Unique outcomes observed by
+#'           cohorts in the largest super cohort.}
+#'     \item{total_outcome_weight_in_largest_super_cohort}{Sum of outcome weights.}
+#'     \item{share_outcomes_in_largest_super_cohort}{Fraction of outcomes covered.}
+#'     \item{share_outcome_weight_in_largest_super_cohort}{Fraction of total weight.}
+#'     \item{num_o3_iterations}{Number of O^3 iterations performed.}
+#'   }
+#'
+#' @seealso \code{\link{o3_algorithm}} for the underlying algorithm.
+#' @seealso \code{\link{aligned_factors_identified}} for a simple yes/no check.
+#' @seealso \code{\link{get_largest_super_cohort}} for extracting cohort indices.
+#'
 #' @examples
-#' summarize_identification(list(c(1,3), c(2,3)), c(50, 40), r = 2)
-#' summarize_identification(list(list(c(1), c(2,3))), list(c(10, 25)), r = 2)
+#' # Single panel: 2 cohorts, cohort 1 sees outcomes 1,3; cohort 2 sees 2,3
+#' summarize_identification(list(c(1L, 3L), c(2L, 3L)), c(50L, 40L), r = 2L)
+#'
+#' # Multiple panels
+#' summarize_identification(
+#'   list(list(c(1L), c(2L, 3L))),
+#'   list(c(10L, 25L)),
+#'   r = 2L
+#' )
+#'
 #' @export
 summarize_identification <- function(observed_outcome_indices, cohort_sizes, r, iter = -1L, outcome_weights = NULL) {
   if (is.list(observed_outcome_indices) && length(observed_outcome_indices) > 0 &&
