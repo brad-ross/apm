@@ -17,7 +17,7 @@ APM is a spectral approach for identifying and estimating average counterfactual
 ### Optional
 - Google Test (for testing)
 
-## Installation
+## Dependency Installation
 
 ### Ubuntu/Debian
 ```bash
@@ -29,7 +29,7 @@ sudo apt-get install libarmadillo-dev libboost-all-dev cmake build-essential
 brew install armadillo boost cmake
 ```
 
-### Building from Source
+## Building from Source
 ```bash
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
@@ -56,26 +56,6 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . -j$(nproc)
 ```
 
-## Usage
-
-### Basic Example
-```cpp
-#include "apm_core.h"
-#include <iostream>
-
-int main() {
-    // Check library version
-    std::cout << "APM version: " << apm::get_version() << std::endl;
-    return 0;
-}
-```
-
-### Compilation
-```bash
-g++ -std=c++17 -O3 -I/path/to/armadillo/include \
-    your_program.cpp -lapm_core -larmadillo -o your_program
-```
-
 ## Testing
 
 ```bash
@@ -91,7 +71,3 @@ ctest --verbose
 2. Add tests for new functionality
 3. Update documentation
 4. Ensure all tests pass
-
-## License
-
-MIT License - see LICENSE file for details 

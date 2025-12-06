@@ -1,19 +1,42 @@
 # APM R Package Development Guide
 
-This directory contains the R package for the Aggregated Projection Matrix (APM) method, with C++ bindings to the core library.
+This directory contains the R package for the Aggregated Projection Matrix (APM) method proposed in [Lei and Ross (2025+)](https://arxiv.org/abs/2312.07520), with C++ bindings to the core libr
 
 ## Prerequisites
 
-### 1. R Installation
+### R Installation
 Ensure you have R installed (version 3.5.0 or higher):
 ```bash
 R --version
 ```
 
-### 2. Required System Dependencies
-- **C++ compiler**: Already available through Xcode Command Line Tools
-- **Armadillo**: Installed via Homebrew
-- **Boost**: Installed via Homebrew
+### System Dependencies
+- **C++ compiler**: Available through Xcode Command Line Tools (macOS), Rtools (Windows), or build-essential (Linux)
+
+**Note**: Armadillo and Boost are provided through R package dependencies (`RcppArmadillo` and `BH`), so no manual installation of these libraries is required. This makes the package installable across all platforms.
+
+## Package Installation
+
+The package is not yet on CRAN. You can install directly from GitHub:
+
+```r
+# Install from GitHub (easiest method)
+devtools::install_github("brad-ross/apm", subdir = "r")
+```
+
+Or clone the repository locally and install from source:
+
+```bash
+git clone https://github.com/your-username/apm.git
+```
+
+```r
+# Install from local clone
+install.packages("path/to/apm/r", repos = NULL, type = "source")
+
+# Or using devtools
+devtools::install("path/to/apm/r")
+```
 
 ## Development Setup
 
@@ -90,29 +113,47 @@ devtools::install()
 
 ## Package Structure
 
+The codebase is organized with a shared C++ core library and R-specific bindings:
+
 ```
-r/
-├── DESCRIPTION          # Package metadata
-├── NAMESPACE           # Exported functions
-├── src/
-│   ├── apm_core_bindings.cpp  # C++ bindings to core library
-│   └── Makevars        # Build configuration
-├── tests/
-│   ├── testthat.R      # Test runner
-│   └── testthat/
-│       └── test-apm-core.R  # Test cases
-└── README.md           # This file
+apm/
+├── core/                      # Shared C++ library
+│   ├── src/                   # Core C++ implementation
+│   └── tests/                 # C++ unit tests (Catch2)
+│
+└── r/                         # R package
+    ├── DESCRIPTION            # Package metadata and dependencies
+    ├── NAMESPACE              # Exported functions
+    ├── R/                     # R source files (native R code)
+    ├── src/                   # C++ bindings (Rcpp wrappers for core library)
+    ├── tests/testthat/        # R unit tests (testthat)
+    ├── man/                   # Documentation (.Rd files, auto-generated)
+    └── inst/include/          # Headers for package linking
 ```
+
+### Where to Add New Functionality
+
+| Component | Location | Description |
+|-----------|----------|-------------|
+| Core C++ logic | `../core/src/` | Platform-independent algorithms and data structures |
+| C++ tests | `../core/tests/` | Unit tests for core C++ code |
+| R bindings | `src/*_bindings.cpp` | Rcpp wrappers exposing C++ functions to R |
+| R functions | `R/` | Pure R code and high-level API functions |
+| R tests | `tests/testthat/` | Unit tests for R functions |
+
+**Build configuration updates:**
+- When adding new core C++ files, update `../core/CMakeLists.txt` (and `../core/tests/CMakeLists.txt` for test files)
+- When adding new R bindings or R source files, update `src/Makevars` (and `src/Makevars.win` for Windows)
 
 ## Adding New Functions
 
 ### 1. Add to Core Library
 First, add your function to the core C++ library:
-- Declaration in `../core/src/apm_core.h`
-- Implementation in `../core/src/apm_core.cpp`
+- Declaration in e.g. `../core/src/apm_core.h`
+- Implementation in e.g. `../core/src/apm_core.cpp`
 
 ### 2. Add R Binding
-Add the R binding in `src/apm_core_bindings.cpp`:
+Add the R binding in e.g. `src/apm_core_bindings.cpp`:
 
 ```cpp
 //' Your Function Description
@@ -127,7 +168,7 @@ ReturnType your_function_name(InputType input) {
 ```
 
 ### 3. Add Tests
-Add tests in `tests/testthat/test-apm-core.R`:
+Add tests in e.g. `tests/testthat/test_apm_core.R`:
 
 ```r
 test_that("your_function_name works", {
@@ -144,7 +185,7 @@ R -e 'devtools::test()'
 ## Troubleshooting
 
 ### Build Issues
-If you encounter compilation errors:
+If you encounter compilation errors or change C++ code without changing R code or bindings:
 
 ```r
 # Clean and rebuild
@@ -158,25 +199,6 @@ If you get errors about missing packages:
 ```r
 # Install missing dependencies
 install.packages(c("Rcpp", "RcppArmadillo", "testthat"))
-```
-
-### C++ Compilation Issues
-Ensure your core library files exist:
-- `../core/src/apm_core.h`
-- `../core/src/apm_core.cpp`
-
-The `Makevars` file tells R how to compile these external C++ files.
-
-## Package Installation
-
-For end users (not during development):
-
-```r
-# Install from source
-install.packages("path/to/apm/r", repos = NULL, type = "source")
-
-# Or using devtools
-devtools::install("path/to/apm/r")
 ```
 
 ## Development Tips
