@@ -419,7 +419,6 @@ construct_cohorts_from_panel_core <- function(panel_df,
 #'
 #' @details
 #' The panel data should be in long format with one row per (unit, outcome)
-
 #' observation. A **cohort** is defined as a group of units that observe exactly
 #' the same set of outcomes.
 #'

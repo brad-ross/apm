@@ -167,10 +167,13 @@ est_target_params <- function(outcome_means, fn, aux_means = NULL, suff_stats = 
 
 #' Difference Between Two Target Parameter Estimates
 #'
-#' Computes the elementwise difference `target_params_1 - target_params_2` for
-#' point estimates and, when available, for each bootstrap replicate.
+#' @description
+#' Computes elementwise differences between two `TargetParameterEstimates` objects,
+#' useful for comparing specifications or computing contrasts.
 #'
 #' @details
+#' Computes the elementwise difference `target_params_1 - target_params_2` for
+#' point estimates and, when available, for each bootstrap replicate.
 #' Both inputs must have the same dimension `p()`. If bootstrap replicates are
 #' present, both inputs must have bootstrap replicates with the same number of
 #' draws `B`. The resulting object has the same `p()` and `B` as the inputs.

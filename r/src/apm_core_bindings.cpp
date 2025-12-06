@@ -151,17 +151,19 @@ arma::vec aggregate_cohort_specific_outcome_fes(
     return apm::aggregate_cohort_specific_outcome_fes(cpp_g_0_c_vec, cpp_observed_outcome_indices);
 } 
 
-//' Estimates outcomes for a representative unit.
+//' Impute all outcomes for a single cohort from its observed outcome means.
 //'
-//' This function supports various combinations of factors, fixed effects, and covariates.
+//' Given factors G and observed outcome means m_c for a cohort, computes the
+//' implied mean outcomes for all T outcomes by estimating the cohort's loading
+//' and applying the factor model.
 //'
 //' @param G A T x r matrix of estimated factors.
-//' @param T_c A vector of 1-based indices for the observed outcomes for the cohort.
-//' @param m_c A vector containing the observed outcomes for the representative unit.
-//' @param g_0 An optional T-dimensional vector of estimated outcome fixed effects.
-//' @param a An optional q-dimensional vector of estimated covariate coefficients.
-//' @param X_c An optional T x q matrix containing the values of q covariates corresponding to each outcome for the representative unit.
-//' @return A T-dimensional vector containing the estimated outcomes for the representative unit.
+//' @param T_c A vector of 1-based indices indicating which outcomes the cohort observes.
+//' @param m_c A vector containing the observed outcome means for the cohort (length matches T_c).
+//' @param g_0 Optional T-dimensional vector of estimated outcome fixed effects.
+//' @param a Optional q-dimensional vector of estimated covariate coefficients.
+//' @param X_c Optional T x q matrix of covariate means for the cohort.
+//' @return A T-dimensional vector of imputed outcome means.
 //' @export
 // [[Rcpp::export]]
 arma::vec impute_outcomes_from_obs_outcomes(
