@@ -227,6 +227,42 @@ TargetParameterEstimates combine_target_param_ests(
     return out;
 }
 
+TargetParameterEstimates subset_target_param_ests(
+    const TargetParameterEstimates& target_params,
+    const arma::uvec& indices)
+{
+    const std::size_t p = target_params.p();
+    for (arma::uword i = 0; i < indices.n_elem; ++i) {
+        if (indices(i) >= p) {
+            throw std::invalid_argument("subset_target_param_ests: index out of range.");
+        }
+    }
+
+    arma::vec point = target_params.point.elem(indices);
+
+    if (!target_params.has_bootstrap_replicates()) {
+        arma::mat boots;
+        boots.set_size(static_cast<arma::uword>(indices.n_elem), arma::uword(0));
+        return TargetParameterEstimates(std::move(point), std::move(boots));
+    }
+
+    if (static_cast<std::size_t>(target_params.bootstrap_replicates.n_rows) != p) {
+        throw std::invalid_argument("subset_target_param_ests: bootstrap matrix must have p rows.");
+    }
+
+    arma::mat boots = target_params.bootstrap_replicates.rows(indices);
+    return TargetParameterEstimates(std::move(point), std::move(boots));
+}
+
+TargetParameterEstimates subset_target_param_ests(
+    const TargetParameterEstimates& target_params,
+    std::size_t index)
+{
+    arma::uvec idx(1);
+    idx(0) = static_cast<arma::uword>(index);
+    return subset_target_param_ests(target_params, idx);
+}
+
 TargetParamComponents est_target_param_components_from_panel(
     const InMemoryUnbalancedPanel& panel,
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,
