@@ -46,6 +46,7 @@ test_that("FGW wrapper returns expected ratio", {
   panel <- fixture$panel
   comps <- fixture$comps
   obs_idx <- panel$get_observed_outcome_indices()
+  obs_means <- lapply(comps$cohort_outcome_mean_ests, function(s) s$observed_outcome_means())
 
   tpe <- est_fgw_bipartite_match_outcome_diff_params(
     outcome_means = comps$outcome_means$pc,
@@ -61,12 +62,21 @@ test_that("FGW wrapper returns expected ratio", {
   Y <- comps$outcome_means$pc$mean_outcomes()
   shares <- vapply(comps$cohort_outcome_mean_ests, function(s) s$cohort_pop_share(), numeric(1))
 
+  observed_value <- function(c_idx, outcome_idx) {
+    pos <- match(outcome_idx, obs_idx[[c_idx]])
+    obs_means[[c_idx]][pos]
+  }
+
   obs_avg <- function(idx) {
     mask <- vapply(obs_idx, function(v) idx %in% v, logical(1))
     if (!any(mask)) return(0)
-    weights <- shares[mask]
-    values <- as.numeric(Y[mask, idx, drop = FALSE])
-    sum(weights * values) / sum(weights)
+    numer <- 0
+    denom <- 0
+    for (c in which(mask)) {
+      numer <- numer + shares[c] * observed_value(c, idx)
+      denom <- denom + shares[c]
+    }
+    numer / denom
   }
   pop_avg <- function(idx) {
     values <- as.numeric(Y[, idx, drop = FALSE])
@@ -83,6 +93,7 @@ test_that("FGW wrapper handles grouped outcomes with weights", {
   panel <- fixture$panel
   comps <- fixture$comps
   obs_idx <- panel$get_observed_outcome_indices()
+  obs_means <- lapply(comps$cohort_outcome_mean_ests, function(s) s$observed_outcome_means())
 
   outcome_weights <- c(1, 2, 3)
   grp1 <- c(1L, 2L)
@@ -104,13 +115,25 @@ test_that("FGW wrapper handles grouped outcomes with weights", {
   cohort_weights <- vapply(comps$cohort_outcome_mean_ests, function(s) s$cohort_pop_share(), numeric(1))
   mean_outcomes <- comps$outcome_means$pc$mean_outcomes()
 
-  # Cohort-level calculations derived manually
-  obs_group1 <- (cohort_weights[1] * (1 * mean_outcomes[1, 1] + 2 * mean_outcomes[1, 2]) +
-                   cohort_weights[2] * (2 * mean_outcomes[2, 2])) /
-    (cohort_weights[1] * 3 + cohort_weights[2] * 2)
-  obs_group2 <- (cohort_weights[1] * (2 * mean_outcomes[1, 2]) +
-                   cohort_weights[2] * (2 * mean_outcomes[2, 2] + 3 * mean_outcomes[2, 3])) /
-    (cohort_weights[1] * 2 + cohort_weights[2] * 5)
+  observed_group_avg <- function(group_idxs) {
+    total_weight <- 0
+    total_value <- 0
+    for (c in seq_along(obs_idx)) {
+      cohort_subset <- intersect(group_idxs, obs_idx[[c]])
+      if (!length(cohort_subset)) next
+      local_positions <- match(cohort_subset, obs_idx[[c]])
+      local_means <- obs_means[[c]][local_positions]
+      local_weights <- outcome_weights[cohort_subset]
+      row_weight_sum <- sum(local_weights)
+      row_weighted_total <- sum(local_weights * local_means)
+      total_weight <- total_weight + cohort_weights[c] * row_weight_sum
+      total_value <- total_value + cohort_weights[c] * row_weighted_total
+    }
+    total_value / total_weight
+  }
+
+  obs_group1 <- observed_group_avg(grp1)
+  obs_group2 <- observed_group_avg(grp2)
 
   pop_group1 <- (cohort_weights[1] * (1 * mean_outcomes[1, 1] + 2 * mean_outcomes[1, 2]) +
                    cohort_weights[2] * (1 * mean_outcomes[2, 1] + 2 * mean_outcomes[2, 2])) /
@@ -121,6 +144,44 @@ test_that("FGW wrapper handles grouped outcomes with weights", {
 
   expected_ratio <- (pop_group1 - pop_group2) / (obs_group1 - obs_group2)
 
+  expect_equal(params[1], expected_ratio, tolerance = 1e-8)
+  expect_equal(params[2], 1 - expected_ratio, tolerance = 1e-8)
+})
+
+test_that("FGW wrapper can disable observed outcome means usage", {
+  fixture <- setup_match_attr_fixture()
+  panel <- fixture$panel
+  comps <- fixture$comps
+  obs_idx <- panel$get_observed_outcome_indices()
+
+  tpe <- est_fgw_bipartite_match_outcome_diff_params(
+    outcome_means = comps$outcome_means$pc,
+    outcome_idx_1 = 1L,
+    outcome_idx_2 = 3L,
+    observed_outcome_indices = obs_idx,
+    suff_stats = comps$cohort_outcome_mean_ests,
+    use_observed_outcome_means = FALSE
+  )
+  params <- tpe$target_params()
+  expect_length(params, 2L)
+  expect_equal(sum(params), 1.0, tolerance = 1e-8)
+
+  Y <- comps$outcome_means$pc$mean_outcomes()
+  shares <- vapply(comps$cohort_outcome_mean_ests, function(s) s$cohort_pop_share(), numeric(1))
+
+  obs_avg_raw <- function(idx) {
+    mask <- vapply(obs_idx, function(v) idx %in% v, logical(1))
+    if (!any(mask)) return(0)
+    weights <- shares[mask]
+    values <- as.numeric(Y[mask, idx, drop = FALSE])
+    sum(weights * values) / sum(weights)
+  }
+  pop_avg <- function(idx) {
+    values <- as.numeric(Y[, idx, drop = FALSE])
+    sum(shares * values) / sum(shares)
+  }
+
+  expected_ratio <- (pop_avg(1L) - pop_avg(3L)) / (obs_avg_raw(1L) - obs_avg_raw(3L))
   expect_equal(params[1], expected_ratio, tolerance = 1e-8)
   expect_equal(params[2], 1 - expected_ratio, tolerance = 1e-8)
 })
