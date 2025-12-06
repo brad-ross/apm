@@ -77,6 +77,18 @@ Rcpp::List estimate_outcome_means_across_cohorts_by_spec_cpp(
 // oneTBB helpers
 //------------------------------------------------------------------------------
 
+//' Get the default C++ concurrency level
+//'
+//' Returns the default number of threads used by the C++ backend for parallel
+//' computations. This value is typically determined by the oneTBB library
+//' and corresponds to the number of hardware threads available on the system.
+//'
+//' @return An integer indicating the default number of threads for C++
+//'   parallel operations.
+//' @seealso \code{\link{set_apm_threads}} for setting the number of threads.
+//' @examples
+//' get_cpp_default_concurrency()
+//' @export
 // [[Rcpp::export]]
 int get_cpp_default_concurrency() { return static_cast<int>(apm::get_cpp_default_concurrency()); }
 
