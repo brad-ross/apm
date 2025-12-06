@@ -1,13 +1,54 @@
-#' Error metrics for masked cohort-outcome means
+#' Error Metrics for Masked Outcome Means
 #'
-#' Computes bias, standard error, and RMSE for masked cohort–outcome mean estimators
-#' using bootstrap draws, given the components returned by
-#' `est_target_param_components`.
+#' Computes prediction error metrics (bias, standard error, RMSE) for masked
+#' cohort-outcome means using bootstrap replicates.
 #'
-#' @param components The list returned by `est_target_param_components`.
+#' @description
+#' This function evaluates the quality of outcome mean predictions by comparing
+#' imputed values to held-out (masked) true values. It is used for cross-validation
+#' and out-of-sample prediction assessment.
+#'
+#' @details
+#' **Metrics Computed:**
+#' \itemize{
+#'   \item **Bias**: Mean prediction error (imputed - true).
+#'   \item **SE**: Standard error of predictions across bootstrap replicates.
+#'   \item **RMSE**: Root mean squared error.
+#' }
+#'
+#' The function requires that `est_target_param_components()` was called with
+#' `cohort_outcomes_to_mask` specified and bootstrap enabled.
+#'
+#' @param components The list returned by \code{\link{est_target_param_components}}
+#'   when using outcome masking and bootstrap.
 #'
 #' @return A data.frame with columns:
-#'  `cohort` (1-based), `outcome` (1-based), `spec`, `bias`, `se`, `rmse`, `cohort_pop_share`.
+#'   \describe{
+#'     \item{cohort}{Integer; 1-based cohort index.}
+#'     \item{outcome}{Integer; 1-based outcome index.}
+#'     \item{spec}{Character; estimation specification name.}
+#'     \item{bias}{Numeric; average prediction bias.}
+#'     \item{se}{Numeric; bootstrap standard error.}
+#'     \item{rmse}{Numeric; root mean squared error.}
+#'     \item{cohort_pop_share}{Numeric; cohort's share of total population.}
+#'   }
+#'
+#' @seealso \code{\link{est_target_param_components}} for running estimation with
+#'   masking enabled.
+#'
+#' @examples
+#' \dontrun{
+#' # Run estimation with masking
+#' components <- est_target_param_components(
+#'   panel, specs, bootstrap = wb,
+#'   cohort_outcomes_to_mask = list("1" = c(3L, 4L))
+#' )
+#'
+#' # Compute error metrics
+#' metrics <- est_masked_outcome_mean_err_metrics(components)
+#' print(metrics)
+#' }
+#'
 #' @export
 est_masked_outcome_mean_err_metrics <- function(components) {
   # Assume the R-level wrapper output of est_target_param_components()
