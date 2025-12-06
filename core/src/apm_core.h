@@ -1,6 +1,10 @@
 #ifndef APM_H
 #define APM_H
 
+//==============================================================================
+// Public APM API: factor alignment, imputation, and identification utilities.
+//==============================================================================
+
 #ifdef USING_R
 #include <RcppArmadillo.h>
 #else
@@ -108,15 +112,6 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
     const ObservedOutcomeIndices& observed_outcome_indices,
     const arma::vec& cohort_weights = arma::vec());
 
-/**
- * @brief Aggregate cohort-specific parameter estimates including bootstrap replicates.
- *
- * Aggregates point estimates and each bootstrap replicate independently using
- * optional weights (and optional per-bootstrap weights), returning a
- * FactorModelEstimates containing aggregated point estimates and aggregated
- * bootstrap replicates.
- */
-
 //==============================================================================
 // Outcome Imputation
 //==============================================================================
@@ -186,9 +181,9 @@ arma::vec impute_outcomes_from_obs_outcomes(
  *
  * Chooses the appropriate imputation routine based on the presence of outcome
  * fixed effects (g_0) and/or covariate coefficients (a) in
- * `apm::FactorModelParameters` (defined in `factor_model_parameter_structs.h`),
+ * `apm::FactorModelParameters` (defined in `cohort_specific_param_structs.h`),
  * and the presence of covariate means in
- * `apm::OutcomeMeanSufficientStatistics` (defined in `factor_model_parameter_structs.h`).
+ * `apm::OutcomeMeanSufficientStatistics` (defined in `cohort_specific_param_structs.h`).
  * Throws if covariate-related fields are inconsistent between inputs or if
  * dimensions are incompatible.
  *
@@ -256,22 +251,53 @@ arma::vec impute_outcomes(
  * - optional X_c (T x q) and a (q) covariate term, broadcast across cohorts
  *
  * Returns (G * L.t()).t() with optional addends broadcasted row-wise.
+ *
+ * @param G T x r factor matrix.
+ * @param L C x r cohort mean loadings.
+ * @return C x T matrix of cohort outcome means.
  */
 arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::mat& L);
 
+/**
+ * @brief Impute cohort outcome means with fixed effects.
+ *
+ * @param G T x r factor matrix.
+ * @param g_0 Length-T outcome fixed effects.
+ * @param L C x r cohort mean loadings.
+ * @return C x T matrix of cohort outcome means.
+ */
 arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
     const arma::mat& L);
 
+/**
+ * @brief Impute cohort outcome means with covariates.
+ *
+ * @param G T x r factor matrix.
+ * @param a Length-q covariate coefficients.
+ * @param X Vector of per-cohort covariate matrices (T x q each).
+ * @param L C x r cohort mean loadings.
+ * @return C x T matrix of cohort outcome means.
+ */
 arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::vec& a,
     const std::vector<arma::mat>& X,
     const arma::mat& L);
 
+/**
+ * @brief Impute cohort outcome means with fixed effects and covariates.
+ *
+ * @param G T x r factor matrix.
+ * @param g_0 Length-T outcome fixed effects.
+ * @param a Length-q covariate coefficients.
+ * @param X Vector of per-cohort covariate matrices (T x q each).
+ * @param L C x r cohort mean loadings.
+ * @return C x T matrix of cohort outcome means.
+ */
 arma::mat impute_outcomes_across_cohorts(
     const arma::mat& G,
     const arma::vec& g_0,
@@ -281,10 +307,20 @@ arma::mat impute_outcomes_across_cohorts(
 
 /**
  * @brief Dispatch overloads using FactorModelParameters; uses params.L and throws if absent.
+ *
+ * @param factor_model_parameters Factor model parameters containing G and L (and optional g_0, a).
+ * @return C x T matrix of cohort outcome means.
  */
 arma::mat impute_outcomes_across_cohorts(
     const FactorModelParameters& factor_model_parameters);
 
+/**
+ * @brief Impute cohort outcome means using parameters plus covariate means.
+ *
+ * @param factor_model_parameters Factor model parameters containing G, L, optional g_0, a.
+ * @param X Vector of per-cohort covariate means (T x q each).
+ * @return C x T matrix of cohort outcome means.
+ */
 arma::mat impute_outcomes_across_cohorts(
     const FactorModelParameters& factor_model_parameters,
     const std::vector<arma::mat>& X);
@@ -376,6 +412,14 @@ arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
 /**
  * @brief Convenience dispatcher: if L is present in parameters, use impute_outcomes_across_cohorts;
  *        otherwise impute from observed outcomes via impute_outcomes_across_cohorts_from_obs_outcomes.
+ *
+ * @param factor_model_parameters Factor model parameters containing G (T x r) and optional
+ *                                g_0 (length T), a (length q), and L (C x r cohort mean loadings).
+ * @param observed_outcome_indices A vector where each element is a vector of indices for the
+ *                                 observed outcomes for a cohort.
+ * @param suff_stats_vec A vector of `apm::OutcomeMeanSufficientStatistics`, one per cohort, each
+ *                       with observed_outcome_means (length T_c) and optional covar_means (T x q).
+ * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
  */
 arma::mat estimate_outcome_means_across_cohorts(
     const FactorModelParameters& factor_model_parameters,

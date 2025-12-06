@@ -1,7 +1,50 @@
-#' Target parameter estimates holder
+#' Target Parameter Estimates Container
 #'
-#' R6 wrapper for target parameter estimates: a point p-vector and optional
-#' bootstrap replicates.
+#' An R6 class that holds estimated target parameters (a p-dimensional vector)
+#' with optional bootstrap replicates for inference.
+#'
+#' @description
+#' `TargetParameterEstimates` stores the output of target parameter estimation,
+#' where target parameters are user-defined functions of cohort outcome means.
+#' Common examples include treatment effects, average differences across time
+#' periods, or policy-relevant aggregations.
+#'
+#' @details
+#' Target parameters are computed by applying \code{\link{est_target_params}} or
+#' the match attribution functions like \code{\link{est_fgw_bipartite_match_outcome_diff_params}}.
+#'
+#' @section Public Methods:
+#' \describe{
+#'   \item{\code{has_bootstrap()}}{Logical; whether bootstrap replicates exist.}
+#'   \item{\code{num_bootstraps()}}{Integer; number of bootstrap replicates (0 if none).}
+#'   \item{\code{p()}}{Integer; dimension of the target parameter vector.}
+#'   \item{\code{target_params(b = NULL)}}{Returns numeric vector of length p.
+#'         If `b` is NULL, returns point estimate; otherwise returns bootstrap
+#'         replicate `b` (1-indexed).}
+#'   \item{\code{boots_matrix()}}{Returns p x B matrix of all bootstrap replicates.}
+#'   \item{\code{subset(indices)}}{Returns a new `TargetParameterEstimates` object
+#'         containing only the elements at the specified indices. Both point estimates
+#'         and bootstrap replicates (if present) are subsetted. `indices` must be a
+#'         non-empty integer vector with values in `[1, p()]`.}
+#' }
+#'
+#' @seealso \code{\link{est_target_params}} for computing target parameters.
+#' @seealso \code{\link{target_param_inference}} for inference on target parameters.
+#' @seealso \code{\link{est_fgw_bipartite_match_outcome_diff_params}} for match
+#'   attribution parameters.
+#'
+#' @examples
+#' # TargetParameterEstimates is typically obtained from estimation functions
+#' \dontrun{
+#' tpe <- est_target_params(outcome_means, my_target_fn)
+#' tpe$p()              # Dimension of target
+#' tpe$target_params()  # Point estimate
+#' tpe$has_bootstrap()  # Check for bootstrap
+#'
+#' # Subset to first 3 parameters
+#' tpe_sub <- tpe$subset(1:3)
+#' tpe_sub$p()          # Now 3
+#' }
 #'
 #' @export
 TargetParameterEstimates <- R6::R6Class(
@@ -33,17 +76,84 @@ TargetParameterEstimates <- R6::R6Class(
   private = list(xp = NULL)
 )
 
-#' Estimate target parameters from estimated means (and optional aux means)
+#' Estimate Target Parameters from Outcome Means
 #'
-#' Dispatch based on the type of `outcome_means`.
+#' Applies a user-defined target function to estimated outcome means to compute
+#' target parameters of interest, with optional bootstrap replicates.
 #'
-#' @param outcome_means `OutcomeMeansEstimates` or named list of them (by spec).
-#' @param fn function(Y, eta = NULL) returning numeric vector length p.
-#' @param aux_means optional list (one entry per cohort) of `CohortAuxiliaryDataMeanEstimates`.
-#'   NULL is allowed when no auxiliary statistics are needed.
-#' @param suff_stats optional list (one entry per cohort) of `OutcomeMeanSuffStatEstimates`.
-#'   NULL indicates that sufficient statistics are unavailable.
-#' @return `TargetParameterEstimates` R6 object or named list of them (by spec).
+#' @description
+#' This function takes estimated cohort-by-outcome means and applies a custom
+#' function to compute target parameters.
+#'
+#' @details
+#' **Target Function Signature:**
+#'
+#' The `fn` argument must be a function with signature:
+#'
+#' `fn(Y, shares, observed_means, covar_means, eta)`
+#'
+#' where:
+#' \itemize{
+#'   \item `Y`: C x T numeric matrix of (imputed) cohort-by-outcome means
+#'   \item `shares`: length-C numeric vector of cohort population shares
+#'   \item `observed_means`: length-C list of observed outcome means per cohort
+#'   \item `covar_means`: length-C list of covariate means matrices (or NULL)
+#'   \item `eta`: length-C list of auxiliary data matrices per cohort
+#' }
+#'
+#' The function must return a numeric vector of length p (the target dimension).
+#'
+#' When bootstrap replicates are present in `outcome_means`, the function is
+#' applied to each bootstrap replicate to enable inference.
+#'
+#' **Performance Note:**
+#'
+#' Custom R functions passed to `fn` are executed single-threaded across
+#' bootstrap replicates because calling R from multiple C++ threads is unsafe.
+#' For maximum performance with bootstrap inference, use the built-in target
+#' functions (e.g., match attribution functions like
+#' \code{\link{est_fgw_bipartite_match_outcome_diff_params}}) which are
+#' implemented in C++ and fully parallelized across bootstrap draws.
+#'
+#' @param outcome_means An \code{\link{OutcomeMeansEstimates}} R6 object, or a
+#'   named list of such objects (for by-spec estimation).
+#' @param fn A function with signature `fn(Y, shares, observed_means, covar_means, eta)`
+#'   that takes outcome means and cohort statistics, returning a numeric vector
+#'   of target parameters. See Details for the full specification of each argument.
+#' @param aux_means Optional list (one entry per cohort) of
+#'   \code{\link{CohortAuxiliaryDataMeanEstimates}} objects. Passed to `fn` as
+#'   the `eta` argument. Use `NULL` when no auxiliary data is needed.
+#' @param suff_stats Optional list (one entry per cohort) of
+#'   \code{\link{OutcomeMeanSuffStatEstimates}} objects. Provides additional
+#'   cohort-level statistics if needed.
+#'
+#' @return For single-spec input: a \code{\link{TargetParameterEstimates}} R6 object.
+#'
+#'   For by-spec input: a named list of `TargetParameterEstimates` objects.
+#'
+#' @seealso \code{\link{TargetParameterEstimates}} for the returned object.
+#' @seealso \code{\link{target_param_inference}} for computing inference.
+#' @seealso \code{\link{est_target_param_components}} for end-to-end estimation.
+#'
+#' @examples
+#' # Define a simple target function: average outcome across all cohorts and times
+#' # Note: fn receives 5 arguments but you can ignore unused ones
+#' avg_outcome_fn <- function(Y, shares, observed_means, covar_means, eta) {
+#'   c(grand_mean = mean(Y))
+#' }
+#'
+#' # Weighted average using cohort shares
+#' weighted_avg_fn <- function(Y, shares, observed_means, covar_means, eta) {
+#'   cohort_means <- rowMeans(Y)  # Mean outcome per cohort
+#'   c(weighted_mean = sum(shares * cohort_means))
+#' }
+#'
+#' \dontrun{
+#' # Apply to outcome means
+#' tpe <- est_target_params(outcome_means, avg_outcome_fn)
+#' tpe$target_params()  # The estimated grand mean
+#' }
+#'
 #' @export
 est_target_params <- function(outcome_means, fn, aux_means = NULL, suff_stats = NULL) {
   if (inherits(outcome_means, "OutcomeMeansEstimates")) {
@@ -55,14 +165,39 @@ est_target_params <- function(outcome_means, fn, aux_means = NULL, suff_stats = 
   stop("Invalid 'outcome_means': expected an OutcomeMeansEstimates object or a named list of them.")
 }
 
-#' Difference between two target parameter estimates
+#' Difference Between Two Target Parameter Estimates
 #'
-#' Computes `target_params_1 - target_params_2` entrywise for the point estimates
-#' and, when available, for each bootstrap replicate.
+#' @description
+#' Computes elementwise differences between two `TargetParameterEstimates` objects,
+#' useful for comparing specifications or computing contrasts.
 #'
-#' @param target_params_1 `TargetParameterEstimates`
-#' @param target_params_2 `TargetParameterEstimates`
-#' @return `TargetParameterEstimates`
+#' @details
+#' Computes the elementwise difference `target_params_1 - target_params_2` for
+#' point estimates and, when available, for each bootstrap replicate.
+#' Both inputs must have the same dimension `p()`. If bootstrap replicates are
+#' present, both inputs must have bootstrap replicates with the same number of
+#' draws `B`. The resulting object has the same `p()` and `B` as the inputs.
+#'
+#' This is useful for computing treatment effects or contrasts between two
+#' estimators or specifications.
+#'
+#' @param target_params_1 A \code{\link{TargetParameterEstimates}} R6 object.
+#' @param target_params_2 A \code{\link{TargetParameterEstimates}} R6 object
+#'   with the same `p()` and bootstrap structure as `target_params_1`.
+#'
+#' @return A \code{\link{TargetParameterEstimates}} R6 object containing the
+#'   elementwise difference.
+#'
+#' @seealso \code{\link{combine_target_param_ests}} for concatenating estimates.
+#' @seealso \code{\link{TargetParameterEstimates}} for the returned object.
+#'
+#' @examples
+#' \dontrun{
+#' # Compare two estimation specifications
+#' tpe_diff <- get_target_param_diff_ests(tpe_spec1, tpe_spec2)
+#' tpe_diff$target_params()  # Difference in point estimates
+#' }
+#'
 #' @export
 get_target_param_diff_ests <- function(target_params_1, target_params_2) {
   stopifnot(inherits(target_params_1, "TargetParameterEstimates"))
@@ -74,16 +209,49 @@ get_target_param_diff_ests <- function(target_params_1, target_params_2) {
   TargetParameterEstimates$new(xp)
 }
 
-#' Combine target parameter estimates
+#' Combine Target Parameter Estimates
 #'
-#' If `target_params_1` is a list of `TargetParameterEstimates`, combines all
-#' elements by concatenating their point vectors and stacking bootstrap
-#' replicate matrices. Otherwise, combines two `TargetParameterEstimates`
-#' provided in `target_params_1` and `target_params_2`.
+#' Concatenates multiple target parameter estimate objects into a single object
+#' by stacking their point estimate vectors and bootstrap replicate matrices.
 #'
-#' @param target_params_1 `TargetParameterEstimates` or a non-empty list of them
-#' @param target_params_2 optional `TargetParameterEstimates` when combining two
-#' @return `TargetParameterEstimates`
+#' @description
+#' This function supports two calling conventions:
+#' \itemize{
+#'   \item **List input**: Pass a list of `TargetParameterEstimates` objects as
+#'         `target_params_1` (with `target_params_2 = NULL`).
+#'   \item **Pairwise input**: Pass two `TargetParameterEstimates` objects as
+#'         `target_params_1` and `target_params_2`.
+#' }
+#'
+#' @details
+#' All inputs must have the same bootstrap structure: either all have bootstrap
+#' replicates with the same number of draws `B`, or none have bootstrap replicates.
+#' The resulting object has dimension equal to the sum of the input dimensions.
+#'
+#' This is useful for aggregating target parameters across different outcomes,
+#' cohorts, or analysis components.
+#'
+#' @param target_params_1 A \code{\link{TargetParameterEstimates}} R6 object, or
+#'   a non-empty list of such objects.
+#' @param target_params_2 A \code{\link{TargetParameterEstimates}} R6 object when
+#'   combining two objects. Must be `NULL` when `target_params_1` is a list.
+#'
+#' @return A \code{\link{TargetParameterEstimates}} R6 object with `p()` equal to
+#'   the sum of the input dimensions.
+#'
+#' @seealso \code{\link{get_target_param_diff_ests}} for computing differences.
+#' @seealso \code{\link{TargetParameterEstimates}} for the returned object.
+#'
+#' @examples
+#' \dontrun{
+#' # Combine two estimate objects
+#' tpe_combined <- combine_target_param_ests(tpe1, tpe2)
+#'
+#' # Combine a list of estimate objects
+#' tpe_all <- combine_target_param_ests(list(tpe1, tpe2, tpe3))
+#' tpe_all$p()  # Sum of individual p() values
+#' }
+#'
 #' @export
 combine_target_param_ests <- function(target_params_1, target_params_2 = NULL) {
   if (is.list(target_params_1)) {
@@ -113,18 +281,83 @@ combine_target_param_ests <- function(target_params_1, target_params_2 = NULL) {
 # -----------------------------------------------------------------------------
 # End-to-end wrapper
 # -----------------------------------------------------------------------------
-#' End-to-end: estimate target parameter components across cohorts (by spec)
+#' Estimate Target Parameter Components (End-to-End)
 #'
-#' This runs cohort-specific estimation and immediately aggregates/estimates cohort
-#' mean outcomes across cohorts, returning a list with:
-#' - outcome_means: named list (by spec) of `OutcomeMeansEstimates` objects
-#' - cohort_outcome_mean_ests: list of `OutcomeMeanSuffStatEstimates` (one per cohort)
-#' - cohort_auxiliary_means: list of `CohortAuxiliaryDataMeanEstimates` (one per cohort), or NULL if none
-#' - masked_cohort_outcome_means / masked_observed_outcome_indices: present when masking is used
-#' - cohort_outcome_mask: named list of masked outcome indices when masking is used
+#' Performs complete end-to-end estimation from panel data to outcome means,
+#' combining cohort-specific estimation, aggregation, and outcome mean computation
+#' in a single efficient pipeline.
+#'
+#' @description
+#' This is a convenience function that wraps the entire estimation pipeline:
+#' \enumerate{
+#'   \item Cohort-specific factor model estimation
+#'   \item Factor aggregation across cohorts
+#'   \item Outcome mean estimation via imputation
+#' }
+#'
+#' The output contains all intermediate results needed for target parameter
+#' estimation and inference.
+#'
+#' @details
+#' **Imputation Options:**
+#'
+#' When `est_outcome_means_via_imputation = TRUE` (default), unobserved outcomes
+#' are imputed using the estimated factor model. The `imputation_options` argument
+#' controls the imputation algorithm. See \code{\link{comp_imputation_components}}
+#' for the full list of available options including solver choice, convergence
+#' tolerances, and LSMR-specific settings.
+#'
+#' **Outcome Masking:**
+#'
+#' Use `cohort_outcomes_to_mask` for cross-validation or out-of-sample evaluation.
+#' Masked outcomes are excluded from estimation but their true values are preserved.
+#' See \code{\link{est_cohort_specific_params}} for details on the masking format.
 #'
 #' @inheritParams est_cohort_specific_params
-#' @return list with the components described above.
+#' @param est_outcome_means_via_imputation Logical; if `TRUE` (default), compute
+#'   outcome means by imputing unobserved outcomes. If `FALSE`, use only observed
+#'   outcome means (no imputation).
+#' @param imputation_options Optional named list of imputation algorithm options.
+#'   See \code{\link{comp_imputation_components}} for the full list of options.
+#'
+#' @return A named list with:
+#'   \describe{
+#'     \item{outcome_means}{Named list (by spec) of \code{\link{OutcomeMeansEstimates}}
+#'           objects containing C x T cohort-by-outcome mean matrices.}
+#'     \item{cohort_outcome_mean_ests}{List (by cohort) of
+#'           \code{\link{OutcomeMeanSuffStatEstimates}} objects.}
+#'     \item{cohort_auxiliary_means}{List (by cohort) of
+#'           \code{\link{CohortAuxiliaryDataMeanEstimates}}, or NULL.}
+#'     \item{masked_cohort_outcome_means}{(When masking) True means for masked outcomes.}
+#'     \item{masked_observed_outcome_indices}{(When masking) Outcome indices after masking.}
+#'     \item{cohort_outcome_mask}{(When masking) Named list of masked outcome indices.}
+#'   }
+#'
+#' @seealso \code{\link{est_cohort_specific_params}} for cohort-specific estimation.
+#' @seealso \code{\link{comp_imputation_components}} for imputation options details.
+#' @seealso \code{\link{est_target_params}} for computing target parameters from
+#'   the returned outcome means.
+#' @seealso \code{\link{target_param_inference}} for inference.
+#'
+#' @examples
+#' \dontrun{
+#' # End-to-end estimation
+#' components <- est_target_param_components(
+#'   panel = panel,
+#'   est_specs = list(
+#'     pc_r2 = list(
+#'       factor_model_estimator = "principal_components",
+#'       include_outcome_fes = TRUE,
+#'       r = 2L
+#'     )
+#'   ),
+#'   bootstrap = wb
+#' )
+#'
+#' # Compute target parameters
+#' tpe <- est_target_params(components$outcome_means, my_target_fn)
+#' }
+#'
 #' @export
 est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_threads = NULL,
                                        cohort_outcomes_to_mask = NULL,
@@ -339,11 +572,54 @@ est_target_param_components <- function(panel, est_specs, bootstrap = NULL, num_
   shared
 }
 
-#' Target-parameter inference (single or by spec)
-#' @param tpe TargetParameterEstimates or named list of them
-#' @param panel an UnbalancedPanel
-#' @param sig_level significance level in (0,1)
-#' @return SimultaneousInferenceResults or named list (by spec) of them
+#' Compute Inference for Target Parameters
+#'
+#' Computes bootstrap-based inference (standard errors, confidence intervals,
+#' confidence bands, p-values) for estimated target parameters.
+#'
+#' @description
+#' This function takes target parameter estimates with bootstrap replicates
+#' and computes:
+#' \itemize{
+#'   \item Robust standard errors (IQR-based)
+#'   \item Pointwise t-statistics and p-values
+#'   \item Pointwise confidence intervals
+#'   \item Romano–Wolf stepdown adjusted p-values (FWER-controlling)
+#'   \item Simultaneous confidence bands (FWER-controlling)
+#' }
+#'
+#' @param tpe A \code{\link{TargetParameterEstimates}} R6 object with bootstrap
+#'   replicates, or a named list of such objects (for by-spec inference).
+#' @param panel An \code{\link{UnbalancedPanel}} R6 object (used to determine
+#'   sample size for standard error computation).
+#' @param sig_level Numeric; significance level for confidence intervals and
+#'   bands, must be in (0, 1). Default is 0.05 for 95% intervals.
+#'
+#' @return For single-spec input: a \code{\link{SimultaneousInferenceResults}}
+#'   R6 object.
+#'
+#'   For by-spec input: a named list of `SimultaneousInferenceResults` objects.
+#'
+#' @seealso \code{\link{SimultaneousInferenceResults}} for accessing inference results.
+#' @seealso \code{\link{est_target_params}} for computing target parameters.
+#' @seealso \code{\link{combine_inference_results_across_specs}} for combining
+#'   results across specifications.
+#'
+#' @examples
+#' \dontrun{
+#' # After target parameter estimation
+#' tpe <- est_target_params(outcome_means, my_fn)
+#'
+#' # Compute inference
+#' sir <- target_param_inference(tpe, panel, sig_level = 0.05)
+#'
+#' # Access results
+#' sir$point()       # Point estimates
+#' sir$std_error()   # Standard errors
+#' sir$ci()          # Confidence intervals
+#' sir$as_data_frame()
+#' }
+#'
 #' @export
 target_param_inference <- function(tpe, panel, sig_level = 0.05) {
   stopifnot(inherits(panel, "UnbalancedPanel"))

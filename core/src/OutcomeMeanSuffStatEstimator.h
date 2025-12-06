@@ -63,8 +63,8 @@ public:
     /**
      * @brief Add a batch of units' data.
      * @param unit_idxs Indexes of units included in this batch (used for bootstrap weighting).
-     * @param Y Matrix of outcomes with shape T_c x N_batch, where each column corresponds to a unit.
-     * @param X Optional cube of covariates with shape T x q x N_batch, aligned to Y's unit order.
+     * @param Y Matrix of outcomes with shape N_batch x T_c, where each row corresponds to a unit.
+     * @param X Optional cube of covariates with shape N_batch x T x q, aligned to Y's unit order.
      *
      * Aggregates point-estimate means and, when a bootstrap is attached, aggregates bootstrap-weighted
      * means for each replicate using weights derived from `unit_idxs`.
@@ -85,11 +85,9 @@ public:
 
     /**
      * @brief Finalize and return sufficient statistics and optional bootstrap replicates.
+     *
+     * @param total_units Total number of unique units across all cohorts (used to compute cohort population shares).
      * @return Aggregated outcome mean sufficient statistics and, when available, bootstrap replicates.
-     */
-    /**
-     * @brief Finalize estimates using the total number of unique units across all cohorts.
-     * @param total_units Total number of unique units across all cohorts.
      */
     OutcomeMeanSuffStatEstimates estimate(std::size_t total_units) const;
 

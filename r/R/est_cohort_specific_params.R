@@ -12,33 +12,119 @@ validate_mask_arg <- function(mask) {
     invisible(NULL)
 }
 
-#' Cohort-specific parameter estimation (thin wrapper to Rcpp)
+#' Estimate Cohort-Specific Factor Model Parameters
 #'
-#' @param panel UnbalancedPanel instance
-#' @param est_specs named list of specs; each spec is a list with fields:
-#'   - factor_model_estimator: character(1), currently only "principal_components" is supported.
-#'       Uses a principal components estimator for cohort-specific factor matrices; when
-#'       `include_outcome_fes = TRUE`, the estimator jointly recovers outcome fixed effects.
-#'   - include_outcome_fes: logical(1). If TRUE, include cohort-specific outcome fixed effects
-#'       (g_0) in estimation and results; if FALSE, estimate factors only.
-#'   - r: integer(1). The factor model rank (number of latent factors) to estimate
-#'       within each cohort.
-#'   - cohort_weighting: character(1), one of "equal" (default) or "by_size".
-#'       Under "equal", the cohort weights are uniform 1/C for the point estimate and,
-#'       when present, each bootstrap draw. Choosing "by_size" weights cohorts by their
-#'       share of total units (or total bootstrap weight masses) when computing point
-#'       and bootstrap replicate weights.
-#' @param bootstrap optional WeightedBootstrap
-#' @param num_threads integer number of threads (default 1L). If NULL, uses the
-#'   core default (serial or TBB default, depending on build).
-#' @param cohort_outcomes_to_mask named list: names are cohort ids (1-based); each value is an
-#'   integer vector of 1-based outcome ids to mask in that cohort.
-#' @return list with:
-#'   - cohort_specific_factor_ests: named list over spec keys; each is a list over cohorts of FactorModelEstimates
-#'   - cohort_outcome_means: list over cohorts of OutcomeMeanSuffStatEstimates
-#'   - cohort_weights: named list over spec keys of CohortWeightEstimates
-#'   - optionally masked_observed_outcome_indices, masked_cohort_outcome_means when masking is used
-#'   - optionally cohort_outcome_mask (named list of masked outcome indices per cohort) when masking is used
+#' Estimates factor model parameters (factors G, optional fixed effects g0,
+#' optional covariate coefficients a) separately for each cohort in an unbalanced
+#' panel, along with cohort weights and outcome mean sufficient statistics.
+#'
+#' @description
+#' This is a core estimation function that processes an \code{\link{UnbalancedPanel}}
+#' to produce:
+#' \itemize{
+#'   \item Per-cohort factor model estimates for each specification
+#'   \item Cohort-level sufficient statistics for outcome means
+#'   \item Cohort weights for subsequent aggregation
+#' }
+#'
+#' Multiple estimation specifications can be run simultaneously (e.g., different
+#' ranks or with/without fixed effects), improving efficiency through shared
+#' data processing and parallelization across cohorts.
+#'
+#' @details
+#' **Estimation Specifications:**
+#'
+#' Each element of `est_specs` is a named list specifying one estimation approach:
+#' \describe{
+#'   \item{factor_model_estimator}{Character; currently only `"principal_components"`
+#'         and "twfe" are supported. If "principal_components", uses PCA on cohort outcome data to extract factors.
+#'         If "twfe", estimates a rank-0 factor model with only outcome fixed effects.}
+#'   \item{include_outcome_fes}{Logical; if `TRUE`, jointly estimate outcome fixed
+#'         effects g0 alongside factors G.}
+#'   \item{r}{Integer; the factor model rank (number of latent factors).}
+#'   \item{cohort_weighting}{Character; either `"equal"` (default) for uniform
+#'         weights 1/C, or `"by_size"` to weight cohorts by their share of units.}
+#' }
+#'
+#' **Outcome Masking:**
+#'
+#' The `cohort_outcomes_to_mask` argument allows holding out specific outcomes 
+#' for specific cohorts for cross-validation or out-of-sample prediction. 
+#' Masked outcomes are excluded from factor estimation but their true values are 
+#' preserved for evaluation.
+#'
+#' @param panel An \code{\link{UnbalancedPanel}} R6 object containing the panel data.
+#' @param est_specs A named list of estimation specifications. Each element is a
+#'   list with fields: `factor_model_estimator`, `include_outcome_fes`, `r`, and
+#'   optionally `cohort_weighting`. See Details.
+#' @param bootstrap Optional \code{\link{WeightedBootstrap}} object for bootstrap
+#'   inference. If provided, all estimates include bootstrap replicates.
+#' @param num_threads Integer; number of threads for parallel computation
+#'   (default: 1). Set to `NULL` to use the library default.
+#' @param cohort_outcomes_to_mask Optional named list for outcome masking. Names
+#'   are cohort IDs (as character strings of 1-based integers); values are integer
+#'   vectors of 1-based outcome indices to mask in that cohort.
+#'
+#' @return A named list with:
+#'   \describe{
+#'     \item{cohort_specific_factor_ests}{Named list (by spec) of lists (by cohort)
+#'           of \code{\link{FactorModelEstimates}} objects.}
+#'     \item{cohort_outcome_means}{List (by cohort) of
+#'           \code{\link{OutcomeMeanSuffStatEstimates}} objects.}
+#'     \item{cohort_weights}{Named list (by spec) of
+#'           \code{\link{CohortWeightEstimates}} objects.}
+#'     \item{cohort_auxiliary_means}{(When auxiliary columns exist) List (by cohort)
+#'           of \code{\link{CohortAuxiliaryDataMeanEstimates}} objects.}
+#'     \item{masked_observed_outcome_indices}{(When masking) List of remaining observed outcome indices
+#'           after masking for each cohort.}
+#'     \item{masked_cohort_outcome_means}{(When masking) True means for masked cohort outcomes.}
+#'     \item{cohort_outcome_mask}{(When masking) Named list of masked outcome indices.}
+#'   }
+#'
+#' @seealso \code{\link{UnbalancedPanel}} for creating the input panel.
+#' @seealso \code{\link{aggregate_factor_model_params}} for aggregating across cohorts.
+#' @seealso \code{\link{est_target_param_components}} for end-to-end estimation.
+#'
+#' @examples
+#' # Create synthetic panel
+#' set.seed(123)
+#' panel_df <- data.frame(
+#'   unit = rep(1:50, each = 4),
+#'   time = rep(1:4, 50),
+#'   y = rnorm(200)
+#' )
+#' panel_df <- panel_df[sample(nrow(panel_df), 180), ]  # Make unbalanced
+#'
+#' # Create UnbalancedPanel
+#' panel <- UnbalancedPanel$new(
+#'   panel_df = panel_df,
+#'   unit_id_col = "unit",
+#'   outcome_id_col = "time",
+#'   outcome_value_col = "y",
+#'   model_rank = 2
+#' )
+#'
+#' # Define estimation specifications
+#' specs <- list(
+#'   pc_r2 = list(
+#'     factor_model_estimator = "principal_components",
+#'     include_outcome_fes = FALSE,
+#'     r = 2L
+#'   ),
+#'   pc_fe_r2 = list(
+#'     factor_model_estimator = "principal_components",
+#'     include_outcome_fes = TRUE,
+#'     r = 2L
+#'   )
+#' )
+#'
+#' # Estimate
+#' results <- est_cohort_specific_params(panel, specs)
+#'
+#' # Access results
+#' names(results$cohort_specific_factor_ests)  # Spec names
+#' length(results$cohort_outcome_means)        # Number of cohorts
+#'
 #' @export
 est_cohort_specific_params <- function(panel, est_specs, bootstrap = NULL, num_threads = 1L,
                                        cohort_outcomes_to_mask = NULL) {

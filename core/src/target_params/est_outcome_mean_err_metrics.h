@@ -3,6 +3,10 @@
 #ifndef APM_EST_MASKED_OUTCOME_MEAN_ERR_METRICS_H
 #define APM_EST_MASKED_OUTCOME_MEAN_ERR_METRICS_H
 
+//==============================================================================
+// Error metrics for masked outcome means (bias, SE, RMSE) by cohort/outcome.
+//==============================================================================
+
 #include <cstddef>
 #include <limits>
 #include <string>
@@ -13,16 +17,28 @@
 
 namespace apm {
 
+/**
+ * @brief Bias, standard error, and RMSE for outcome mean estimates by spec.
+ */
 struct OutcomeMeanErrMetrics {
-    std::unordered_map<std::string, double> bias_by_spec;
-    std::unordered_map<std::string, double> se_by_spec;
-    std::unordered_map<std::string, double> rmse_by_spec;
-    double cohort_pop_share = std::numeric_limits<double>::quiet_NaN();
+    std::unordered_map<std::string, double> bias_by_spec; ///< Bias per estimator spec (masked predicted mean minus true masked mean).
+    std::unordered_map<std::string, double> se_by_spec;   ///< Standard error per estimator spec (bootstrap or analytic).
+    std::unordered_map<std::string, double> rmse_by_spec; ///< Root mean squared error per estimator spec.
+    double cohort_pop_share = std::numeric_limits<double>::quiet_NaN(); ///< Cohort population share.
 };
 
+/** @brief Type alias for a (cohort index, outcome index) pair. */
 using CohortOutcomeIndex = std::pair<std::size_t, std::size_t>;
 
+/**
+ * @brief Hash functor for CohortOutcomeIndex pairs, enabling use as unordered_map keys.
+ */
 struct CohortOutcomeIndexHash {
+    /**
+     * @brief Compute hash for a (cohort, outcome) index pair.
+     * @param p The (cohort, outcome) pair to hash.
+     * @return Hash value.
+     */
     std::size_t operator()(const CohortOutcomeIndex& p) const noexcept {
         // FNV-1a style hash combine on the two coordinates
         std::size_t h = 1469598103934665603ull;
@@ -32,6 +48,12 @@ struct CohortOutcomeIndexHash {
     }
 };
 
+/**
+ * @brief Estimate masked outcome mean error metrics (bias, SE, RMSE) by estimator specification for all cohort/outcome pairs.
+ *
+ * @param components Target parameter components including masks and means.
+ * @return Map from (cohort, outcome) -> OutcomeMeanErrMetrics (bias, SE, RMSE per spec, plus cohort share).
+ */
 std::unordered_map<CohortOutcomeIndex, OutcomeMeanErrMetrics, CohortOutcomeIndexHash>
 est_masked_outcome_mean_err_metrics(const TargetParamComponents& components);
 

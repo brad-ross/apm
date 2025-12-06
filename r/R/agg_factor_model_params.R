@@ -1,21 +1,73 @@
-#' Aggregate factor model parameters across cohorts
+#' Aggregate Factor Model Parameters Across Cohorts
 #'
-#' Aggregates per-cohort factor model parameter estimates (factors `G`, optional
-#' outcome fixed effects `g0`, and optional covariate coefficients `a`) into a
-#' single set of parameters. Bootstrap replicates, when present in the inputs and
-#' weights, are aggregated per draw.
+#' Aggregates per-cohort factor model parameter estimates into a single set of
+#' panel-level parameters using the Aggregated Projection Matrix (APM) method.
 #'
-#' @param per_cohort_factor_estimates list of `FactorModelEstimates` R6 objects
-#'   (length = number of cohorts). Each element must carry point estimates and
-#'   optionally bootstrap replicates with consistent `B` across cohorts.
-#' @param observed_outcome_indices list of integer vectors (1-based indices) of
-#'   observed outcomes for each cohort.
-#' @param cohort_weights either a single `CohortWeightEstimates` R6 object, or a
-#'   named list of `CohortWeightEstimates` R6 objects (by-spec aggregation).
+#' @description
+#' This function combines cohort-specific factor estimates (G matrices, optional
+#' outcome fixed effects g0, optional covariate coefficients a) into aggregated
+#' panel-level parameters. The APM method aligns factors across cohorts that
+#' observe different subsets of outcomes.
 #'
-#' @return If `cohort_weights` is a single `CohortWeightEstimates`, returns a
-#'   `FactorModelEstimates` R6 object. If `cohort_weights` is a named list,
-#'   returns a named list of `FactorModelEstimates` R6 objects.
+#' @details
+#' **Aggregation Method:**
+#'
+#' The APM method works as follows:
+#' \enumerate{
+#'   \item Construct a weighted aggregated projection matrix from cohort-specific
+#'         factor matrices.
+#'   \item Compute an orthonormal basis for the estimated null space of this matrix.
+#'   \item This basis forms the aggregated factor matrix G.
+#' }
+#'
+#' **Component Aggregation:**
+#' \itemize{
+#'   \item **Factors G**: Aligned using the APM method to produce a T x r matrix.
+#'   \item **Fixed effects g0**: Weighted average across cohorts for each outcome.
+#'   \item **Covariate coefficients a**: Weighted average across cohorts.
+#' }
+#'
+#' When bootstrap replicates are present, aggregation is performed independently
+#' for each bootstrap draw using the corresponding bootstrap weights.
+#'
+#' @param per_cohort_factor_estimates List of \code{\link{FactorModelEstimates}}
+#'   R6 objects (one per cohort), or a named list (by-spec) of such lists.
+#'   Each element must have consistent bootstrap counts (all have B replicates
+#'   or none have bootstrap).
+#' @param observed_outcome_indices List of integer vectors; element c contains
+#'   the 1-based outcome indices observed by cohort c.
+#' @param cohort_weights A \code{\link{CohortWeightEstimates}} R6 object for
+#'   single-spec aggregation, or a named list of such objects (by-spec) matching
+#'   the specification names in `per_cohort_factor_estimates`.
+#'
+#' @return For single-spec input: a \code{\link{FactorModelEstimates}} R6 object
+#'   containing aggregated parameters.
+#'
+#'   For by-spec input: a named list of `FactorModelEstimates` objects (one per
+#'   specification).
+#'
+#' @seealso \code{\link{align_factors_using_apm}} for the underlying alignment method.
+#' @seealso \code{\link{compute_aggregated_projection_matrix}} for the APM computation.
+#' @seealso \code{\link{est_cohort_specific_params}} for obtaining cohort estimates.
+#' @seealso \code{\link{estimate_outcome_means_across_cohorts}} for using aggregated
+#'   parameters.
+#'
+#' @examples
+#' # This function is typically used in a pipeline
+#' \dontrun{
+#' # After cohort-specific estimation
+#' results <- est_cohort_specific_params(panel, specs)
+#'
+#' # Aggregate parameters
+#' agg <- aggregate_factor_model_params(
+#'   per_cohort_factor_estimates = results$cohort_specific_factor_ests$my_spec,
+#'   observed_outcome_indices = panel$get_observed_outcome_indices(),
+#'   cohort_weights = results$cohort_weights$my_spec
+#' )
+#'
+#' # Access aggregated factors
+#' G <- agg$G()  # T x r matrix
+#' }
 #'
 #' @export
 aggregate_factor_model_params <- function(per_cohort_factor_estimates, observed_outcome_indices, cohort_weights) {

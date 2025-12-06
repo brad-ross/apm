@@ -54,8 +54,10 @@
 #'     Returns the object itself (invisibly).
 #'   }
 #'
-#'   \item{estimate()}{{Finalize and return} an \link{OutcomeMeanSuffStatEstimates}
-#'     object containing point estimates and, when available, bootstrap replicates.}
+#'   \item{estimate(total_units)}{{Finalize and return} an \link{OutcomeMeanSuffStatEstimates}
+#'     object containing point estimates and, when available, bootstrap replicates.
+#'     \code{total_units} is the total number of units across all cohorts, used to compute
+#'     cohort population shares.}
 #'
 #'   \item{T_c(), T(), q()}{{Accessors for} the configured dimensions.}
 #'
@@ -159,6 +161,11 @@ OutcomeMeanSuffStatEstimator <- R6::R6Class(
 #'
 #'   \item{covar_means(b = NULL)}{
 #'     Numeric matrix (T x q) of covariate means if covariates were tracked; otherwise NULL.
+#'     If `b` is NULL, returns the point estimate; otherwise returns replicate `b` (1-indexed).
+#'   }
+#'
+#'   \item{cohort_pop_share(b = NULL)}{
+#'     Numeric scalar representing the cohort's share of the total population.
 #'     If `b` is NULL, returns the point estimate; otherwise returns replicate `b` (1-indexed).
 #'   }
 #' }
