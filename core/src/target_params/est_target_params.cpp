@@ -177,6 +177,92 @@ TargetParameterEstimates get_target_param_diff_ests(
     return TargetParameterEstimates(std::move(point), std::move(boots));
 }
 
+TargetParameterEstimates combine_target_param_ests(
+    const TargetParameterEstimates& target_params_1,
+    const TargetParameterEstimates& target_params_2)
+{
+    const std::size_t p1 = static_cast<std::size_t>(target_params_1.point.n_elem);
+    const std::size_t p2 = static_cast<std::size_t>(target_params_2.point.n_elem);
+
+    const bool has_boots_1 = target_params_1.has_bootstrap_replicates();
+    const bool has_boots_2 = target_params_2.has_bootstrap_replicates();
+
+    arma::vec point = arma::join_cols(target_params_1.point, target_params_2.point);
+
+    if (!has_boots_1 && !has_boots_2) {
+        arma::mat boots;
+        boots.set_size(static_cast<arma::uword>(p1 + p2), arma::uword(0));
+        return TargetParameterEstimates(std::move(point), std::move(boots));
+    }
+
+    if (has_boots_1 != has_boots_2) {
+        throw std::invalid_argument("combine_target_param_ests: both inputs must either include or omit bootstrap replicates.");
+    }
+
+    const std::size_t B1 = target_params_1.n_bootstrap_replicates();
+    const std::size_t B2 = target_params_2.n_bootstrap_replicates();
+    if (B1 != B2) {
+        throw std::invalid_argument("combine_target_param_ests: bootstrap replicate counts must match.");
+    }
+
+    if (static_cast<std::size_t>(target_params_1.bootstrap_replicates.n_rows) != p1 ||
+        static_cast<std::size_t>(target_params_2.bootstrap_replicates.n_rows) != p2) {
+        throw std::invalid_argument("combine_target_param_ests: bootstrap matrices must have p rows.");
+    }
+
+    arma::mat boots = arma::join_cols(target_params_1.bootstrap_replicates, target_params_2.bootstrap_replicates);
+    return TargetParameterEstimates(std::move(point), std::move(boots));
+}
+
+TargetParameterEstimates combine_target_param_ests(
+    const std::vector<TargetParameterEstimates>& targets)
+{
+    if (targets.empty()) {
+        throw std::invalid_argument("combine_target_param_ests: input vector must be non-empty.");
+    }
+    TargetParameterEstimates out = targets.front();
+    for (std::size_t i = 1; i < targets.size(); ++i) {
+        out = combine_target_param_ests(out, targets[i]);
+    }
+    return out;
+}
+
+TargetParameterEstimates subset_target_param_ests(
+    const TargetParameterEstimates& target_params,
+    const arma::uvec& indices)
+{
+    const std::size_t p = target_params.p();
+    for (arma::uword i = 0; i < indices.n_elem; ++i) {
+        if (indices(i) >= p) {
+            throw std::invalid_argument("subset_target_param_ests: index out of range.");
+        }
+    }
+
+    arma::vec point = target_params.point.elem(indices);
+
+    if (!target_params.has_bootstrap_replicates()) {
+        arma::mat boots;
+        boots.set_size(static_cast<arma::uword>(indices.n_elem), arma::uword(0));
+        return TargetParameterEstimates(std::move(point), std::move(boots));
+    }
+
+    if (static_cast<std::size_t>(target_params.bootstrap_replicates.n_rows) != p) {
+        throw std::invalid_argument("subset_target_param_ests: bootstrap matrix must have p rows.");
+    }
+
+    arma::mat boots = target_params.bootstrap_replicates.rows(indices);
+    return TargetParameterEstimates(std::move(point), std::move(boots));
+}
+
+TargetParameterEstimates subset_target_param_ests(
+    const TargetParameterEstimates& target_params,
+    std::size_t index)
+{
+    arma::uvec idx(1);
+    idx(0) = static_cast<arma::uword>(index);
+    return subset_target_param_ests(target_params, idx);
+}
+
 TargetParamComponents est_target_param_components_from_panel(
     const InMemoryUnbalancedPanel& panel,
     const std::unordered_map<std::string, EstimatorSpecification>& est_specs,

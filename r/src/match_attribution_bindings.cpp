@@ -96,7 +96,8 @@ SEXP est_fgw_bipartite_match_outcome_diff_params_multi_cpp(SEXP ome_xptr,
                                                            Rcpp::IntegerVector outcome_indices_1,
                                                            Rcpp::IntegerVector outcome_indices_2,
                                                            Rcpp::List observed_outcome_indices_list,
-                                                           Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue)
+                                                           Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue,
+                                                           bool use_observed_outcome_means = true)
 {
     Rcpp::XPtr<OutcomeMeansEstimates> ome(ome_xptr);
     auto stats_vec = apm::r_utils::list_to_stats_vec(stats_xptrs_by_cohort);
@@ -114,6 +115,7 @@ SEXP est_fgw_bipartite_match_outcome_diff_params_multi_cpp(SEXP ome_xptr,
         idx2,
         ooi,
         std::move(weights),
+        use_observed_outcome_means,
         nt_opt);
 
     return make_xptr(std::move(out));
@@ -124,7 +126,8 @@ SEXP est_fgw_bipartite_match_outcome_diff_params_cpp(SEXP ome_xptr,
                                                      Rcpp::Nullable<Rcpp::List> stats_xptrs_by_cohort,
                                                      int outcome_idx_1,
                                                      int outcome_idx_2,
-                                                     Rcpp::List observed_outcome_indices_list)
+                                                     Rcpp::List observed_outcome_indices_list,
+                                                     bool use_observed_outcome_means = true)
 {
     if (outcome_idx_1 < 1 || outcome_idx_2 < 1) {
         Rcpp::stop("Outcome indices must be >= 1.");
@@ -138,7 +141,8 @@ SEXP est_fgw_bipartite_match_outcome_diff_params_cpp(SEXP ome_xptr,
         idx1,
         idx2,
         observed_outcome_indices_list,
-        R_NilValue);
+        R_NilValue,
+        use_observed_outcome_means);
 }
 
 // [[Rcpp::export]]
@@ -148,7 +152,8 @@ Rcpp::List est_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
     Rcpp::IntegerVector outcome_indices_1,
     Rcpp::IntegerVector outcome_indices_2,
     Rcpp::List observed_outcome_indices_list,
-    Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue)
+    Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue,
+    bool use_observed_outcome_means = true)
 {
     auto ome_map = apm::r_bindings::list_to_ome_map(ome_by_spec);
     auto stats_vec = apm::r_utils::list_to_stats_vec(stats_xptrs_by_cohort);
@@ -166,6 +171,7 @@ Rcpp::List est_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
         idx2,
         ooi,
         std::move(weights),
+        use_observed_outcome_means,
         nt_opt);
 
     Rcpp::List out(static_cast<int>(out_map.size()));
@@ -186,7 +192,8 @@ Rcpp::List est_fgw_bipartite_match_outcome_diff_params_by_spec_cpp(
     Rcpp::Nullable<Rcpp::List> stats_xptrs_by_cohort,
     int outcome_idx_1,
     int outcome_idx_2,
-    Rcpp::List observed_outcome_indices_list)
+    Rcpp::List observed_outcome_indices_list,
+    bool use_observed_outcome_means = true)
 {
     if (outcome_idx_1 < 1 || outcome_idx_2 < 1) {
         Rcpp::stop("Outcome indices must be >= 1.");
@@ -200,7 +207,8 @@ Rcpp::List est_fgw_bipartite_match_outcome_diff_params_by_spec_cpp(
         idx1,
         idx2,
         observed_outcome_indices_list,
-        R_NilValue);
+        R_NilValue,
+        use_observed_outcome_means);
 }
 
 // [[Rcpp::export]]
@@ -210,6 +218,7 @@ SEXP est_avg_fgw_bipartite_match_outcome_diff_params_multi_cpp(
     Rcpp::List outcome_groupings,
     Rcpp::List observed_outcome_indices_list,
     Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue,
+    bool use_observed_outcome_means = true,
     int num_threads = 1)
 {
     Rcpp::XPtr<OutcomeMeansEstimates> ome(ome_xptr);
@@ -225,6 +234,7 @@ SEXP est_avg_fgw_bipartite_match_outcome_diff_params_multi_cpp(
         groupings,
         ooi,
         std::move(weights),
+        use_observed_outcome_means,
         nt_opt);
 
     return make_xptr(std::move(out));
@@ -237,6 +247,7 @@ SEXP est_avg_fgw_bipartite_match_outcome_diff_params_cpp(
     Rcpp::IntegerVector outcome_indices,
     Rcpp::List observed_outcome_indices_list,
     Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue,
+    bool use_observed_outcome_means = true,
     int num_threads = 1)
 {
     Rcpp::XPtr<OutcomeMeansEstimates> ome(ome_xptr);
@@ -253,6 +264,7 @@ SEXP est_avg_fgw_bipartite_match_outcome_diff_params_cpp(
         groupings,
         ooi,
         std::move(weights),
+        use_observed_outcome_means,
         nt_opt);
 
     return make_xptr(std::move(out));
@@ -265,6 +277,7 @@ Rcpp::List est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
     Rcpp::List outcome_groupings,
     Rcpp::List observed_outcome_indices_list,
     Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue,
+    bool use_observed_outcome_means = true,
     int num_threads = 1)
 {
     auto ome_map = apm::r_bindings::list_to_ome_map(ome_by_spec);
@@ -281,6 +294,7 @@ Rcpp::List est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_multi_cpp(
         groupings,
         ooi,
         std::move(weights),
+        use_observed_outcome_means,
         nt_opt);
 
     Rcpp::List out(static_cast<int>(out_map.size()));
@@ -302,6 +316,7 @@ Rcpp::List est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_cpp(
     Rcpp::IntegerVector outcome_indices,
     Rcpp::List observed_outcome_indices_list,
     Rcpp::Nullable<Rcpp::NumericVector> outcome_weights = R_NilValue,
+    bool use_observed_outcome_means = true,
     int num_threads = 1)
 {
     auto ome_map = apm::r_bindings::list_to_ome_map(ome_by_spec);
@@ -319,6 +334,7 @@ Rcpp::List est_avg_fgw_bipartite_match_outcome_diff_params_by_spec_cpp(
         groupings,
         ooi,
         std::move(weights),
+        use_observed_outcome_means,
         nt_opt);
 
     Rcpp::List out(static_cast<int>(out_map.size()));

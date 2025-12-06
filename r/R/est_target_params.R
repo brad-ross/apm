@@ -52,7 +52,18 @@ TargetParameterEstimates <- R6::R6Class(
       if (is.null(b)) tpe_point_params_cpp(private$xp)
       else tpe_boot_params_cpp(private$xp, as.integer(b))
     },
-    boots_matrix = function() tpe_boot_params_matrix_cpp(private$xp)
+    boots_matrix = function() tpe_boot_params_matrix_cpp(private$xp),
+    subset = function(indices) {
+      stopifnot(!missing(indices))
+      indices <- as.integer(indices)
+      if (length(indices) == 0L) stop("indices must be non-empty")
+      if (any(is.na(indices))) stop("indices must not be NA")
+      if (any(indices < 1L) || any(indices > self$p())) {
+        stop("indices must be in range [1, p()]")
+      }
+      xp <- subset_target_param_ests_cpp(private$xp, indices - 1L)
+      TargetParameterEstimates$new(xp)
+    }
   ),
   private = list(xp = NULL)
 )
@@ -159,6 +170,42 @@ get_target_param_diff_ests <- function(target_params_1, target_params_2) {
   stopifnot(inherits(target_params_1, "TargetParameterEstimates"))
   stopifnot(inherits(target_params_2, "TargetParameterEstimates"))
   xp <- get_target_param_diff_ests_cpp(
+    target_params_1$.__enclos_env__$private$xp,
+    target_params_2$.__enclos_env__$private$xp
+  )
+  TargetParameterEstimates$new(xp)
+}
+
+#' Combine target parameter estimates
+#'
+#' If `target_params_1` is a list of `TargetParameterEstimates`, combines all
+#' elements by concatenating their point vectors and stacking bootstrap
+#' replicate matrices. Otherwise, combines two `TargetParameterEstimates`
+#' provided in `target_params_1` and `target_params_2`.
+#'
+#' @param target_params_1 `TargetParameterEstimates` or a non-empty list of them
+#' @param target_params_2 optional `TargetParameterEstimates` when combining two
+#' @return `TargetParameterEstimates`
+#' @export
+combine_target_param_ests <- function(target_params_1, target_params_2 = NULL) {
+  if (is.list(target_params_1)) {
+    if (!is.null(target_params_2)) {
+      stop("When combining a list, 'target_params_2' must be NULL.")
+    }
+    if (length(target_params_1) == 0L) stop("'target_params_1' list must be non-empty.")
+    ok <- vapply(target_params_1, function(e) inherits(e, "TargetParameterEstimates"), logical(1))
+    if (!all(ok)) stop("All elements of 'target_params_1' must be TargetParameterEstimates when providing a list.")
+    xp_list <- lapply(target_params_1, function(e) e$.__enclos_env__$private$xp)
+    xp <- combine_target_param_ests_multi_cpp(xp_list)
+    return(TargetParameterEstimates$new(xp))
+  }
+
+  if (is.null(target_params_2)) {
+    stop("When providing a single 'target_params_1', you must also supply 'target_params_2'.")
+  }
+  stopifnot(inherits(target_params_1, "TargetParameterEstimates"))
+  stopifnot(inherits(target_params_2, "TargetParameterEstimates"))
+  xp <- combine_target_param_ests_cpp(
     target_params_1$.__enclos_env__$private$xp,
     target_params_2$.__enclos_env__$private$xp
   )

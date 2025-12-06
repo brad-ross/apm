@@ -17,6 +17,8 @@
 #'   defines the second contrast. Defaults to `outcome_idx_2` when unspecified.
 #' @param outcome_weights Optional numeric vector of nonnegative weights (length equals the total
 #'   number of observed outcomes). When omitted, all outcomes receive equal weight.
+#' @param use_observed_outcome_means Logical; when `TRUE` (by default), uses cohort-level observed outcome
+#'   means (if available) instead of raw `Y` measurements for the observed contrast.
 #' @return `TargetParameterEstimates` object or named list of them (by spec).
 #' @export
 est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
@@ -26,7 +28,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                                                         suff_stats = NULL,
                                                         outcome_indices_1 = NULL,
                                                         outcome_indices_2 = NULL,
-                                                        outcome_weights = NULL) {
+                                                        outcome_weights = NULL,
+                                                        use_observed_outcome_means = TRUE) {
   stopifnot(is.list(observed_outcome_indices))
   idx_resolved <- .resolve_outcome_indices(
     outcome_idx_1,
@@ -44,7 +47,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
       idx_resolved$outcome_indices_2,
       observed_outcome_indices,
       suff_stats,
-      outcome_weights
+      outcome_weights,
+      use_observed_outcome_means
     ))
   }
   if (is.list(outcome_means)) {
@@ -54,7 +58,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
       idx_resolved$outcome_indices_2,
       observed_outcome_indices,
       suff_stats,
-      outcome_weights
+      outcome_weights,
+      use_observed_outcome_means
     ))
   }
   stop("Invalid 'outcome_means': expected an OutcomeMeansEstimates object or a named list of them.")
@@ -65,7 +70,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                         outcome_indices_2,
                         observed_outcome_indices,
                         suff_stats,
-                        outcome_weights) {
+                        outcome_weights,
+                        use_observed_outcome_means) {
   suff_stats <- .extract_suff_stats_xptrs(suff_stats)
   idx1 <- as.integer(outcome_indices_1)
   idx2 <- as.integer(outcome_indices_2)
@@ -75,7 +81,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
     outcome_indices_1 = idx1,
     outcome_indices_2 = idx2,
     observed_outcome_indices_list = observed_outcome_indices,
-    outcome_weights = outcome_weights
+    outcome_weights = outcome_weights,
+    use_observed_outcome_means = use_observed_outcome_means
   )
   TargetParameterEstimates$new(xp)
 }
@@ -85,7 +92,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                          outcome_indices_2,
                          observed_outcome_indices,
                          suff_stats_input,
-                         outcome_weights) {
+                         outcome_weights,
+                         use_observed_outcome_means) {
   .validate_ome_by_spec(outcome_means_by_spec)
 
   ome_xp_by_spec <- lapply(outcome_means_by_spec, function(ome) ome$.__enclos_env__$private$xp)
@@ -98,7 +106,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
     outcome_indices_1 = idx1,
     outcome_indices_2 = idx2,
     observed_outcome_indices_list = observed_outcome_indices,
-    outcome_weights = outcome_weights
+    outcome_weights = outcome_weights,
+    use_observed_outcome_means = use_observed_outcome_means
   )
   .wrap_target_params_xptr_list(res)
 }
@@ -147,6 +156,8 @@ est_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
 #' @param outcome_groupings Optional list of integer vectors (1-based) defining outcome groups. Must contain at least two groups.
 #' @param outcome_indices Optional integer vector (1-based) of outcomes; treated as singleton groups when `outcome_groupings` is omitted.
 #' @param outcome_weights Optional numeric vector of nonnegative weights (length equals the total number of observed outcomes). Defaults to equal weights.
+#' @param use_observed_outcome_means Logical; when `TRUE` (by default), uses cohort-level observed outcome
+#'   means (if available) instead of raw `Y` measurements for the observed contrasts.
 #' @param num_threads Positive integer specifying threads passed to the underlying estimator. Defaults to 1.
 #' @return `TargetParameterEstimates` object or named list of them (by spec).
 #' @export
@@ -156,6 +167,7 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                                                             outcome_groupings = NULL,
                                                             outcome_indices = NULL,
                                                             outcome_weights = NULL,
+                                                            use_observed_outcome_means = TRUE,
                                                             num_threads = 1) {
   stopifnot(is.list(observed_outcome_indices))
   resolved <- .resolve_avg_outcome_inputs(outcome_groupings, outcome_indices)
@@ -171,6 +183,7 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
       resolved$outcome_groupings,
       resolved$outcome_indices,
       outcome_weights,
+      use_observed_outcome_means,
       num_threads
     ))
   }
@@ -182,6 +195,7 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
       resolved$outcome_groupings,
       resolved$outcome_indices,
       outcome_weights,
+      use_observed_outcome_means,
       num_threads
     ))
   }
@@ -194,6 +208,7 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                             outcome_groupings,
                             outcome_indices,
                             outcome_weights,
+                            use_observed_outcome_means,
                             num_threads) {
   suff_stats <- .extract_suff_stats_xptrs(suff_stats)
   if (!is.null(outcome_groupings)) {
@@ -204,6 +219,7 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
       outcome_groupings = groupings,
       observed_outcome_indices_list = observed_outcome_indices,
       outcome_weights = outcome_weights,
+      use_observed_outcome_means = use_observed_outcome_means,
       num_threads = num_threads
     )
   } else {
@@ -214,6 +230,7 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
       outcome_indices = idx,
       observed_outcome_indices_list = observed_outcome_indices,
       outcome_weights = outcome_weights,
+      use_observed_outcome_means = use_observed_outcome_means,
       num_threads = num_threads
     )
   }
@@ -226,6 +243,7 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
                              outcome_groupings,
                              outcome_indices,
                              outcome_weights,
+                             use_observed_outcome_means,
                              num_threads) {
   .validate_ome_by_spec(outcome_means_by_spec)
 
@@ -239,6 +257,7 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
       outcome_groupings = groupings,
       observed_outcome_indices_list = observed_outcome_indices,
       outcome_weights = outcome_weights,
+      use_observed_outcome_means = use_observed_outcome_means,
       num_threads = num_threads
     )
   } else {
@@ -249,6 +268,7 @@ est_avg_fgw_bipartite_match_outcome_diff_params <- function(outcome_means,
       outcome_indices = idx,
       observed_outcome_indices_list = observed_outcome_indices,
       outcome_weights = outcome_weights,
+      use_observed_outcome_means = use_observed_outcome_means,
       num_threads = num_threads
     )
   }

@@ -24,7 +24,8 @@ TargetFn get_fgw_bipartite_match_outcome_diff_params_fn(
     const arma::uvec& outcome_indices_1,
     const arma::uvec& outcome_indices_2,
     const ObservedOutcomeIndices& observed_outcome_indices,
-    std::optional<arma::vec> outcome_weights = std::nullopt);
+    std::optional<arma::vec> outcome_weights = std::nullopt,
+    bool use_observed_outcome_means = true);
 
 /**
  * @brief Build a target function for FGW bipartite match outcome difference (scalar version).
@@ -37,7 +38,8 @@ TargetFn get_fgw_bipartite_match_outcome_diff_params_fn(
 TargetFn get_fgw_bipartite_match_outcome_diff_params_fn(
     std::size_t outcome_idx_1,
     std::size_t outcome_idx_2,
-    const ObservedOutcomeIndices& observed_outcome_indices);
+    const ObservedOutcomeIndices& observed_outcome_indices,
+    bool use_observed_outcome_means = true);
 
 /**
  * @brief Estimate FGW bipartite match outcome differences for given outcome groups.
@@ -58,6 +60,7 @@ TargetParameterEstimates est_fgw_bipartite_match_outcome_diff_params(
     const arma::uvec& outcome_indices_2,
     const ObservedOutcomeIndices& observed_outcome_indices,
     std::optional<arma::vec> outcome_weights = std::nullopt,
+    bool use_observed_outcome_means = true,
     std::optional<std::size_t> num_threads = std::nullopt);
 
 /**
@@ -77,6 +80,7 @@ TargetParameterEstimates est_fgw_bipartite_match_outcome_diff_params(
     std::size_t outcome_idx_1,
     std::size_t outcome_idx_2,
     const ObservedOutcomeIndices& observed_outcome_indices,
+    bool use_observed_outcome_means = true,
     std::optional<std::size_t> num_threads = std::nullopt);
 
 /**
@@ -98,6 +102,7 @@ std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_matc
     const arma::uvec& outcome_indices_2,
     const ObservedOutcomeIndices& observed_outcome_indices,
     std::optional<arma::vec> outcome_weights = std::nullopt,
+    bool use_observed_outcome_means = true,
     std::optional<std::size_t> num_threads = std::nullopt);
 
 /**
@@ -117,6 +122,7 @@ std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_matc
     std::size_t outcome_idx_1,
     std::size_t outcome_idx_2,
     const ObservedOutcomeIndices& observed_outcome_indices,
+    bool use_observed_outcome_means = true,
     std::optional<std::size_t> num_threads = std::nullopt);
 
 /**
@@ -130,7 +136,8 @@ std::unordered_map<std::string, TargetParameterEstimates> est_fgw_bipartite_matc
 TargetFn get_avg_fgw_bipartite_match_outcome_diff_params_fn(
     const std::vector<arma::uvec>& outcome_groupings,
     const ObservedOutcomeIndices& observed_outcome_indices,
-    std::optional<arma::vec> outcome_weights = std::nullopt);
+    std::optional<arma::vec> outcome_weights = std::nullopt,
+    bool use_observed_outcome_means = true);
 
 /**
  * @brief Build a target function for average FGW bipartite match differences over individual outcomes.
@@ -143,7 +150,8 @@ TargetFn get_avg_fgw_bipartite_match_outcome_diff_params_fn(
 TargetFn get_avg_fgw_bipartite_match_outcome_diff_params_fn(
     const arma::uvec& outcome_indices,
     const ObservedOutcomeIndices& observed_outcome_indices,
-    std::optional<arma::vec> outcome_weights = std::nullopt);
+    std::optional<arma::vec> outcome_weights = std::nullopt,
+    bool use_observed_outcome_means = true);
 
 /**
  * @brief Estimate average FGW bipartite match differences over pairs of outcome groups.
@@ -162,6 +170,7 @@ TargetParameterEstimates est_avg_fgw_bipartite_match_outcome_diff_params(
     const std::vector<arma::uvec>& outcome_groupings,
     const ObservedOutcomeIndices& observed_outcome_indices,
     std::optional<arma::vec> outcome_weights = std::nullopt,
+    bool use_observed_outcome_means = true,
     std::optional<std::size_t> num_threads = std::nullopt);
 
 /**
@@ -179,6 +188,7 @@ TargetParameterEstimates est_avg_fgw_bipartite_match_outcome_diff_params(
     const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
     const arma::uvec& outcome_indices,
     const ObservedOutcomeIndices& observed_outcome_indices,
+    bool use_observed_outcome_means = true,
     std::optional<std::size_t> num_threads = std::nullopt);
 
 /**
@@ -198,6 +208,7 @@ std::unordered_map<std::string, TargetParameterEstimates> est_avg_fgw_bipartite_
     const std::vector<arma::uvec>& outcome_groupings,
     const ObservedOutcomeIndices& observed_outcome_indices,
     std::optional<arma::vec> outcome_weights = std::nullopt,
+    bool use_observed_outcome_means = true,
     std::optional<std::size_t> num_threads = std::nullopt);
 
 /**
@@ -215,6 +226,7 @@ std::unordered_map<std::string, TargetParameterEstimates> est_avg_fgw_bipartite_
     const std::vector<OutcomeMeanSuffStatEstimates>& stats_by_cohort,
     const arma::uvec& outcome_indices,
     const ObservedOutcomeIndices& observed_outcome_indices,
+    bool use_observed_outcome_means = true,
     std::optional<std::size_t> num_threads = std::nullopt);
 
 } // namespace apm

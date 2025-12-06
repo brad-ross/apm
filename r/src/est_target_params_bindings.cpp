@@ -197,6 +197,40 @@ SEXP get_target_param_diff_ests_cpp(SEXP tpe1_xp, SEXP tpe2_xp) {
     return apm::r_utils::make_xptr(std::move(out));
 }
 
+// [[Rcpp::export]]
+SEXP combine_target_param_ests_cpp(SEXP tpe1_xp, SEXP tpe2_xp) {
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe1(tpe1_xp);
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe2(tpe2_xp);
+    apm::TargetParameterEstimates out = apm::combine_target_param_ests(*tpe1, *tpe2);
+    return apm::r_utils::make_xptr(std::move(out));
+}
+
+// [[Rcpp::export]]
+SEXP combine_target_param_ests_multi_cpp(Rcpp::List tpe_list) {
+    std::vector<apm::TargetParameterEstimates> inputs;
+    inputs.reserve(tpe_list.size());
+    for (int i = 0; i < tpe_list.size(); ++i) {
+        Rcpp::XPtr<apm::TargetParameterEstimates> xp(tpe_list[i]);
+        inputs.push_back(*xp);
+    }
+    apm::TargetParameterEstimates out = apm::combine_target_param_ests(inputs);
+    return apm::r_utils::make_xptr(std::move(out));
+}
+
+// [[Rcpp::export]]
+SEXP subset_target_param_ests_cpp(SEXP tpe_xp, Rcpp::IntegerVector indices_0based) {
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe(tpe_xp);
+    arma::uvec idx(indices_0based.size());
+    for (int i = 0; i < indices_0based.size(); ++i) {
+        if (indices_0based[i] < 0) {
+            Rcpp::stop("indices must be non-negative");
+        }
+        idx(static_cast<arma::uword>(i)) = static_cast<arma::uword>(indices_0based[i]);
+    }
+    apm::TargetParameterEstimates out = apm::subset_target_param_ests(*tpe, idx);
+    return apm::r_utils::make_xptr(std::move(out));
+}
+
 //------------------------------------------------------------------------------
 // End-to-end: estimate target parameter components from panel (by spec)
 //------------------------------------------------------------------------------

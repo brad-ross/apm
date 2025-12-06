@@ -17,7 +17,9 @@ TEST(MatchAttribution, FactoryComputesExpectedRatio) {
     };
     std::vector<OutcomeMeanSufficientStatistics> stats(2);
     stats[0].cohort_pop_share = 0.4;
+    stats[0].observed_outcome_means = arma::vec({1.0, 2.0});
     stats[1].cohort_pop_share = 0.6;
+    stats[1].observed_outcome_means = arma::vec({5.0, 6.0});
     std::vector<CohortAuxiliaryDataMeans> eta;
 
     arma::vec result = fn(Y, stats, eta);
@@ -46,7 +48,9 @@ TEST(MatchAttribution, HandlesOutcomeGroupsWithWeights) {
     };
     std::vector<OutcomeMeanSufficientStatistics> stats(2);
     stats[0].cohort_pop_share = 0.4;
+    stats[0].observed_outcome_means = arma::vec({1.0, 2.0});
     stats[1].cohort_pop_share = 0.6;
+    stats[1].observed_outcome_means = arma::vec({5.0, 6.0});
     std::vector<CohortAuxiliaryDataMeans> eta;
 
     arma::uvec group_a({0, 1});
@@ -84,5 +88,31 @@ TEST(MatchAttribution, HandlesOutcomeGroupsWithWeights) {
 
     EXPECT_NEAR(result[0], expected_ratio, 1e-10);
     EXPECT_NEAR(result[1], 1.0 - expected_ratio, 1e-10);
+}
+
+TEST(MatchAttribution, RespectsUseObservedOutcomeMeansFlag) {
+    ObservedOutcomeIndices ooi(1);
+    ooi[0] = arma::uvec({0, 1});
+
+    arma::mat Y = {
+        {1.0, 2.0}
+    };
+    std::vector<OutcomeMeanSufficientStatistics> stats(1);
+    stats[0].cohort_pop_share = 1.0;
+    stats[0].observed_outcome_means = arma::vec({10.0, 20.0});
+    std::vector<CohortAuxiliaryDataMeans> eta;
+
+    auto fn_use_means = get_fgw_bipartite_match_outcome_diff_params_fn(0, 1, ooi, true);
+    arma::vec result_use_means = fn_use_means(Y, stats, eta);
+    ASSERT_EQ(result_use_means.n_elem, 2u);
+    const double expected_ratio_use_means = ( (1.0 - 2.0) ) / ( (10.0 - 20.0) );
+    EXPECT_NEAR(result_use_means[0], expected_ratio_use_means, 1e-10);
+    EXPECT_NEAR(result_use_means[1], 1.0 - expected_ratio_use_means, 1e-10);
+
+    auto fn_use_raw = get_fgw_bipartite_match_outcome_diff_params_fn(0, 1, ooi, false);
+    arma::vec result_use_raw = fn_use_raw(Y, stats, eta);
+    ASSERT_EQ(result_use_raw.n_elem, 2u);
+    EXPECT_NEAR(result_use_raw[0], 1.0, 1e-10);
+    EXPECT_NEAR(result_use_raw[1], 0.0, 1e-10);
 }
 
