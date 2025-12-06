@@ -228,6 +228,53 @@ test_that("get_target_param_diff_ests returns zero vector when inputs match", {
   }
 })
 
+test_that("combine_target_param_ests concatenates two estimates", {
+  fixture <- setup_target_fixture(num_specs = 1L)
+  comps <- fixture$comps
+  fn <- function(Y, shares, observed_means_list, covar_means_list, eta_list) {
+    colMeans(Y)
+  }
+  tpe <- est_target_params(
+    outcome_means = comps$outcome_means[[1]],
+    fn = fn,
+    aux_means = comps$cohort_auxiliary_means,
+    suff_stats = comps$cohort_outcome_mean_ests
+  )
+  combined <- combine_target_param_ests(tpe, tpe)
+  expect_true(inherits(combined, "TargetParameterEstimates"))
+  p <- tpe$p()
+  expect_equal(combined$p(), 2L * p)
+  tp_comb <- combined$target_params()
+  expect_equal(as.numeric(tp_comb[seq_len(p)]), as.numeric(tpe$target_params()), tolerance = 1e-10)
+  expect_equal(as.numeric(tp_comb[(p + 1):(2 * p)]), as.numeric(tpe$target_params()), tolerance = 1e-10)
+  boots <- combined$boots_matrix()
+  expect_equal(nrow(boots), 2L * p)
+  expect_equal(ncol(boots), tpe$num_bootstraps())
+  expect_equal(boots[seq_len(p), , drop = FALSE], tpe$boots_matrix(), tolerance = 1e-10)
+  expect_equal(boots[(p + 1):(2 * p), , drop = FALSE], tpe$boots_matrix(), tolerance = 1e-10)
+})
+
+test_that("combine_target_param_ests combines a list and validates inputs", {
+  fixture <- setup_target_fixture(num_specs = 1L)
+  comps <- fixture$comps
+  fn <- function(Y, shares, observed_means_list, covar_means_list, eta_list) colMeans(Y)
+  tpe <- est_target_params(
+    outcome_means = comps$outcome_means[[1]],
+    fn = fn,
+    aux_means = comps$cohort_auxiliary_means,
+    suff_stats = comps$cohort_outcome_mean_ests
+  )
+  combined <- combine_target_param_ests(list(tpe, tpe, tpe))
+  expect_true(inherits(combined, "TargetParameterEstimates"))
+  expect_equal(combined$p(), 3L * tpe$p())
+  boots <- combined$boots_matrix()
+  expect_equal(nrow(boots), 3L * tpe$p())
+  expect_equal(ncol(boots), tpe$num_bootstraps())
+
+  expect_error(combine_target_param_ests(list(tpe), tpe))
+  expect_error(combine_target_param_ests(list(tpe, "oops")))
+})
+
 test_that("est_masked_outcome_mean_err_metrics errors when bootstrap missing", {
   T <- 5L; T_c <- 3L
   outcomes <- make_outcomes(T)

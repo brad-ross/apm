@@ -207,4 +207,75 @@ TEST(TargetParamDiff, ThrowsOnBootstrapMismatch) {
     EXPECT_THROW(get_target_param_diff_ests(tpe_a, tpe_b), std::invalid_argument);
 }
 
+TEST(TargetParamCombine, ConcatenatesPointAndBootstrap) {
+    arma::vec point_a = {1.0, 2.0};
+    arma::vec point_b = {3.0};
 
+    arma::mat boots_a(2, 2);
+    boots_a.col(0) = arma::vec({1.0, 2.0});
+    boots_a.col(1) = arma::vec({4.0, 5.0});
+
+    arma::mat boots_b(1, 2);
+    boots_b.col(0) = arma::vec({3.0});
+    boots_b.col(1) = arma::vec({6.0});
+
+    TargetParameterEstimates tpe_a(point_a, boots_a);
+    TargetParameterEstimates tpe_b(point_b, boots_b);
+
+    TargetParameterEstimates combined = combine_target_param_ests(tpe_a, tpe_b);
+
+    arma::vec expected_point = arma::join_cols(point_a, point_b);
+    arma::mat expected_boots = arma::join_cols(boots_a, boots_b);
+    EXPECT_TRUE(arma::approx_equal(combined.point, expected_point, "absdiff", 1e-12));
+    EXPECT_TRUE(arma::approx_equal(combined.bootstrap_replicates, expected_boots, "absdiff", 1e-12));
+}
+
+TEST(TargetParamCombine, ThrowsOnBootstrapMismatch) {
+    arma::vec point = {1.0};
+    arma::mat boots_two(1, 2, arma::fill::ones);
+    arma::mat boots_one(1, 1, arma::fill::ones);
+    TargetParameterEstimates tpe_a(point, boots_two);
+    TargetParameterEstimates tpe_b(point, boots_one);
+
+    EXPECT_THROW(combine_target_param_ests(tpe_a, tpe_b), std::invalid_argument);
+}
+
+TEST(TargetParamCombine, HandlesNoBootstrap) {
+    arma::vec point_a = {1.0};
+    arma::vec point_b = {2.0, 3.0};
+    TargetParameterEstimates tpe_a(point_a, arma::mat());
+    TargetParameterEstimates tpe_b(point_b, arma::mat());
+
+    TargetParameterEstimates combined = combine_target_param_ests(tpe_a, tpe_b);
+    EXPECT_EQ(combined.n_bootstrap_replicates(), 0u);
+    EXPECT_EQ(static_cast<std::size_t>(combined.point.n_elem), 3u);
+    EXPECT_EQ(static_cast<std::size_t>(combined.bootstrap_replicates.n_rows), 3u);
+    EXPECT_EQ(static_cast<std::size_t>(combined.bootstrap_replicates.n_cols), 0u);
+    arma::vec expected_point = arma::vec({1.0, 2.0, 3.0});
+    EXPECT_TRUE(arma::approx_equal(combined.point, expected_point, "absdiff", 1e-12));
+}
+
+TEST(TargetParamCombine, CombinesVectorOfEstimates) {
+    arma::mat boots1(1, 1); boots1.col(0) = arma::vec({2.0});
+    arma::mat boots2(1, 1); boots2.col(0) = arma::vec({20.0});
+    arma::mat boots3(1, 1); boots3.col(0) = arma::vec({200.0});
+
+    TargetParameterEstimates t1(arma::vec({1.0}), boots1);
+    TargetParameterEstimates t2(arma::vec({10.0}), boots2);
+    TargetParameterEstimates t3(arma::vec({100.0}), boots3);
+
+    std::vector<TargetParameterEstimates> v{t1, t2, t3};
+    TargetParameterEstimates combined = combine_target_param_ests(v);
+
+    arma::vec expected_point = arma::vec({1.0, 10.0, 100.0});
+    arma::mat expected_boots(3, 1);
+    expected_boots.col(0) = arma::vec({2.0, 20.0, 200.0});
+
+    EXPECT_TRUE(arma::approx_equal(combined.point, expected_point, "absdiff", 1e-12));
+    EXPECT_TRUE(arma::approx_equal(combined.bootstrap_replicates, expected_boots, "absdiff", 1e-12));
+}
+
+TEST(TargetParamCombine, ThrowsOnEmptyVector) {
+    std::vector<TargetParameterEstimates> empty;
+    EXPECT_THROW(combine_target_param_ests(empty), std::invalid_argument);
+}
