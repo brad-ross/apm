@@ -112,15 +112,6 @@ FactorModelParameters aggregate_cohort_specific_factor_model_params(
     const ObservedOutcomeIndices& observed_outcome_indices,
     const arma::vec& cohort_weights = arma::vec());
 
-/**
- * @brief Aggregate cohort-specific parameter estimates including bootstrap replicates.
- *
- * Aggregates point estimates and each bootstrap replicate independently using
- * optional weights (and optional per-bootstrap weights), returning a
- * FactorModelEstimates containing aggregated point estimates and aggregated
- * bootstrap replicates.
- */
-
 //==============================================================================
 // Outcome Imputation
 //==============================================================================
@@ -421,6 +412,14 @@ arma::mat impute_outcomes_across_cohorts_from_obs_outcomes(
 /**
  * @brief Convenience dispatcher: if L is present in parameters, use impute_outcomes_across_cohorts;
  *        otherwise impute from observed outcomes via impute_outcomes_across_cohorts_from_obs_outcomes.
+ *
+ * @param factor_model_parameters Factor model parameters containing G (T x r) and optional
+ *                                g_0 (length T), a (length q), and L (C x r cohort mean loadings).
+ * @param observed_outcome_indices A vector where each element is a vector of indices for the
+ *                                 observed outcomes for a cohort.
+ * @param suff_stats_vec A vector of `apm::OutcomeMeanSufficientStatistics`, one per cohort, each
+ *                       with observed_outcome_means (length T_c) and optional covar_means (T x q).
+ * @return A C x T matrix where each row c contains the estimated T mean outcomes for cohort c.
  */
 arma::mat estimate_outcome_means_across_cohorts(
     const FactorModelParameters& factor_model_parameters,

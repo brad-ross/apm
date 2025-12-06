@@ -49,6 +49,7 @@ public:
     std::size_t T() const override { return T_; }
     /** @return Covariate dimension q (0 if covariates absent). */
     std::size_t q() const override { return q_; }
+    /** @return Auxiliary dimension d (always 0 for cohort-level panels). */
     std::size_t d() const override { return 0; }
     /** @return Number of synthetic units (equals number of cohorts). */
     std::size_t num_units() const override { return num_units_; }

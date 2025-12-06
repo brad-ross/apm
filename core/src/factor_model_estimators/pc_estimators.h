@@ -79,6 +79,10 @@ class PCEstimator : public PCBase {
 public:
     using PCBase::PCBase;
 
+    /**
+     * @brief Compute factor estimates from accumulated data.
+     * @return FactorModelEstimates containing factors and optional bootstrap replicates.
+     */
     FactorModelEstimates estimate() override;
 };
 
@@ -100,9 +104,20 @@ public:
                                 std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
                                 std::size_t q = 0);
 
+    /**
+     * @brief Compute factor and fixed-effect estimates from accumulated data.
+     * @return FactorModelEstimates containing factors, fixed effects, and optional bootstrap replicates.
+     */
     FactorModelEstimates estimate() override;
 
 protected:
+    /**
+     * @brief Ingest a batch of data (pre-validated) and update accumulators.
+     *
+     * @param unit_idxs Unit indices for the batch (length N).
+     * @param Y N x T_c outcome matrix.
+     * @param X N x T_c x q covariate cube (may be empty when q==0).
+     */
     void add_data_(const arma::uvec& unit_idxs,
                    const arma::mat& Y,
                    const arma::cube& X) override;

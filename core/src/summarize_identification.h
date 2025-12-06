@@ -97,6 +97,7 @@ summarize_identification(
  * @param cohort_sizes Units per cohort (length C).
  * @param max_model_rank Maximum model rank r to test in O^3.
  * @param iter Iteration selector; iter >= 0 clamps to last if too large, iter < 0 counts from end (e.g., -1 is final).
+ * @return IdentificationSummary at the specified iteration.
  */
 IdentificationSummary
 summarize_identification(
@@ -105,6 +106,16 @@ summarize_identification(
     std::size_t max_model_rank,
     int iter);
 
+/**
+ * @brief Summarize identification for a single panel at a specific iteration with explicit outcome weights.
+ *
+ * @param observed_outcome_indices Observed outcomes per cohort (0-based).
+ * @param cohort_sizes Units per cohort (length C).
+ * @param max_model_rank Maximum model rank r to test in O^3.
+ * @param iter Iteration selector; iter >= 0 clamps to last if too large, iter < 0 counts from end (e.g., -1 is final).
+ * @param outcome_weights Outcome weights (length T); defaults to ones when absent.
+ * @return IdentificationSummary at the specified iteration.
+ */
 IdentificationSummary
 summarize_identification(
     const ObservedOutcomeIndices& observed_outcome_indices,

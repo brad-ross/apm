@@ -27,9 +27,18 @@ struct OutcomeMeanErrMetrics {
     double cohort_pop_share = std::numeric_limits<double>::quiet_NaN(); ///< Cohort population share.
 };
 
+/** @brief Type alias for a (cohort index, outcome index) pair. */
 using CohortOutcomeIndex = std::pair<std::size_t, std::size_t>;
 
+/**
+ * @brief Hash functor for CohortOutcomeIndex pairs, enabling use as unordered_map keys.
+ */
 struct CohortOutcomeIndexHash {
+    /**
+     * @brief Compute hash for a (cohort, outcome) index pair.
+     * @param p The (cohort, outcome) pair to hash.
+     * @return Hash value.
+     */
     std::size_t operator()(const CohortOutcomeIndex& p) const noexcept {
         // FNV-1a style hash combine on the two coordinates
         std::size_t h = 1469598103934665603ull;

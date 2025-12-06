@@ -146,6 +146,12 @@ struct OutcomeMeanSufficientStatistics {
     // Constructors
     OutcomeMeanSufficientStatistics() = default;
 
+    /**
+     * @brief Construct sufficient statistics from observed outcome means and optional covariate means.
+     *
+     * @param observed_means_in Length T_c vector of observed outcome means.
+     * @param covar_means_in Optional T x q matrix of covariate means.
+     */
     OutcomeMeanSufficientStatistics(arma::vec observed_means_in,
                                     std::optional<arma::mat> covar_means_in = std::nullopt)
         : observed_outcome_means(std::move(observed_means_in)),
@@ -184,6 +190,12 @@ struct OutcomeMeanSuffStatEstimates {
     OutcomeMeanSufficientStatistics suff_stat_estimates;                  ///< Point sufficient stats.
     std::vector<OutcomeMeanSufficientStatistics> bootstrap_replicates;   ///< Bootstrap sufficient stats (length B or empty).
 
+    /**
+     * @brief Construct from point sufficient statistics and optional bootstrap replicates.
+     *
+     * @param stats Point sufficient statistics.
+     * @param boot_reps Vector of bootstrap replicate statistics (may be empty).
+     */
     OutcomeMeanSuffStatEstimates(OutcomeMeanSufficientStatistics stats,
                                  std::vector<OutcomeMeanSufficientStatistics> boot_reps = {})
         : suff_stat_estimates(std::move(stats)),
@@ -213,7 +225,15 @@ struct CohortWeightEstimates {
     arma::vec cohort_weights;                    ///< Length-C cohort weights (point estimate).
     std::vector<arma::vec> bootstrap_cohort_weights; ///< Optional bootstrap weights (length B, each length C).
 
+    /**
+     * @brief Indicates whether bootstrap replicates are present (non-empty).
+     * @return true if replicates exist; false otherwise.
+     */
     bool has_bootstrap_replicates() const noexcept { return !bootstrap_cohort_weights.empty(); }
+    /**
+     * @brief Returns the number of bootstrap replicates (0 if none).
+     * @return Number of bootstrap weight vectors.
+     */
     std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_cohort_weights.size(); }
 };
 
@@ -234,10 +254,16 @@ struct CohortAuxiliaryDataMeans {
 
     CohortAuxiliaryDataMeans() = default;
 
+    /**
+     * @brief Construct from a precomputed auxiliary means matrix.
+     * @param aux_means_in T x d matrix of auxiliary data means.
+     */
     explicit CohortAuxiliaryDataMeans(arma::mat aux_means_in)
         : auxiliary_means(std::move(aux_means_in)) {}
 
+    /** @brief Returns the number of outcomes (rows). @return Number of rows in auxiliary_means. */
     std::size_t T() const noexcept { return static_cast<std::size_t>(auxiliary_means.n_rows); }
+    /** @brief Returns the number of auxiliary columns. @return Number of columns in auxiliary_means. */
     std::size_t d() const noexcept { return static_cast<std::size_t>(auxiliary_means.n_cols); }
 };
 
@@ -250,11 +276,25 @@ struct CohortAuxiliaryDataMeanEstimates {
 
     CohortAuxiliaryDataMeanEstimates() = default;
 
+    /**
+     * @brief Construct from point estimate and optional bootstrap replicates.
+     *
+     * @param est Point auxiliary data means.
+     * @param boot_reps Vector of bootstrap replicate means (may be empty).
+     */
     CohortAuxiliaryDataMeanEstimates(CohortAuxiliaryDataMeans est,
                                      std::vector<CohortAuxiliaryDataMeans> boot_reps = {})
         : estimates(std::move(est)), bootstrap_replicates(std::move(boot_reps)) {}
 
+    /**
+     * @brief Indicates whether bootstrap replicates are present (non-empty).
+     * @return true if replicates exist; false otherwise.
+     */
     bool has_bootstrap_replicates() const noexcept { return !bootstrap_replicates.empty(); }
+    /**
+     * @brief Returns the number of bootstrap replicates (0 if none).
+     * @return Number of bootstrap replicate means.
+     */
     std::size_t n_bootstrap_replicates() const noexcept { return bootstrap_replicates.size(); }
 };
 

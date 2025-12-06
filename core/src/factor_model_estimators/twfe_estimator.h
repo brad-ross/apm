@@ -33,6 +33,10 @@ public:
                            std::shared_ptr<const WeightedBootstrap> bootstrap = nullptr,
                            std::size_t q = 0);
 
+    /**
+     * @brief Compute TWFE estimates from accumulated data.
+     * @return FactorModelEstimates containing G (ones), g_0 (means), and optional bootstrap replicates.
+     */
 	FactorModelEstimates estimate() override;
 
 protected:
