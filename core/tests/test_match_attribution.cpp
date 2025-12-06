@@ -67,8 +67,24 @@ TEST(MatchAttribution, HandlesOutcomeGroupsWithWeights) {
     // Cohort 1 (pop share 0.6) observes outcomes {1,2}
     //   Group A uses only outcome 1: sum = 2*5 = 10, weight sum = 2 -> avg = 5
     //   Group B uses outcomes {1,2}: sum = 2*5 + 3*6 = 28, weight sum = 5 -> avg = 28/5
-    const double obs_group_a = (0.4 * (5.0 / 3.0) + 0.6 * 5.0) / (0.4 + 0.6);
-    const double obs_group_b = (0.4 * 2.0 + 0.6 * (28.0 / 5.0)) / (0.4 + 0.6);
+    //
+    // Observed group means should mirror compute_weighted_avg in the implementation,
+    // i.e. cohorts are weighted by cohort_pop_share * (sum of outcome weights used):
+    const double obs_group_a_num =
+        stats[0].cohort_pop_share * 5.0 +   // 0.4 * (1*1 + 2*2)
+        stats[1].cohort_pop_share * 10.0;   // 0.6 * (2*5)
+    const double obs_group_a_den =
+        stats[0].cohort_pop_share * 3.0 +   // 0.4 * (1 + 2)
+        stats[1].cohort_pop_share * 2.0;    // 0.6 * (2)
+    const double obs_group_a = obs_group_a_num / obs_group_a_den;
+
+    const double obs_group_b_num =
+        stats[0].cohort_pop_share * 4.0 +   // 0.4 * (2*2)
+        stats[1].cohort_pop_share * 28.0;   // 0.6 * (2*5 + 3*6)
+    const double obs_group_b_den =
+        stats[0].cohort_pop_share * 2.0 +   // 0.4 * (2)
+        stats[1].cohort_pop_share * 5.0;    // 0.6 * (2 + 3)
+    const double obs_group_b = obs_group_b_num / obs_group_b_den;
 
     const double pop_group_a_num =
         stats[0].cohort_pop_share * (outcome_weights[0] * Y(0, 0) + outcome_weights[1] * Y(0, 1)) +
