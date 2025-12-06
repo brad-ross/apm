@@ -50,19 +50,36 @@ validate_required_panel_cols <- function(panel_dt,
 
 #' Construct long-form mapping of cohort observed outcomes
 #'
-#' Given the globally sorted `outcome_ids` vector and the
-#' `observed_outcome_indices` list (each element is an integer vector of outcome
-#' indices observed in a cohort, ordered by `cohort_id`), build a data.frame
-#' where each row corresponds to one (cohort, outcome) pair.
+#' Converts a list of observed outcome indices per cohort into a long-form
+#' data.frame where each row corresponds to one (cohort, outcome) pair.
 #'
-#' Columns:
-#'   - cohort_id: integer id of the cohort (1-based index into the list)
-#'   - outcome_idx: integer index of the outcome (position in `outcome_ids`)
-#'   - outcome_name: character name of the outcome (`outcome_ids[outcome_idx]`)
+#' @details
+#' This is a utility function for converting the compact list-of-vectors
+#' representation of cohort-outcome mappings into a tidy data.frame format
+#' suitable for analysis and visualization.
 #'
-#' @param outcome_ids Character (or coercible) vector of outcome ids
-#' @param observed_outcome_indices List of integer vectors, per cohort
-#' @return A base R data.frame with columns `cohort_id`, `outcome_idx`, `outcome_name`
+#' @param outcome_ids Character (or coercible to character) vector of outcome
+#'   identifiers. The order defines the mapping from indices to names.
+#' @param observed_outcome_indices List of integer vectors where element `c`
+#'   contains the 1-based indices of outcomes observed by cohort `c`.
+#'
+#' @return A data.frame with columns:
+#'   \describe{
+#'     \item{cohort_id}{Integer; 1-based cohort identifier.}
+#'     \item{outcome_idx}{Integer; 1-based outcome index (position in `outcome_ids`).}
+#'     \item{outcome_name}{Character; the outcome identifier from `outcome_ids`.}
+#'   }
+#'
+#' @examples
+#' outcome_ids <- c("2020-01", "2020-02", "2020-03", "2020-04")
+#' obs_indices <- list(
+#'   c(1L, 2L, 3L),      # Cohort 1 observes outcomes 1, 2, 3
+#'   c(2L, 3L, 4L),      # Cohort 2 observes outcomes 2, 3, 4
+#'   c(1L, 2L, 3L, 4L)   # Cohort 3 observes all outcomes
+#' )
+#' df <- construct_cohort_observed_outcomes_df(outcome_ids, obs_indices)
+#' print(df)
+#'
 #' @export
 construct_cohort_observed_outcomes_df <- function(outcome_ids, observed_outcome_indices) {
     outcome_ids_chr <- as.character(outcome_ids)
@@ -108,30 +125,94 @@ construct_cohort_observed_outcomes_df <- function(outcome_ids, observed_outcome_
 #' (2) the list of cohorts with their observed outcome indices, and (3) a
 #' data.table assigning each unit to its cohort.
 #'
-#' @param panel_df data.table containing panel data
-#' @param unit_id_col Column name for unit identifier
-#' @param outcome_id_col Column name for outcome identifier
-#' @param outcome_value_col Column name for the outcome value; rows with missing
-#'   values in this column are dropped prior to cohort construction
-#' @param model_rank Integer model rank
-#' @param min_cohort_size Minimum units per cohort to keep (default: 0)
-#' @param subset_to_largest_super_cohort Logical; if TRUE, subset the panel to the largest super cohort at 
-#' the final iteration of the O^3 algorithm; if FALSE, subsequent estimation may fail without warning (default: TRUE)
-#' @param sort_cohorts_lexicographically Logical; if TRUE, sort the cohorts lexicographically by 
-#' the outcome indices (default: FALSE)
-#' @param cohort_observed_outcomes_as_df Logical; if TRUE (default), return a
-#'   single `cohort_observed_outcomes_df` (with columns `cohort_id`, `outcome_idx`,
-#'   `outcome_name`) instead of the triplet (`outcome_ids`, `outcome_to_index`,
-#'   `observed_outcome_indices`). If FALSE, return the original triplet.
-#' @param verbose Logical; if TRUE, print a log during the construction process
-#'   (default: FALSE)
-#' @return list with the following elements:
-#'   - outcome_ids: sorted unique values of outcome_id_col
-#'   - outcome_to_index: named integer vector mapping outcome value -> index
-#'   - observed_outcome_indices: list of integer index vectors per cohort (ordered by cohort_id)
-#'   - unit_cohorts: data.table with columns unit_id_col, cohort_id
-#'   - cohort_sizes: integer vector; number of units per cohort ordered by cohort_id
-#'   - cohort_observed_outcomes_df: long-form mapping of cohorts to outcomes (only returned when cohort_observed_outcomes_as_df = TRUE)
+#' @details
+#' A **cohort** is defined as a group of units that share exactly the same set
+#' of observed outcomes. This function:
+#' \enumerate{
+#'   \item Drops rows with missing outcome values.
+#'   \item Assigns a global index to each unique outcome (sorted alphabetically/numerically).
+#'   \item Groups units by the set of outcomes they observe.
+#'   \item Filters cohorts to keep only those with at least `model_rank` outcomes
+#'         and at least `min_cohort_size` units.
+#'   \item Optionally subsets to the largest "super cohort" using the O^3 algorithm
+#'         to ensure factor identification.
+#' }
+#'
+#' The O^3 (Observed Outcome Overlap) algorithm iteratively merges cohorts whose
+#' observed outcomes overlap by at least `model_rank` outcomes, ensuring that
+#' factors can be identified across the panel.
+#'
+#' @param panel_df A data.frame, data.table, tibble, or Arrow table containing
+#'   panel data in long format (one row per unit-outcome observation).
+#' @param unit_id_col Character string; column name for the unit identifier.
+#' @param outcome_id_col Character string; column name for the outcome identifier
+#'   (e.g., time period, product, location).
+#' @param outcome_value_col Character string; column name for the outcome value.
+#'   Rows with missing values in this column are dropped prior to cohort construction.
+#' @param model_rank Integer; the factor model rank. Cohorts must have at least
+#'   this many observed outcomes to be retained (default: 1).
+#' @param min_cohort_size Integer; minimum number of units per cohort to keep
+#'   (default: 0, meaning no minimum).
+#' @param subset_to_largest_super_cohort Logical; if `TRUE` (default), subset the
+#'   panel to the largest super cohort at the final iteration of the O^3 algorithm.
+#'   This ensures factor identification. If `FALSE`, subsequent estimation may fail
+#'   if factors are not identified.
+#' @param sort_cohorts_lexicographically Logical; if `TRUE`, sort cohorts
+#'   lexicographically by their outcome indices. If `FALSE` (default), cohorts are
+#'   ordered by their hash key (faster but less deterministic across runs).
+#' @param cohort_observed_outcomes_as_df Logical; if `TRUE` (default), include a
+#'   `cohort_observed_outcomes_df` data.frame in the output with columns `cohort_id`,
+#'   `outcome_idx`, and `outcome_name`.
+#' @param verbose Logical; if `TRUE`, print progress during construction
+#'   (default: `FALSE`).
+#'
+#' @return A named list with the following elements:
+#'   \describe{
+#'     \item{outcome_ids}{Sorted unique values from `outcome_id_col` (vector).}
+#'     \item{outcome_to_index}{Named integer vector mapping each outcome value to
+#'           its 1-based index.}
+#'     \item{observed_outcome_indices}{List of integer vectors; element `c` contains
+#'           the 1-based outcome indices observed by cohort `c`.}
+#'     \item{unit_cohorts}{data.table with columns `unit_id` and `cohort_id` mapping
+#'           each unit to its cohort.}
+#'     \item{cohort_sizes}{Integer vector; number of units in each cohort, ordered
+#'           by `cohort_id`.}
+#'     \item{cohort_observed_outcomes_df}{(When `cohort_observed_outcomes_as_df = TRUE`)
+#'           A data.table with columns `cohort_id`, `outcome_idx`, `outcome_name`
+#'           providing a long-form mapping of cohorts to their observed outcomes.}
+#'   }
+#'
+#' @seealso \code{\link{UnbalancedPanel}} for an R6 class that wraps this function
+#'   and provides additional functionality for estimation.
+#' @seealso \code{\link{o3_algorithm}} for details on the Observed Outcome Overlap
+#'   algorithm used for identification.
+#' @seealso \code{\link{get_largest_super_cohort}} for extracting the largest
+#'   super cohort.
+#'
+#' @examples
+#' # Create synthetic panel data
+#' set.seed(123)
+#' panel <- data.frame(
+#'   unit = rep(1:100, each = 5),
+#'   time = rep(1:5, 100),
+#'   outcome = rnorm(500)
+#' )
+#' # Remove some observations to create unbalanced structure
+#' panel <- panel[sample(nrow(panel), 400), ]
+#'
+#' # Construct cohorts
+#' result <- construct_cohorts_from_panel(
+#'   panel_df = panel,
+#'   unit_id_col = "unit",
+#'   outcome_id_col = "time",
+#'   outcome_value_col = "outcome",
+#'   model_rank = 2
+#' )
+#'
+#' # Examine cohort structure
+#' print(result$cohort_sizes)
+#' print(result$observed_outcome_indices)
+#'
 #' @importFrom data.table setorder
 #' @export
 construct_cohorts_from_panel <- function(panel_df,
@@ -320,11 +401,140 @@ construct_cohorts_from_panel_core <- function(panel_df,
 
 # ------------------------------------------------------------------------------
 
-#' Unbalanced panel container and processor (stub)
+#' Unbalanced Panel Data Container
 #'
-#' R6 class that holds panel data and related cohort artifacts. Constructor
-#' mirrors `construct_cohorts_from_panel` but adds `outcome_value_col` after
-#' `outcome_id_col`.
+#' An R6 class that holds unbalanced panel data and provides efficient access
+#' to cohort structure, outcome indexing, and processed data for estimation.
+#' This is the primary data structure used throughout the apm package.
+#'
+#' @description
+#' `UnbalancedPanel` encapsulates panel data where different units may observe
+#' different subsets of outcomes. It automatically (based on `construct_cohorts_from_panel`):
+#' \itemize{
+#'   \item Constructs cohorts (groups of units with identical outcome patterns)
+#'   \item Indexes outcomes and units for efficient lookup
+#'   \item Processes the panel into a format suitable for C++ estimation routines
+#'   \item Optionally subsets to the largest identifiable super cohort
+#' }
+#'
+#' @details
+#' The panel data should be in long format with one row per (unit, outcome)
+
+#' observation. A **cohort** is defined as a group of units that observe exactly
+#' the same set of outcomes.
+#'
+#' **Covariates vs. Auxiliary Columns:**
+#' \itemize{
+#'   \item `covar_cols`: Columns used in factor model estimation (e.g., for
+#'         covariate-adjusted models). These affect the estimated parameters.
+#'   \item `auxiliary_cols`: Additional data columns tracked alongside the panel
+#'         but not used in estimation. Useful for post-estimation analysis.
+#' }
+#'
+#' @section Constructor:
+#' \preformatted{
+#' UnbalancedPanel$new(
+#'   panel_df,
+#'   unit_id_col,
+#'   outcome_id_col,
+#'   outcome_value_col,
+#'   model_rank = 1,
+#'   min_cohort_size = 0,
+#'   subset_to_largest_super_cohort = TRUE,
+#'   sort_cohorts_lexicographically = FALSE,
+#'   covar_cols = character(0),
+#'   auxiliary_cols = character(0),
+#'   verbose = FALSE
+#' )
+#' }
+#'
+#' @section Constructor Arguments:
+#' \describe{
+#'   \item{panel_df}{A data.frame, data.table, tibble, or Arrow table in long
+#'         format (one row per unit-outcome observation).
+#'   }
+#'   \item{unit_id_col}{Character; column name for the unit identifier.}
+#'   \item{outcome_id_col}{Character; column name for the outcome identifier
+#'         (e.g., time period).}
+#'   \item{outcome_value_col}{Character; column name for the outcome value.}
+#'   \item{model_rank}{Integer; factor model rank. Cohorts with fewer than this
+#'         many outcomes are dropped (default: 1).}
+#'   \item{min_cohort_size}{Integer; minimum units per cohort (default: 0).}
+#'   \item{subset_to_largest_super_cohort}{Logical; if TRUE (default), subset to
+#'         the largest super cohort for identification. See \code{\link{o3_algorithm}}.}
+#'   \item{sort_cohorts_lexicographically}{Logical; if TRUE, sort cohorts by
+#'         outcome indices (default: FALSE).}
+#'   \item{covar_cols}{Character vector; column names of covariates to include
+#'         in estimation.}
+#'   \item{auxiliary_cols}{Character vector; column names of auxiliary data to
+#'         track (not used in estimation).}
+#'   \item{verbose}{Logical; print progress messages (default: FALSE).}
+#' }
+#'
+#' @section Public Methods:
+#' \describe{
+#'   \item{\code{get_original_panel()}}{Returns the original panel data.table.}
+#'   \item{\code{get_unit_id_col()}}{Returns the unit ID column name.}
+#'   \item{\code{get_outcome_id_col()}}{Returns the outcome ID column name.}
+#'   \item{\code{get_outcome_value_col()}}{Returns the outcome value column name.}
+#'   \item{\code{get_model_rank()}}{Returns the model rank.}
+#'   \item{\code{get_min_cohort_size()}}{Returns the minimum cohort size.}
+#'   \item{\code{get_unit_ids()}}{Returns sorted vector of unit IDs.}
+#'   \item{\code{get_num_units()}}{Returns number of units (N).}
+#'   \item{\code{get_outcome_ids()}}{Returns sorted vector of outcome IDs.}
+#'   \item{\code{get_num_outcomes()}}{Returns number of outcomes (T).}
+#'   \item{\code{get_outcome_to_index()}}{Returns named vector mapping outcome
+#'         IDs to 1-based indices.}
+#'   \item{\code{get_observed_outcome_indices()}}{Returns list of integer vectors;
+#'         element c contains 1-based outcome indices for cohort c.}
+#'   \item{\code{get_unit_cohorts()}}{Returns data.table mapping units to cohorts.}
+#'   \item{\code{get_num_cohorts()}}{Returns number of cohorts (C).}
+#'   \item{\code{get_cohort_sizes()}}{Returns integer vector of cohort sizes.}
+#'   \item{\code{get_processed_panel()}}{Returns processed data.table used
+#'         internally for estimation.}
+#'   \item{\code{get_covar_cols()}}{Returns character vector of covariate column
+#'         names.}
+#'   \item{\code{get_auxiliary_cols()}}{Returns character vector of auxiliary
+#'         column names.}
+#'   \item{\code{get_panel_holder_xptr()}}{Returns external pointer to C++ panel
+#'         holder (for internal use).}
+#' }
+#'
+#' @seealso \code{\link{construct_cohorts_from_panel}} for the underlying cohort
+#'   construction logic.
+#' @seealso \code{\link{est_cohort_specific_params}} for estimating cohort-specific
+#'   parameters from an UnbalancedPanel.
+#' @seealso \code{\link{est_target_param_components}} for end-to-end estimation.
+#'
+#' @examples
+#' # Create synthetic panel data
+#' set.seed(42)
+#' n_units <- 50
+#' n_times <- 6
+#' panel <- data.frame(
+#'   unit = rep(1:n_units, each = n_times),
+#'   time = rep(1:n_times, n_units),
+#'   y = rnorm(n_units * n_times),
+#'   x = rnorm(n_units * n_times)
+#' )
+#' # Create unbalanced structure by removing some observations
+#' panel <- panel[sample(nrow(panel), 250), ]
+#'
+#' # Create UnbalancedPanel
+#' up <- UnbalancedPanel$new(
+#'   panel_df = panel,
+#'   unit_id_col = "unit",
+#'   outcome_id_col = "time",
+#'   outcome_value_col = "y",
+#'   model_rank = 2,
+#'   covar_cols = "x"
+#' )
+#'
+#' # Access panel properties
+#' up$get_num_units()
+#' up$get_num_cohorts()
+#' up$get_cohort_sizes()
+#' up$get_observed_outcome_indices()
 #'
 #' @export
 UnbalancedPanel <- R6Class(
