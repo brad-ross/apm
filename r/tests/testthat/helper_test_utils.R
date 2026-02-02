@@ -1,0 +1,391 @@
+library(data.table)
+utils::globalVariables(c(
+    "y", "outcome_id", "cov1", "cov2", "outcome_idx",
+    "unit_idx", "cohort_id", "outcome_idx_f", "aux1", "aux2"
+))
+
+# Outcome helpers
+make_outcomes <- function(T) {
+    width <- nchar(as.character(T))
+    sprintf("%0*d", width, seq_len(T))
+}
+
+make_staircase_observed_indices <- function(T, window, add_no_missing_cohort = FALSE) {
+    idx <- lapply(seq_len(T - window + 1L), function(start) as.integer(seq.int(start, start + window - 1L)))
+    if (isTRUE(add_no_missing_cohort)) idx <- c(idx, list(as.integer(seq_len(T))))
+    idx
+}
+
+make_units_by_cohort <- function(n_cohorts, units_per_cohort, prefix = "u", start_index = 1L) {
+    idx <- seq.int(start_index, length.out = n_cohorts * units_per_cohort)
+    split(sprintf("%s%d", prefix, idx), rep(seq_len(n_cohorts), each = units_per_cohort))
+}
+
+# Panel builders
+build_panel_from_indices <- function(outcomes, cohort_indices, units_by_cohort, include_covariates = FALSE, include_auxiliary = FALSE) {
+    all_units <- sort(unique(unlist(units_by_cohort)))
+    data.table::rbindlist(lapply(seq_along(cohort_indices), function(k) {
+        observed_idxs <- cohort_indices[[k]]
+        observed_outcomes <- outcomes[observed_idxs]
+        unit_ids <- units_by_cohort[[k]]
+        data.table::rbindlist(lapply(unit_ids, function(u) {
+            if (isTRUE(include_covariates) || isTRUE(include_auxiliary)) {
+                dt <- data.table::data.table(
+                    unit_id = u,
+                    outcome_id = outcomes
+                )
+                dt[, ("y") := match(get("outcome_id"), outcomes)]
+                dt[!get("outcome_id") %in% observed_outcomes, ("y") := NA_real_]
+                if (isTRUE(include_covariates)) {
+                    dt[, ("cov1") := as.integer(match(u, all_units))]
+                    dt[, ("cov2") := as.integer(k)]
+                }
+                if (isTRUE(include_auxiliary)) {
+                    dt[, ("aux1") := as.integer(match(u, all_units))]
+                    dt[, ("aux2") := as.integer(k)]
+                }
+                dt
+            } else {
+                dt <- data.table::data.table(
+                    unit_id = u,
+                    outcome_id = observed_outcomes
+                )
+                dt[, ("y") := match(get("outcome_id"), outcomes)]
+                dt
+            }
+        }))
+    }))
+}
+
+# Factor model helpers ---------------------------------------------------------
+
+# Deterministic general true factor generator used in tests
+make_true_factors_general <- function(T, r) {
+    # Match C++: polynomial basis B(t,j) = x^(j), j = 1..r with x = (t)/(T+1), then thin-QR,
+    # then set.seed(42) and permute rows deterministically.
+    x <- (seq_len(T)) / (T + 1)
+    base <- sapply(seq_len(r), function(j) x^j)
+    qr_fac <- qr(base)
+    set.seed(42)
+    Q <- qr.Q(qr_fac)[sample(seq_len(T)), , drop = FALSE]
+    Q
+}
+
+make_rotations <- function(C, r, rotate = TRUE) {
+    if (isTRUE(rotate)) generate_symmetric_rotation_matrices(C, r) else rep(list(diag(r)), C)
+}
+
+unit_loading_from_all_units <- function(u_name, all_units, r, cohort_id, C) {
+    # Match C++ deterministic full-rank variation: for global unit index u (0-based),
+    # set x = (u+1)/(N+1) and l_j = 1.0 + x^(j+1) for j = 0..r-1
+    N <- length(all_units)
+    u_idx <- match(u_name, all_units) - 1L
+    x <- (as.numeric(u_idx) + 1.0) / (N + 1.0)
+    sapply(0:(r - 1L), function(j) 1.0 + x^(j + 1L))
+}
+
+build_factor_model_context <- function(outcomes, cohort_indices, units_by_cohort, r = 2L, rotate = TRUE, include_outcome_fes = FALSE) {
+    all_units <- sort(unique(unlist(units_by_cohort)))
+    T <- length(outcomes)
+    r <- as.integer(r)
+    true_factors <- make_true_factors_general(T, r)
+    # Optional outcome fixed effects orthogonal to span(true_factors)
+    g0 <- NULL
+    if (isTRUE(include_outcome_fes)) {
+        # Deterministic vector then orthogonalize onto complement of span(G)
+        g0_raw <- as.numeric(seq_len(T)) / (T + 1)
+        G <- true_factors
+        g0 <- as.numeric(g0_raw - G %*% solve(crossprod(G), crossprod(G, g0_raw)))
+    }
+    rotations <- make_rotations(length(cohort_indices), r, rotate)
+    cohort_G_list <- lapply(seq_along(cohort_indices), function(cid) {
+        idx <- as.integer(cohort_indices[[cid]])
+        as.matrix(true_factors[idx, , drop = FALSE] %*% rotations[[cid]])
+    })
+    out <- list(
+        outcomes = outcomes,
+        cohort_indices = cohort_indices,
+        units_by_cohort = units_by_cohort,
+        all_units = all_units,
+        r = r,
+        true_factors = true_factors,
+        rotations = rotations,
+        cohort_G_list = cohort_G_list
+    )
+    if (!is.null(g0)) out$g0 <- g0
+    out
+}
+
+expected_Y_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
+    G_c <- ctx$true_factors[T_idx, ]
+    T_c <- dim(G_c)[1]
+    if (is.null(T_c)) {
+        T_c <- length(G_c)
+    }
+    g0_c <- double(T_c)
+    if (!is.null(ctx$g0)) {
+        g0_c <- ctx$g0[T_idx]
+    }
+    Y_base <- do.call(rbind, lapply(unit_ids, function(u) {
+        l_u <- unit_loading_from_all_units(
+            u,
+            ctx$all_units,
+            ctx$r,
+            cohort_id,
+            length(ctx$units_by_cohort)
+        )
+        if (is.null(dim(G_c))) {
+            # G_c is a vector (length T), l_u is scalar
+            as.numeric(G_c * l_u) + g0_c
+        } else {
+            # G_c is a matrix (T x r), l_u is a vector (r)
+            as.numeric(G_c %*% l_u) + g0_c
+        }
+    }))
+    # if (!is.null(ctx$g0)) {
+    #     g0_c <- as.numeric(ctx$g0[T_idx])
+    #     Y_base <- sweep(Y_base, 2L, g0_c, "+")
+    # }
+    Y_base
+}
+
+expected_covariates_for_units_ctx <- function(ctx, cohort_id, unit_ids, T_idx) {
+    N <- length(unit_ids)
+    TT <- length(T_idx)
+    # Map units to global 1..N index and outcomes to 1..T indices
+    u_idx <- as.numeric(match(unit_ids, ctx$all_units))
+    t_idx <- as.numeric(T_idx)
+    # Time-varying covariates (match C++ DGP):
+    # cov1 = u * t
+    cov1 <- outer(u_idx, t_idx, function(u, t) u * t)
+    # cov2 = (u * t) * (t + 0.5*u + 1.0) + 0.7 * cohort_id
+    cov2 <- cov1 * (matrix(t_idx, nrow = N, ncol = TT, byrow = TRUE) +
+                    0.5 * matrix(u_idx, nrow = N, ncol = TT) + 1.0) +
+            0.7 * as.numeric(cohort_id)
+    array(c(cov1, cov2), dim = c(N, TT, 2L))
+}
+
+# Cohort index matching helpers ------------------------------------------------
+
+# Return the position in list_vecs of the first vector exactly equal to target;
+# NA_integer_ if no exact match is found. Comparison is on integer values.
+match_panel_index <- function(target, list_vecs) {
+    for (i in seq_along(list_vecs)) {
+        v <- list_vecs[[i]]
+        if (length(v) == length(target) && all(as.integer(v) == as.integer(target))) return(i)
+    }
+    NA_integer_
+}
+
+# Given original cohort_indices (list of integer vectors) and ooi_panel (list of
+# integer vectors from the panel), return an integer vector mapping each original
+# cohort to its index in the panel's order. Length equals length(cohort_indices).
+match_cohorts_panel_order <- function(cohort_indices, ooi_panel) {
+    vapply(cohort_indices, function(idx) match_panel_index(idx, ooi_panel), integer(1))
+}
+
+# Factor-based outcome generator to avoid signature conflicts with older helpers
+build_panel_from_indices_factor <- function(outcomes, cohort_indices, units_by_cohort,
+                                            include_covariates = FALSE,
+                                            include_auxiliary = FALSE,
+                                            r = 2L,
+                                            rotate = TRUE,
+                                            ctx = NULL,
+                                            add_no_missing_cohort = FALSE,
+                                            a = NULL,
+                                            g0 = NULL) {
+    # If requested, extend cohorts and units with a fully observed cohort
+    if (isTRUE(add_no_missing_cohort)) {
+        T <- length(outcomes)
+        units_per <- length(units_by_cohort[[1]])
+        start_index <- length(unique(unlist(units_by_cohort))) + 1L
+        extra_units <- make_units_by_cohort(1L, units_per, prefix = "u", start_index = start_index)[[1]]
+        cohort_indices <- c(cohort_indices, list(as.integer(seq_len(T))))
+        units_by_cohort <- c(units_by_cohort, list(extra_units))
+        ctx <- NULL  # force rebuild to include the new cohort
+    }
+
+    if (is.null(ctx)) {
+        ctx <- build_factor_model_context(outcomes, cohort_indices, units_by_cohort, r = r, rotate = rotate)
+    }
+    # Prefer explicit g0 argument; else use context g0 if available
+    if (is.null(g0) && !is.null(ctx$g0)) g0 <- ctx$g0
+
+    data.table::rbindlist(lapply(seq_along(cohort_indices), function(k) {
+        observed_idxs <- cohort_indices[[k]]
+        observed_outcomes <- outcomes[observed_idxs]
+        unit_ids <- units_by_cohort[[k]]
+        data.table::rbindlist(lapply(unit_ids, function(u) {
+            if (isTRUE(include_covariates) || isTRUE(include_auxiliary)) {
+                dt <- data.table::data.table(
+                    unit_id = u,
+                    outcome_id = outcomes
+                )
+                dt[, ("y") := NA_real_]
+                # Base factor-implied outcomes for observed indices
+                y_obs <- expected_Y_for_units_ctx(ctx, k, unit_ids = c(u), T_idx = observed_idxs)[1, ]
+
+                # Optional covariate contribution X * a
+                if (isTRUE(include_covariates) && !is.null(a)) {
+                    X_arr <- expected_covariates_for_units_ctx(ctx, k, unit_ids = c(u), T_idx = observed_idxs)
+                    X_mat <- cbind(X_arr[1, , 1], X_arr[1, , 2])
+                    y_obs <- y_obs + as.numeric(X_mat %*% as.numeric(a))
+                }
+                dt[get("outcome_id") %in% observed_outcomes, ("y") := y_obs]
+                if (isTRUE(include_covariates)) {
+                    # Populate time-varying covariates for all outcomes (full T per unit)
+                    u_idx <- as.numeric(match(u, ctx$all_units))
+                    t_idx_full <- seq_along(outcomes)
+                    cov1_full <- u_idx * as.numeric(t_idx_full)
+                    cov2_full <- cov1_full * (as.numeric(t_idx_full) + 0.5 * u_idx + 1.0) + 0.7 * as.numeric(k)
+                    dt[, ("cov1") := cov1_full]
+                    dt[, ("cov2") := cov2_full]
+                }
+                if (isTRUE(include_auxiliary)) {
+                    dt[, ("aux1") := as.integer(match(u, ctx$all_units))]
+                    dt[, ("aux2") := as.integer(k)]
+                }
+                dt
+            } else {
+                dt <- data.table::data.table(
+                    unit_id = u,
+                    outcome_id = observed_outcomes
+                )
+                y_obs <- expected_Y_for_units_ctx(ctx, k, unit_ids = c(u), T_idx = observed_idxs)[1, ]
+                dt[, ("y") := y_obs]
+                dt
+            }
+        }))
+    }))
+}
+
+build_expected_unit_map <- function(units_by_cohort) {
+    expected_unit_map <- data.table::rbindlist(mapply(function(units, cid) {
+        data.table::data.table(unit_id = units, cohort_id = cid)
+    }, units_by_cohort, seq_along(units_by_cohort), SIMPLIFY = FALSE))
+    setkey(expected_unit_map, unit_id)
+    expected_unit_map
+}
+
+build_expected_processed_panel <- function(outcomes, cohort_indices, units_by_cohort, include_covariates = TRUE) {
+    all_units <- sort(unique(unlist(units_by_cohort)))
+    data.table::rbindlist(lapply(seq_along(cohort_indices), function(cid) {
+        observed_idxs <- cohort_indices[[cid]]
+        data.table::rbindlist(lapply(units_by_cohort[[cid]], function(u) {
+            if (isTRUE(include_covariates)) {
+                dt <- data.table::data.table(
+                    unit_id = u,
+                    cohort_id = cid,
+                    outcome_idx = seq_along(outcomes)
+                )
+                dt[, ("y") := as.integer(get("outcome_idx"))]
+                dt[!get("outcome_idx") %in% observed_idxs, ("y") := NA_integer_]
+                dt[, ("cov1") := as.integer(match(u, all_units))]
+                dt[, ("cov2") := as.integer(cid)]
+                dt
+            } else {
+                data.table::data.table(
+                    unit_id = u,
+                    cohort_id = cid,
+                    outcome_idx = observed_idxs,
+                    y = as.integer(observed_idxs)
+                )
+            }
+        }))
+    }))
+}
+
+# Linear algebra helpers
+projection_matrix_r <- function(X) {
+    if (ncol(X) == 0) {
+        return(matrix(0, nrow = nrow(X), ncol = nrow(X)))
+    }
+    svd_X <- svd(X)
+    tol <- max(dim(X)) * max(svd_X$d) * .Machine$double.eps
+    rank <- sum(svd_X$d > tol)
+    if (rank == 0) {
+        return(matrix(0, nrow = nrow(X), ncol = nrow(X)))
+    }
+    U <- svd_X$u[, 1:rank, drop = FALSE]
+    U %*% t(U)
+}
+
+generate_symmetric_rotation_matrices <- function(C, r) {
+    lapply(1:C, function(c) {
+        R <- matrix(0, nrow = r, ncol = r)
+        for (i in 1:r) {
+            for (j in 1:r) {
+                R[i, j] <- 0.1 * c * i + 0.1 * j
+            }
+        }
+        R <- (R + t(R)) / 2
+        diag(R) <- diag(R) + r
+        R
+    })
+}
+
+run_alignment_test_r <- function(true_factors,
+                                 observed_outcome_indices,
+                                 cohort_weights = NULL) {
+    C <- length(observed_outcome_indices)
+    r <- ncol(true_factors)
+    rotation_matrices <- generate_symmetric_rotation_matrices(C, r)
+
+    cohort_factor_matrices <- lapply(1:C, function(c) {
+        true_factors[observed_outcome_indices[[c]], ] %*% rotation_matrices[[c]]
+    })
+
+    if (is.null(cohort_weights)) {
+        aligned_factors <- align_factors_using_apm(
+            cohort_factor_matrices,
+            observed_outcome_indices
+        )
+    } else {
+        args <- list(cohort_factor_matrices, observed_outcome_indices, cohort_weights = cohort_weights)
+        aligned_factors <- do.call(align_factors_using_apm, args)
+    }
+
+    proj_aligned <- projection_matrix_r(aligned_factors)
+    proj_true <- projection_matrix_r(true_factors)
+
+    testthat::expect_equal(proj_aligned, proj_true, tolerance = 1e-9)
+}
+
+# Estimation data
+setup_estimation_test_data_r <- function() {
+    list(
+        Tval = 4, r = 2, Cval = 2, q = 2,
+        G = matrix(c(1, 1, 2, 4, 3, 9, 4, 16), nrow = 4, ncol = 2, byrow = TRUE),
+        a = c(0.5, 1.0),
+        g_0 = seq(0.1, 0.4, by = 0.1),
+        observed_outcome_indices = list(c(1, 2, 3), c(2, 3, 4)),
+        l_c = list(c(1.0, 2.0), c(3.0, 4.0)),
+        X_c_vec = list(
+            matrix(c(0.1, 0.5, 0.2, 0.6, 0.3, 0.7, 0.4, 0.8), nrow = 4, ncol = 2, byrow = TRUE),
+            matrix(c(1.1, 1.5, 1.2, 1.6, 1.3, 1.7, 1.4, 1.8), nrow = 4, ncol = 2, byrow = TRUE)
+        )
+    )
+}
+
+# O3 canonicalizer
+canonicalize_o3_output <- function(output) {
+    lapply(output, function(iteration) {
+        sorted_scs <- lapply(iteration, sort)
+        sorted_scs[order(sapply(sorted_scs, function(x) paste(x, collapse = "_")))]
+    })
+}
+
+# Specific true factors used across core tests
+make_true_factors_5x2 <- function() {
+    matrix(c(
+        0.1, 0.6,
+        0.2, 0.7,
+        0.3, 0.8,
+        0.4, 0.9,
+        0.5, 1.0
+    ), nrow = 5, ncol = 2, byrow = TRUE)
+}
+
+comp_rel_tol <- function(p, x, y, smallest_tol = 1e-10) {
+    pmax(smallest_tol, p*max(c(abs(x), abs(y))))
+}

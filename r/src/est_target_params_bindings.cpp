@@ -1,0 +1,359 @@
+#include <RcppArmadillo.h>
+#include <algorithm>
+#include <string>
+#include <vector>
+#include <unordered_map>
+
+#include "r_utils.h"
+#include "../../core/src/target_params/est_target_params.h"
+#include "../../core/src/est_outcome_means.h"
+#include "../../core/src/panels/InMemoryUnbalancedPanel.h"
+#include "../../core/src/cohort_specific_param_structs.h"
+#include "cohort_specific_estimates_helpers.h"
+#include "../../core/src/outcome_imputation.h"
+#include "est_target_params_bindings_helpers.h"
+
+// [[Rcpp::depends(RcppArmadillo)]]
+
+using apm::TargetParameterEstimates;
+using apm::OutcomeMeansEstimates;
+using apm::CohortAuxiliaryDataMeanEstimates;
+using apm::CohortAuxiliaryDataMeans;
+using apm::r_utils::make_xptr;
+
+namespace apm {
+namespace r_bindings {
+
+std::vector<CohortAuxiliaryDataMeanEstimates> list_to_eta_vec(Rcpp::Nullable<Rcpp::List> maybe_list) {
+    std::vector<CohortAuxiliaryDataMeanEstimates> out;
+    if (maybe_list.isNotNull()) {
+        Rcpp::List L(maybe_list);
+        out.reserve(L.size());
+        for (int i = 0; i < L.size(); ++i) {
+            if (Rf_isNull(L[i])) continue;
+            Rcpp::XPtr<CohortAuxiliaryDataMeanEstimates> xp(L[i]);
+            out.push_back(*xp);
+        }
+    }
+    return out;
+}
+
+std::unordered_map<std::string, OutcomeMeansEstimates> list_to_ome_map(Rcpp::List ome_by_spec) {
+    std::unordered_map<std::string, OutcomeMeansEstimates> ome_map;
+    Rcpp::CharacterVector nms = ome_by_spec.names();
+    for (int i = 0; i < ome_by_spec.size(); ++i) {
+        std::string key = Rcpp::as<std::string>(nms[i]);
+        Rcpp::XPtr<OutcomeMeansEstimates> xp(ome_by_spec[i]);
+        ome_map.emplace(std::move(key), *xp);
+    }
+    return ome_map;
+}
+
+} // namespace r_bindings
+} // namespace apm
+
+namespace {
+
+apm::TargetFn make_target_fn(Rcpp::Function r_fn) {
+    return [r_fn](const arma::mat& Y,
+                  const std::vector<apm::OutcomeMeanSufficientStatistics>& stats_all,
+                  const std::vector<CohortAuxiliaryDataMeans>& eta_all) -> arma::vec {
+        Rcpp::NumericMatrix Y_r(Y.n_rows, Y.n_cols);
+        std::copy(Y.begin(), Y.end(), Y_r.begin());
+        const int C = static_cast<int>(eta_all.size());
+        Rcpp::NumericVector shares(C);
+        Rcpp::List observed_means_list(C);
+        Rcpp::List covar_means_list(C);
+        Rcpp::List T_list(C);
+        Rcpp::List q_list(C);
+        Rcpp::List eta_list(C);
+        for (int c = 0; c < C; ++c) {
+            shares[c] = stats_all[c].cohort_pop_share;
+            observed_means_list[c] = Rcpp::NumericVector(stats_all[c].observed_outcome_means.begin(), stats_all[c].observed_outcome_means.end());
+            if (stats_all[c].covar_means.has_value()) {
+                const arma::mat& XM = *(stats_all[c].covar_means);
+                Rcpp::NumericMatrix XMr(XM.n_rows, XM.n_cols);
+                std::copy(XM.begin(), XM.end(), XMr.begin());
+                covar_means_list[c] = XMr;
+            } else {
+                covar_means_list[c] = R_NilValue;
+            }
+            T_list[c] = static_cast<int>(stats_all[c].T());
+            q_list[c] = static_cast<int>(stats_all[c].q());
+            const arma::mat& M = eta_all[c].auxiliary_means;
+            Rcpp::NumericMatrix Mr(M.n_rows, M.n_cols);
+            std::copy(M.begin(), M.end(), Mr.begin());
+            eta_list[c] = Mr;
+        }
+        Rcpp::RObject res = r_fn(Y_r, shares, observed_means_list, covar_means_list, eta_list);
+        return Rcpp::as<arma::vec>(res);
+    };
+}
+
+} // anonymous namespace
+
+// Compute from single spec
+// [[Rcpp::export]]
+SEXP est_target_params_cpp(SEXP ome_xptr,
+                          Rcpp::Nullable<Rcpp::List> stats_xptrs_by_cohort,
+                          Rcpp::Nullable<Rcpp::List> eta_xptrs_by_cohort,
+                          Rcpp::Function r_fn) {
+    Rcpp::XPtr<OutcomeMeansEstimates> ome(ome_xptr);
+    auto stats_vec = apm::r_utils::list_to_stats_vec(stats_xptrs_by_cohort);
+    auto eta_vec = apm::r_bindings::list_to_eta_vec(eta_xptrs_by_cohort);
+    apm::TargetFn cb = make_target_fn(r_fn);
+    // NOTE: Calling R from multiple threads is unsafe. We therefore force single-threaded
+    // execution (num_threads = 1) for target param estimation invoked via R bindings.
+    std::optional<std::size_t> nt_opt = std::optional<std::size_t>(1);
+    TargetParameterEstimates out = apm::est_target_params(*ome, stats_vec, eta_vec, cb, nt_opt);
+    return make_xptr(std::move(out));
+}
+
+// Accessors aligned with other *Estimates
+// [[Rcpp::export]]
+bool tpe_has_bootstrap_cpp(SEXP xp_) {
+    Rcpp::XPtr<TargetParameterEstimates> xp(xp_);
+    return xp->has_bootstrap_replicates();
+}
+
+// [[Rcpp::export]]
+int tpe_num_bootstrap_cpp(SEXP xp_) {
+    Rcpp::XPtr<TargetParameterEstimates> xp(xp_);
+    return static_cast<int>(xp->n_bootstrap_replicates());
+}
+
+// [[Rcpp::export]]
+int tpe_p_cpp(SEXP xp_) {
+    Rcpp::XPtr<TargetParameterEstimates> xp(xp_);
+    return static_cast<int>(xp->p());
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericVector tpe_point_params_cpp(SEXP xp_) {
+    Rcpp::XPtr<TargetParameterEstimates> xp(xp_);
+    const arma::vec& v = xp->point;
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericVector tpe_boot_params_cpp(SEXP xp_, int b1) {
+    Rcpp::XPtr<TargetParameterEstimates> xp(xp_);
+    int B = static_cast<int>(xp->bootstrap_replicates.n_cols);
+    if (b1 < 1 || b1 > B) Rcpp::stop("bootstrap index out of range");
+    arma::vec v = xp->bootstrap_replicates.col(static_cast<arma::uword>(b1 - 1));
+    Rcpp::NumericVector out(v.n_elem);
+    std::copy(v.begin(), v.end(), out.begin());
+    return out;
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericMatrix tpe_boot_params_matrix_cpp(SEXP xp_) {
+    Rcpp::XPtr<TargetParameterEstimates> xp(xp_);
+    const std::size_t B = xp->n_bootstrap_replicates();
+    const std::size_t p = xp->p();
+    // Directly wrap the arma::mat as R matrix
+    const arma::mat& M = xp->bootstrap_replicates;
+    if (static_cast<std::size_t>(M.n_rows) != p) Rcpp::stop("Unexpected bootstrap matrix n_rows vs p.");
+    Rcpp::NumericMatrix out(static_cast<int>(M.n_rows), static_cast<int>(M.n_cols));
+    std::copy(M.begin(), M.end(), out.begin());
+    return out;
+}
+
+// By-spec variant: named list of XPtr<TargetParameterEstimates>
+// [[Rcpp::export]]
+Rcpp::List est_target_params_by_spec_cpp(Rcpp::List ome_by_spec,
+                                         Rcpp::Nullable<Rcpp::List> stats_xptrs_by_cohort,
+                                         Rcpp::Nullable<Rcpp::List> eta_xptrs_by_cohort,
+                                         Rcpp::Function r_fn) {
+    auto ome_map = apm::r_bindings::list_to_ome_map(ome_by_spec);
+    auto eta_vec = apm::r_bindings::list_to_eta_vec(eta_xptrs_by_cohort);
+    auto stats_vec = apm::r_utils::list_to_stats_vec(stats_xptrs_by_cohort);
+
+    apm::TargetFn cb = make_target_fn(r_fn);
+    // NOTE: Calling R from multiple threads is unsafe. We therefore force single-threaded
+    // execution (num_threads = 1) for target param estimation invoked via R bindings.
+    std::optional<std::size_t> nt_opt = std::optional<std::size_t>(1); // single-thread for R safety
+    auto out_map = apm::est_target_params(ome_map, stats_vec, eta_vec, cb, nt_opt);
+
+    Rcpp::List out(static_cast<int>(out_map.size()));
+    Rcpp::CharacterVector names(static_cast<int>(out_map.size()));
+    int k = 0;
+    for (auto& kv : out_map) {
+        names[k] = kv.first;
+        out[k] = make_xptr(std::move(kv.second));
+        ++k;
+    }
+    out.attr("names") = names;
+    return out;
+}
+
+// [[Rcpp::export]]
+SEXP get_target_param_diff_ests_cpp(SEXP tpe1_xp, SEXP tpe2_xp) {
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe1(tpe1_xp);
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe2(tpe2_xp);
+    apm::TargetParameterEstimates out = apm::get_target_param_diff_ests(*tpe1, *tpe2);
+    return apm::r_utils::make_xptr(std::move(out));
+}
+
+// [[Rcpp::export]]
+SEXP combine_target_param_ests_cpp(SEXP tpe1_xp, SEXP tpe2_xp) {
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe1(tpe1_xp);
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe2(tpe2_xp);
+    apm::TargetParameterEstimates out = apm::combine_target_param_ests(*tpe1, *tpe2);
+    return apm::r_utils::make_xptr(std::move(out));
+}
+
+// [[Rcpp::export]]
+SEXP combine_target_param_ests_multi_cpp(Rcpp::List tpe_list) {
+    std::vector<apm::TargetParameterEstimates> inputs;
+    inputs.reserve(tpe_list.size());
+    for (int i = 0; i < tpe_list.size(); ++i) {
+        Rcpp::XPtr<apm::TargetParameterEstimates> xp(tpe_list[i]);
+        inputs.push_back(*xp);
+    }
+    apm::TargetParameterEstimates out = apm::combine_target_param_ests(inputs);
+    return apm::r_utils::make_xptr(std::move(out));
+}
+
+// [[Rcpp::export]]
+SEXP subset_target_param_ests_cpp(SEXP tpe_xp, Rcpp::IntegerVector indices_0based) {
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe(tpe_xp);
+    arma::uvec idx(indices_0based.size());
+    for (int i = 0; i < indices_0based.size(); ++i) {
+        if (indices_0based[i] < 0) {
+            Rcpp::stop("indices must be non-negative");
+        }
+        idx(static_cast<arma::uword>(i)) = static_cast<arma::uword>(indices_0based[i]);
+    }
+    apm::TargetParameterEstimates out = apm::subset_target_param_ests(*tpe, idx);
+    return apm::r_utils::make_xptr(std::move(out));
+}
+
+//------------------------------------------------------------------------------
+// End-to-end: estimate target parameter components from panel (by spec)
+//------------------------------------------------------------------------------
+
+// [[Rcpp::export]]
+Rcpp::List est_target_param_components_from_panel_cpp(
+    SEXP panel_holder_xptr,
+    Rcpp::List est_specs,
+    SEXP bootstrap_xptr = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> num_threads_in = R_NilValue,
+    Rcpp::Nullable<Rcpp::List> cohort_outcomes_to_mask_in = R_NilValue,
+    bool est_outcome_means_via_imputation = true,
+    Rcpp::Nullable<Rcpp::List> imputation_options_in = R_NilValue)
+{
+    const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
+    auto cpp_specs = apm::r_utils::to_cpp_specs(est_specs);
+    auto wb = apm::r_utils::xp_to_const_wb_shared(bootstrap_xptr);
+    std::optional<std::size_t> nt_opt = std::nullopt; {
+        auto p = apm::r_utils::resolve_num_threads(num_threads_in);
+        if (p.first) nt_opt = p.second;
+    }
+    apm::CohortOutcomeMask mask = apm::r_utils::to_cpp_mask(cohort_outcomes_to_mask_in);
+
+    apm::ImputationOptions imputation_opts = apm::r_utils::imputation_options_from_r_list(imputation_options_in);
+
+    apm::TargetParamComponents comps = apm::est_target_param_components_from_panel(
+        panel, cpp_specs, wb, nt_opt, mask, est_outcome_means_via_imputation, imputation_opts);
+
+    Rcpp::List ome_out(static_cast<int>(comps.outcome_means_by_spec.size()));
+    Rcpp::CharacterVector names(static_cast<int>(comps.outcome_means_by_spec.size()));
+    int k = 0;
+    for (auto& kv : comps.outcome_means_by_spec) {
+        names[k] = kv.first;
+        ome_out[k] = make_xptr(std::move(kv.second));
+        ++k;
+    }
+    ome_out.attr("names") = names;
+
+    Rcpp::List cohort_stats(static_cast<int>(comps.cohort_outcome_mean_ests.size()));
+    for (int i = 0; i < static_cast<int>(comps.cohort_outcome_mean_ests.size()); ++i) {
+        cohort_stats[i] = make_xptr(apm::OutcomeMeanSuffStatEstimates(comps.cohort_outcome_mean_ests[static_cast<std::size_t>(i)]));
+    }
+
+    Rcpp::RObject aux_out = R_NilValue;
+    if (!comps.cohort_auxiliary_means.empty()) {
+        Rcpp::List aux_list(static_cast<int>(comps.cohort_auxiliary_means.size()));
+        for (int i = 0; i < static_cast<int>(comps.cohort_auxiliary_means.size()); ++i) {
+            aux_list[i] = make_xptr(apm::CohortAuxiliaryDataMeanEstimates(comps.cohort_auxiliary_means[static_cast<std::size_t>(i)]));
+        }
+        aux_out = aux_list;
+    }
+
+    Rcpp::RObject masked_indices_out = R_NilValue;
+    if (comps.masked_observed_outcome_indices.has_value()) {
+        masked_indices_out = apm::r_utils::to_r_observed_outcome_indices(*comps.masked_observed_outcome_indices);
+    }
+
+    Rcpp::RObject masked_means_out = R_NilValue;
+    if (!comps.masked_cohort_outcome_means.empty()) {
+        masked_means_out = apm::r_utils::masked_means_to_r_list(comps.masked_cohort_outcome_means);
+    }
+
+    Rcpp::RObject mask_out = R_NilValue;
+    if (comps.cohort_outcome_mask.has_value()) {
+        mask_out = apm::r_utils::mask_to_r_list(*comps.cohort_outcome_mask);
+    }
+
+    Rcpp::List final = Rcpp::List::create(
+        Rcpp::Named("outcome_means") = ome_out,
+        Rcpp::Named("cohort_outcome_mean_ests") = cohort_stats,
+        Rcpp::Named("cohort_auxiliary_means") = aux_out,
+        Rcpp::Named("masked_cohort_outcome_means") = masked_means_out,
+        Rcpp::Named("masked_observed_outcome_indices") = masked_indices_out,
+        Rcpp::Named("cohort_outcome_mask") = mask_out
+    );
+    return final;
+}
+
+//------------------------------------------------------------------------------
+// Inference for target parameters given panel
+//------------------------------------------------------------------------------
+
+// [[Rcpp::export]]
+SEXP target_param_inference_cpp(SEXP tpe_xptr,
+                                SEXP panel_holder_xptr,
+                                double sig_level = 0.05) {
+    Rcpp::XPtr<apm::TargetParameterEstimates> tpe(tpe_xptr);
+    const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
+    apm::SimultaneousInferenceResults res = apm::target_param_inference(*tpe, panel, sig_level);
+    return apm::r_utils::make_xptr(std::move(res));
+}
+
+// By-spec inference: named list of XPtr<TargetParameterEstimates> -> named list of XPtr<SimultaneousInferenceResults>
+// [[Rcpp::export]]
+Rcpp::List target_param_inference_by_spec_cpp(Rcpp::List tpe_by_spec,
+                                              SEXP panel_holder_xptr,
+                                              double sig_level = 0.05) {
+    // Build input map<string, TargetParameterEstimates>
+    std::unordered_map<std::string, apm::TargetParameterEstimates> ests_map;
+    {
+        Rcpp::CharacterVector nms = tpe_by_spec.names();
+        for (int i = 0; i < tpe_by_spec.size(); ++i) {
+            std::string key = Rcpp::as<std::string>(nms[i]);
+            Rcpp::XPtr<apm::TargetParameterEstimates> xp(tpe_by_spec[i]);
+            ests_map.emplace(std::move(key), *xp);
+        }
+    }
+
+    // Panel ref
+    const apm::InMemoryUnbalancedPanel& panel = apm::r_utils::panel_ref_from_panel_holder(panel_holder_xptr);
+
+    // Delegate to core overload
+    auto res_map = apm::target_param_inference(ests_map, panel, sig_level);
+
+    // Return named list of XPtr<SimultaneousInferenceResults>
+    Rcpp::List out(static_cast<int>(res_map.size()));
+    Rcpp::CharacterVector names(static_cast<int>(res_map.size()));
+    int k = 0;
+    for (auto& kv : res_map) {
+        names[k] = kv.first;
+        out[k] = apm::r_utils::make_xptr(std::move(kv.second));
+        ++k;
+    }
+    out.attr("names") = names;
+    return out;
+}

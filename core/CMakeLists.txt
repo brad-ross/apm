@@ -25,13 +25,37 @@ find_package(LAPACK REQUIRED)
 # Find Boost (for Graph Library) - conda-friendly
 find_package(Boost REQUIRED COMPONENTS graph)
 
-# Find Arrow - conda-friendly
-find_package(Arrow REQUIRED)
-
-# Arrow found successfully
+# Find oneTBB for parallelization (optional; Homebrew installs TBBConfig.cmake)
+find_package(TBB CONFIG QUIET COMPONENTS tbb)
 
 # Create the core library
-add_library(apm src/apm_core.cpp src/linear_algebra_utils.cpp)
+add_library(apm
+    src/apm_core.cpp
+    src/est_outcome_means.cpp
+    src/agg_cohort_specific_factor_model_params.cpp
+    src/summarize_identification.cpp
+    src/outcome_imputation.cpp
+    src/outcome_clustering/cluster_outcomes.cpp
+    src/outcome_clustering/weighted_kmeans.cpp
+    src/outcome_imputation_helpers.h
+    src/linear_algebra_utils.cpp
+    src/bootstrap.cpp
+    src/online_accumulators.cpp
+    # factor_model_parameter_structs is header-only now
+    src/factor_model_estimators/FactorModelEstimator.cpp
+    src/factor_model_estimators/pc_estimators.cpp
+    src/factor_model_estimators/twfe_estimator.cpp
+    src/OutcomeMeanSuffStatEstimator.cpp
+    src/nuisance_param_estimators.cpp
+    src/est_cohort_specific_params.cpp
+    src/panels/AbstractUnbalancedPanel.h
+    src/panels/InMemoryUnbalancedPanel.cpp
+    src/panels/CohortLevelUnbalancedPanel.cpp
+    src/utils.cpp
+    src/target_params/est_target_params.cpp
+    src/target_params/match_attribution.cpp
+    src/target_params/est_outcome_mean_err_metrics.cpp
+)
 target_include_directories(apm PUBLIC src)
 
 # Link libraries using modern CMake targets
@@ -41,18 +65,16 @@ target_link_libraries(apm
         ${BLAS_LIBRARIES}
         ${LAPACK_LIBRARIES}
         Boost::graph
-        Arrow::arrow_shared
 )
 
-# Explicitly link Acero and Compute libraries (needed for Homebrew Arrow)
-find_library(ARROW_ACERO_LIB NAMES arrow_acero libarrow_acero)
-find_library(ARROW_COMPUTE_LIB NAMES arrow_compute libarrow_compute)
-if(ARROW_ACERO_LIB)
-    target_link_libraries(apm PUBLIC ${ARROW_ACERO_LIB})
+if(TARGET TBB::tbb)
+    message(STATUS "oneTBB found; building with parallel cohort loop")
+    target_link_libraries(apm PUBLIC TBB::tbb)
+    target_compile_definitions(apm PUBLIC APM_HAS_TBB=1)
+else()
+    message(STATUS "oneTBB NOT found; building with serial cohort loop")
 endif()
-if(ARROW_COMPUTE_LIB)
-    target_link_libraries(apm PUBLIC ${ARROW_COMPUTE_LIB})
-endif()
+
 
 # On macOS, link against the Accelerate framework for BLAS/LAPACK
 if(APPLE)
@@ -79,6 +101,8 @@ enable_testing()
 find_package(GTest QUIET)
 if(GTest_FOUND)
     add_subdirectory(tests)
+    # Enable test-only APIs in the core library when building tests
+    target_compile_definitions(apm PUBLIC APM_TESTS=1)
 else()
     message(WARNING "Google Test not found. Tests will not be built.")
 endif()
@@ -90,6 +114,7 @@ install(TARGETS apm
     RUNTIME DESTINATION bin
 )
 
-install(FILES src/apm_core.h src/linear_algebra_utils.h
+install(FILES src/apm_core.h src/est_outcome_means.h src/agg_cohort_specific_factor_model_params.h src/summarize_identification.h src/bootstrap.h src/factor_model_estimators/FactorModelEstimator.h src/factor_model_estimators/pc_estimators.h src/cohort_specific_param_structs.h src/OutcomeMeanSuffStatEstimator.h src/nuisance_param_estimators.h src/est_cohort_specific_params.h src/utils.h src/target_params/est_target_params.h src/panels/AbstractUnbalancedPanel.h src/panels/InMemoryUnbalancedPanel.h src/panels/CohortLevelUnbalancedPanel.h src/outcome_imputation.h src/outcome_clustering/cluster_outcomes.h src/outcome_clustering/weighted_kmeans.h
+    src/target_params/est_outcome_mean_err_metrics.h
     DESTINATION include/apm
-) 
+)

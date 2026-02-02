@@ -17,16 +17,19 @@ Depends:
 Imports: 
     Rcpp (>= 1.0.0),
     RcppArmadillo (>= 0.9.000.0.0),
-    data.table (>= 1.14.0)
+    RcppParallel,
+    data.table (>= 1.14.0),
+    parallel,
+    R6,
+    xxhashlite
 LinkingTo: 
     Rcpp,
-    RcppArmadillo
-SystemRequirements: 
-    C++17,
-    Armadillo (>= 9.000),
-    Boost (>= 1.70.0)
+    RcppArmadillo,
+    RcppParallel,
+    BH
 Suggests: 
     testthat (>= 3.0.0)
+SystemRequirements: C++17
 RoxygenNote: 7.3.2
 BugReports: https://github.com/brad-ross/apm/issues
 URL: https://github.com/brad-ross/apm 

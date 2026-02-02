@@ -2,11 +2,52 @@
 # This tells R how to compile and link the core C++ library
 
 # Use RcppArmadillo flags for consistent compilation and define USING_R flag
-PKG_CPPFLAGS = $(shell $(R_HOME)/bin/Rscript -e "RcppArmadillo:::CxxFlags()") -I../../core/src -DUSING_R -I/opt/homebrew/include
+PKG_CPPFLAGS = $(shell $(R_HOME)/bin/Rscript -e "RcppArmadillo:::CxxFlags()") -I../../core/src -DUSING_R
 PKG_CXXFLAGS = -std=c++17
 
-# RcppArmadillo is header-only, no special linking needed. Add Boost lib path.
-PKG_LIBS = -L/opt/homebrew/lib $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+# Link against LAPACK/BLAS provided by R
+PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+
+# oneTBB via RcppParallel (preferred), with pkg-config fallback
+RCPP_PARALLEL_CXXFLAGS := $(shell $(R_HOME)/bin/Rscript -e "cat(tryCatch(RcppParallel::CxxFlags(), error=function(e) ''))")
+RCPP_PARALLEL_LIBS     := $(shell $(R_HOME)/bin/Rscript -e "cat(tryCatch(RcppParallel::RcppParallelLibs(), error=function(e) ''))")
+
+# Try RcppParallel headers first; only define APM_HAS_TBB if headers are available
+ifneq ($(strip $(RCPP_PARALLEL_CXXFLAGS)),)
+  PKG_CPPFLAGS += $(RCPP_PARALLEL_CXXFLAGS) -DAPM_HAS_TBB=1
+  PKG_LIBS     += $(RCPP_PARALLEL_LIBS)
+  $(info APM: Building with oneTBB via RcppParallel (headers available))
+  $(info APM: RCPP_PARALLEL_CXXFLAGS=$(RCPP_PARALLEL_CXXFLAGS))
+  $(info APM: RCPP_PARALLEL_LIBS=$(RCPP_PARALLEL_LIBS))
+else
+  # Fallback: system oneTBB via pkg-config; define APM_HAS_TBB if headers/libs found
+  TBB_CFLAGS := $(shell pkg-config --cflags tbb 2>/dev/null)
+  TBB_LIBS   := $(shell pkg-config --libs   tbb 2>/dev/null)
+  ifneq ($(strip $(TBB_CFLAGS) $(TBB_LIBS)),)
+    PKG_CPPFLAGS += $(TBB_CFLAGS) -DAPM_HAS_TBB=1
+    PKG_LIBS     += $(TBB_LIBS)
+    $(info APM: Building with system oneTBB via pkg-config)
+    $(info APM: TBB_CFLAGS=$(TBB_CFLAGS))
+    $(info APM: TBB_LIBS=$(TBB_LIBS))
+  else
+    $(info APM: oneTBB not found (no headers via RcppParallel or pkg-config); building serial path)
+  endif
+endif
 
 # Object files (including the core library)
-OBJECTS = apm_core_bindings.o r_utils.o RcppExports.o ../../core/src/apm_core.o ../../core/src/linear_algebra_utils.o 
+OBJECTS = apm_core_bindings.o bootstrap_bindings.o r_utils.o RcppExports.o \
+           ../../core/src/apm_core.o ../../core/src/linear_algebra_utils.o ../../core/src/bootstrap.o ../../core/src/online_accumulators.o \
+           ../../core/src/factor_model_estimators/FactorModelEstimator.o ../../core/src/factor_model_estimators/pc_estimators.o \
+           ../../core/src/factor_model_estimators/twfe_estimator.o \
+           ../../core/src/OutcomeMeanSuffStatEstimator.o ../../core/src/nuisance_param_estimators.o ../../core/src/est_cohort_specific_params.o \
+           ../../core/src/panels/InMemoryUnbalancedPanel.o ../../core/src/panels/CohortLevelUnbalancedPanel.o \
+           ../../core/src/utils.o ../../core/src/est_outcome_means.o ../../core/src/agg_cohort_specific_factor_model_params.o ../../core/src/target_params/est_target_params.o ../../core/src/target_params/est_outcome_mean_err_metrics.o ../../core/src/outcome_imputation.o \
+           factor_model_estimator_bindings.o pc_estimator_bindings.o outcome_mean_suff_stats_bindings.o \
+           twfe_estimator_bindings.o \
+           est_cohort_specific_params_bindings.o cohort_weight_estimates_bindings.o nuisance_params_bindings.o \
+           est_outcome_means_bindings.o agg_cohort_specific_factor_model_params_bindings.o outcome_means_estimates_bindings.o est_target_params_bindings.o est_outcome_mean_err_metrics_bindings.o \
+           outcome_imputation_bindings.o \
+           outcome_clustering_bindings.o ../../core/src/outcome_clustering/cluster_outcomes.o \
+           ../../core/src/outcome_clustering/weighted_kmeans.o \
+           summarize_identification_bindings.o ../../core/src/summarize_identification.o \
+           match_attribution_bindings.o ../../core/src/target_params/match_attribution.o
