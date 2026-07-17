@@ -1,4 +1,4 @@
-import os
+import sys
 from pathlib import Path
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext
@@ -7,10 +7,11 @@ from setuptools import setup
 HERE = Path(__file__).resolve().parent
 CORE = HERE.parent / "core" / "src"
 
-library_dirs = []
-conda_prefix = os.environ.get("CONDA_PREFIX")
-if conda_prefix:
-    library_dirs.append(str(Path(conda_prefix) / "lib"))
+libraries = ["blas", "lapack"]
+extra_link_args = ["-static-libstdc++", "-static-libgcc"]
+if sys.platform == "darwin":
+    libraries = []
+    extra_link_args = ["-framework", "Accelerate"]
 
 ext_modules = [
     Pybind11Extension(
@@ -26,8 +27,8 @@ ext_modules = [
             "../core/src/factor_model_estimators/pc_estimators.cpp",
         ],
         include_dirs=[str(CORE)],
-        libraries=["armadillo", "boost_graph", "blas", "lapack"],
-        library_dirs=library_dirs,
+        libraries=libraries,
+        extra_link_args=extra_link_args,
         cxx_std=17,
         define_macros=[
             ("ARMA_DONT_USE_WRAPPER", "1"),

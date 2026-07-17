@@ -10,7 +10,7 @@ find_package(pybind11 CONFIG REQUIRED)
 find_package(Armadillo REQUIRED)
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
-find_package(Boost REQUIRED COMPONENTS graph)
+find_package(Boost REQUIRED)
 
 set(APM_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../core/src")
 set(APM_CORE_SOURCES
@@ -24,12 +24,14 @@ set(APM_CORE_SOURCES
 )
 
 pybind11_add_module(_core src/apm/_core.cpp ${APM_CORE_SOURCES})
-target_include_directories(_core PRIVATE "${APM_CORE_DIR}")
+target_include_directories(_core PRIVATE
+    "${APM_CORE_DIR}"
+    ${ARMADILLO_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIRS}
+)
 target_link_libraries(_core PRIVATE
-    ${ARMADILLO_LIBRARIES}
     ${BLAS_LIBRARIES}
     ${LAPACK_LIBRARIES}
-    Boost::graph
 )
 target_compile_definitions(_core PRIVATE
     ARMA_DONT_USE_WRAPPER=1
