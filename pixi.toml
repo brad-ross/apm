@@ -38,9 +38,9 @@ build-all = { depends-on = ["configure", "build"] }
 test-all = { depends-on = ["build-all", "test-cpp"] }
 
 # Python development  
-install-python = "cd python && python setup.py build_ext --inplace"
-install-python-dev = "pip install -e python/"
-test-python = "cd python && python -c 'import sys; sys.path.insert(0, \"src\"); import apm; print(\"APM version:\", apm.get_version())'"
+install-python = "python -m pip install ./python"
+install-python-dev = "python -m pip install -e ./python --no-build-isolation"
+test-python = "python -m pytest python/tests"
 
 [pypi-dependencies]
 # Development packages from PyPI that aren't available in conda-forge

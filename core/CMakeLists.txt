@@ -28,6 +28,23 @@ find_package(Boost REQUIRED COMPONENTS graph)
 # Find oneTBB for parallelization (optional; Homebrew installs TBBConfig.cmake)
 find_package(TBB CONFIG QUIET COMPONENTS tbb)
 
+if(TARGET TBB::tbb)
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_LIBRARIES TBB::tbb)
+    check_cxx_source_compiles(
+        "#include <oneapi/tbb/global_control.h>
+         #include <oneapi/tbb/parallel_for.h>
+         int main() {
+             oneapi::tbb::parallel_for(0, 1, [](int) {});
+             return 0;
+         }"
+        APM_TBB_USABLE
+    )
+    unset(CMAKE_REQUIRED_LIBRARIES)
+else()
+    set(APM_TBB_USABLE FALSE)
+endif()
+
 # Create the core library
 add_library(apm
     src/apm_core.cpp
@@ -67,12 +84,12 @@ target_link_libraries(apm
         Boost::graph
 )
 
-if(TARGET TBB::tbb)
+if(APM_TBB_USABLE)
     message(STATUS "oneTBB found; building with parallel cohort loop")
     target_link_libraries(apm PUBLIC TBB::tbb)
     target_compile_definitions(apm PUBLIC APM_HAS_TBB=1)
 else()
-    message(STATUS "oneTBB NOT found; building with serial cohort loop")
+    message(STATUS "usable oneTBB headers/libraries not found; building with serial cohort loop")
 endif()
 
 
