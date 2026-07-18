@@ -13,9 +13,10 @@ The method identifies all counterfactual outcome means, including those not esti
 The R package in [`r`](r) is the most complete user interface. See the
 [R package documentation](r/README.md) for installation and usage.
 
-The [`python`](python) package provides pybind11 bindings for the C++ principal
-components estimators, APM factor alignment, weighted bootstraps, and matrix
-completion from observed outcomes. In the pixi environment:
+The [`python`](python) package provides a Polars-native long-panel ATT workflow
+alongside pybind11 bindings for the C++ principal-components estimators, APM
+factor alignment, weighted bootstraps, and matrix completion. In the pixi
+environment:
 
 ```bash
 pixi run install-python-dev

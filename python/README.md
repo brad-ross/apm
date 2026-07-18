@@ -12,6 +12,64 @@ pixi run install-python-dev
 pixi run test-python
 ```
 
+## ATT from a long Polars panel
+
+The high-level API accepts a balanced long panel with exactly one row per
+unit-outcome pair. The treatment column must be an absorbing indicator that
+switches on at adoption. APM reshapes the data, constructs cohorts, completes
+the untreated cohort means, and aggregates the treated cells into an ATT. All
+tabular validation, indexing, grouping, and result construction uses Polars;
+NumPy arrays are used only at the C++ numerical boundary.
+
+```python
+import apm
+import polars as pl
+
+panel = pl.DataFrame(
+    {
+        "unit": [1, 1, 1, 2, 2, 2],
+        "period": [1, 2, 3, 1, 2, 3],
+        "outcome": [1.0, 2.0, 5.0, 2.0, 4.0, 6.0],
+        "treated": [False, False, True, False, False, False],
+    }
+)
+
+result = apm.estimate_att(
+    panel,
+    unit_id_col="unit",
+    outcome_id_col="period",
+    outcome_value_col="outcome",
+    treatment_col="treated",
+    model_rank=1,
+)
+
+result.att                 # scalar ATT over all treated cells
+result.att_by_outcome      # Polars DataFrame of period-specific ATTs
+result.completed_panel     # long Polars frame with completion/ATT contributions
+result.counterfactual_means  # N x T NumPy matrix of cohort counterfactual means
+```
+
+For repeated estimation, prepare the panel once using the R-style container API:
+
+```python
+prepared = apm.BalancedPanel(
+    panel,
+    unit_id_col="unit",
+    outcome_id_col="period",
+    outcome_value_col="outcome",
+    treatment_col="treated",
+    model_rank=1,
+)
+result = prepared.estimate_att()
+```
+
+`BalancedPanel` exposes `get_unit_ids()`, `get_outcome_ids()`,
+`get_observed_outcome_indices()`, `get_unit_cohorts()`, and the other panel
+metadata accessors used by the R package. For balanced source data with
+additional administrative gaps, pass a boolean `counterfactual_observed_col`;
+the rows stay in the panel while unavailable cells are excluded from factor
+estimation.
+
 ## Principal-components estimator
 
 The estimator interface mirrors the R package. Python uses zero-based indices,
