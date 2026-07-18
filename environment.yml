@@ -1,0 +1,32 @@
+name: apm-dev
+channels:
+  - conda-forge
+dependencies:
+  # Build tools
+  - cmake>=3.16
+  - ninja  # faster than make
+  - pkg-config
+  
+  # C++ compiler and tools
+  - cxx-compiler
+  - gxx_linux-64  # or gxx_osx-64 for macOS
+  
+  # C++ dependencies
+  - boost-cpp>=1.70
+  - armadillo>=9.0
+  - arrow-cpp
+  - gtest  # for testing
+  
+  # Python dependencies for bindings
+  - python>=3.8
+  - pybind11>=2.6
+  - numpy
+  - pip
+  
+  # Development tools
+  - black
+  - pytest
+  
+  # Pip dependencies (if needed)
+  - pip:
+    - []

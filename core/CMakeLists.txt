@@ -1,19 +1,49 @@
 cmake_minimum_required(VERSION 3.16)
 project(apm_core VERSION 0.1.0 LANGUAGES CXX)
 
+# Modern CMake policies
+cmake_policy(SET CMP0167 OLD)  # Keep using FindBoost for now
+
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Support conda/mamba environments
+if(DEFINED ENV{CONDA_PREFIX})
+    set(CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_PREFIX_PATH}")
+    message(STATUS "Using conda environment: $ENV{CONDA_PREFIX}")
+endif()
 
 # Configure Armadillo as header-only
 set(ARMA_DONT_USE_WRAPPER 1)
 find_package(Armadillo REQUIRED)
 
-# Find Boost (for Graph Library)
+# Find BLAS and LAPACK (required by Armadillo)
+find_package(BLAS REQUIRED)
+find_package(LAPACK REQUIRED)
+
+# Find Boost (for Graph Library) - conda-friendly
 find_package(Boost REQUIRED COMPONENTS graph)
 
 # Find oneTBB for parallelization (optional; Homebrew installs TBBConfig.cmake)
 find_package(TBB CONFIG QUIET COMPONENTS tbb)
+
+if(TARGET TBB::tbb)
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_LIBRARIES TBB::tbb)
+    check_cxx_source_compiles(
+        "#include <oneapi/tbb/global_control.h>
+         #include <oneapi/tbb/parallel_for.h>
+         int main() {
+             oneapi::tbb::parallel_for(0, 1, [](int) {});
+             return 0;
+         }"
+        APM_TBB_USABLE
+    )
+    unset(CMAKE_REQUIRED_LIBRARIES)
+else()
+    set(APM_TBB_USABLE FALSE)
+endif()
 
 # Create the core library
 add_library(apm
@@ -49,15 +79,17 @@ target_include_directories(apm PUBLIC src)
 target_link_libraries(apm
     PUBLIC
         ${ARMADILLO_LIBRARIES}
+        ${BLAS_LIBRARIES}
+        ${LAPACK_LIBRARIES}
         Boost::graph
 )
 
-if(TARGET TBB::tbb)
+if(APM_TBB_USABLE)
     message(STATUS "oneTBB found; building with parallel cohort loop")
     target_link_libraries(apm PUBLIC TBB::tbb)
     target_compile_definitions(apm PUBLIC APM_HAS_TBB=1)
 else()
-    message(STATUS "oneTBB NOT found; building with serial cohort loop")
+    message(STATUS "usable oneTBB headers/libraries not found; building with serial cohort loop")
 endif()
 
 

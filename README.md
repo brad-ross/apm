@@ -10,6 +10,18 @@ The method identifies all counterfactual outcome means, including those not esti
 
 ## Getting Started
 
-The primary interface is through the R package, which you can find in the [`r`](r) directory. See the [R package documentation](r/README.md) for installation and usage instructions.
+The R package in [`r`](r) is the most complete user interface. See the
+[R package documentation](r/README.md) for installation and usage.
 
-For developers interested in the core C++ implementation housed in the [`core`](core) directory, see the [C++ core documentation](core/README.md). 
+The [`python`](python) package provides a Polars-native long-panel ATT workflow
+alongside pybind11 bindings for the C++ principal-components estimators, APM
+factor alignment, weighted bootstraps, and matrix completion. In the pixi
+environment:
+
+```bash
+pixi run install-python-dev
+pixi run test-python
+```
+
+See the [Python package documentation](python/README.md) for examples. For the
+underlying implementation, see the [C++ core documentation](core/README.md).

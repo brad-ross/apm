@@ -1,0 +1,50 @@
+[project]
+name = "apm"
+version = "0.1.0"
+description = "Aggregated Projection Matrix for causal inference"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[dependencies]
+# Build tools
+cmake = ">=3.16"
+ninja = "*"
+pkg-config = "*"
+
+# C++ compiler
+cxx-compiler = "*"
+
+# C++ dependencies
+boost-cpp = ">=1.70"
+armadillo = ">=9.0"
+arrow-cpp = "*"
+gtest = "*"
+
+# Python for bindings
+python = ">=3.8"
+pybind11 = ">=2.6"
+numpy = "*"
+polars = ">=0.20.4"
+pip = "*"
+setuptools = "*"
+
+[tasks]
+# Build tasks
+configure = "cmake -S core -B core/build -GNinja -DCMAKE_BUILD_TYPE=Release"
+build = "cmake --build core/build"
+test-cpp = "cd core/build && ctest --output-on-failure"
+
+# Combined tasks
+build-all = { depends-on = ["configure", "build"] }
+test-all = { depends-on = ["build-all", "test-cpp"] }
+
+# Python development  
+install-python = "python -m pip install ./python"
+install-python-dev = "python -m pip install -e ./python --no-build-isolation"
+test-python = "python -m pytest python/tests"
+
+[pypi-dependencies]
+# Development packages from PyPI that aren't available in conda-forge
+pytest = "*"
+black = "*"
+ruff = "*"
