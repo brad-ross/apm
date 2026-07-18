@@ -54,3 +54,15 @@ completed = apm.impute_outcomes_from_obs_outcomes(
 `impute_outcomes_across_cohorts_from_obs_outcomes` completes all cohorts in one
 call. Optional fixed effects and covariates follow the same `g_0`, `a`, and
 `X_c` argument structure as the R API.
+
+## Demo notebook
+
+[`notebooks/matrix_completion_att.ipynb`](notebooks/matrix_completion_att.ipynb)
+uses a latent-factor data-generating process to estimate ATT under both a
+rectangular missing-outcome block and jagged, cohort-specific missingness. From
+the repository root:
+
+```bash
+python -m pip install -e './python[demo]'
+jupyter lab python/notebooks/matrix_completion_att.ipynb
+```

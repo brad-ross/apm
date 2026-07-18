@@ -27,6 +27,10 @@ test = [
     "pytest>=6.0",
     "numpy",
 ]
+demo = [
+    "jupyterlab>=4.0",
+    "matplotlib>=3.7",
+]
 dev = [
     "pytest>=6.0", 
     "numpy",
