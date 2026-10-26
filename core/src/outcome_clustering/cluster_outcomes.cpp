@@ -11,6 +11,7 @@
 #include <limits>
 #include <set>
 #include <mutex>
+#include "random_seed.h"
 
 
 #ifdef APM_HAS_TBB
@@ -150,8 +151,8 @@ ClusteringInputs build_clustering_inputs(const InMemoryUnbalancedPanel& panel, s
     return out;
 }
 
-inline std::optional<uint64_t> per_init_seed(std::optional<uint64_t> base, std::size_t init) {
-    return base ? std::optional<uint64_t>(*base + static_cast<uint64_t>(init)) : std::nullopt;
+inline uint64_t per_init_seed(uint64_t base, std::size_t init) {
+    return base + static_cast<uint64_t>(init);
 }
 
 inline arma::uvec to_uvec(const arma::Row<size_t>& r) {
@@ -164,9 +165,11 @@ struct BestForK {
     std::mutex m;
     double best_sse = std::numeric_limits<double>::infinity();
     arma::Row<size_t> best_assignments;
-    void consider(double sse, arma::Row<size_t>&& asg) {
-        if (sse < best_sse) {
+    std::size_t best_init = std::numeric_limits<std::size_t>::max();
+    void consider(double sse, arma::Row<size_t>&& asg, std::size_t init) {
+        if (sse < best_sse || (sse == best_sse && init < best_init)) {
             best_sse = sse;
+            best_init = init;
             best_assignments = std::move(asg);
         }
     }
@@ -234,6 +237,8 @@ comp_outcome_clusterings(
         throw std::invalid_argument("n_inits must be > 0");
     }
 
+    // Resolve once here: worker threads must never touch R's RNG.
+    const uint64_t base_seed = resolve_random_seed(seed);
     std::vector<BestForK> trackers(num_k);
 
 #ifdef APM_HAS_TBB
@@ -244,9 +249,9 @@ comp_outcome_clusterings(
         oneapi::tbb::parallel_for(std::size_t(0), total_tasks, [&](std::size_t idx){
             auto [k_idx, init] = unflatten(idx, num_k, num_inits_val);
             const std::size_t k_val = min_k + k_idx;
-            auto [sse, asg] = kmeans_weighted(inputs.data, inputs.weights, k_val, per_init_seed(seed, init));
+            auto [sse, asg] = kmeans_weighted(inputs.data, inputs.weights, k_val, per_init_seed(base_seed, init));
             std::lock_guard<std::mutex> lock(trackers[k_idx].m);
-            trackers[k_idx].consider(sse, std::move(asg));
+            trackers[k_idx].consider(sse, std::move(asg), init);
         });
     } else
 #endif
@@ -254,8 +259,8 @@ comp_outcome_clusterings(
         for (std::size_t k_idx = 0; k_idx < num_k; ++k_idx) {
             const std::size_t k_val = min_k + k_idx;
             for (std::size_t init = 0; init < num_inits_val; ++init) {
-                auto [sse, asg] = kmeans_weighted(inputs.data, inputs.weights, k_val, per_init_seed(seed, init));
-                trackers[k_idx].consider(sse, std::move(asg));
+                auto [sse, asg] = kmeans_weighted(inputs.data, inputs.weights, k_val, per_init_seed(base_seed, init));
+                trackers[k_idx].consider(sse, std::move(asg), init);
             }
         }
     }

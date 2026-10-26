@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <optional>
 
 namespace apm {
 
@@ -88,9 +89,9 @@ public:
     /**
      * @param N Number of observations.
      * @param B Number of bootstrap draws.
-     * @param seed RNG seed.
+     * @param seed Optional RNG seed; zero is a valid seed.
      */
-    explicit MultinomialBootstrap(std::size_t N, std::size_t B, std::uint64_t seed = 0);
+    explicit MultinomialBootstrap(std::size_t N, std::size_t B, std::optional<std::uint64_t> seed = std::nullopt);
 };
 
 /**
@@ -101,9 +102,9 @@ public:
     /**
      * @param N Number of observations.
      * @param B Number of bootstrap draws.
-     * @param seed RNG seed.
+     * @param seed Optional RNG seed; zero is a valid seed.
      */
-    explicit BayesianBootstrap(std::size_t N, std::size_t B, std::uint64_t seed = 0);
+    explicit BayesianBootstrap(std::size_t N, std::size_t B, std::optional<std::uint64_t> seed = std::nullopt);
 };
 
 /**

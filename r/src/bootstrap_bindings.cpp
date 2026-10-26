@@ -7,7 +7,7 @@
 // Factory returning an external pointer to a shared_ptr<WeightedBootstrap>
 // [[Rcpp::export]]
 SEXP get_weighted_bootstrap_ptr_cpp(std::size_t N, std::size_t B, const std::string& type, Rcpp::Nullable<Rcpp::NumericVector> seed = R_NilValue) {
-    std::uint64_t s = 0;
+    std::optional<std::uint64_t> s;
     if (seed.isNotNull()) {
         Rcpp::NumericVector v(seed);
         if (v.size() > 0 && !Rcpp::NumericVector::is_na(v[0])) {

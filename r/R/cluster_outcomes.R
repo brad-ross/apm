@@ -27,8 +27,9 @@ NULL
 #' }
 #'
 #' **Reproducibility:**
-#' For deterministic results, set `num_threads = 1` and provide a fixed `seed`.
-#' Parallel runs may produce minor differences.
+#' A fixed `seed` (including zero) gives identical results across thread counts.
+#' Explicit seeds initialize a local RNG and do not change R's RNG state.
+#' With `seed = NULL`, randomness follows R's RNG and respects `set.seed()`.
 #'
 #' @param panel An \code{\link{UnbalancedPanel}} R6 object.
 #' @param grid_size Integer; number of quantile grid points (> 0). More points
@@ -86,7 +87,9 @@ comp_outcome_clustering <- function(panel, grid_size, k, n_inits = NULL, seed = 
 #' See \code{\link{comp_outcome_clustering}} for algorithm details.
 #'
 #' **Reproducibility:**
-#' For deterministic results, set `num_threads = 1` and provide a fixed `seed`.
+#' A fixed `seed` (including zero) gives identical results across thread counts.
+#' Explicit seeds initialize a local RNG and do not change R's RNG state.
+#' With `seed = NULL`, randomness follows R's RNG and respects `set.seed()`.
 #'
 #' @param panel An \code{\link{UnbalancedPanel}} R6 object.
 #' @param grid_size Integer; number of quantile grid points (> 0).

@@ -32,7 +32,8 @@ NULL
 #' \describe{
 #'   \item{initialize(N, B, type, seed = NULL)}{Construct with N observations and
 #'     B draws. `type` is either "multinomial" or "bayesian". If `seed` is supplied
-#'     it is passed to the underlying RNG for reproducibility.}
+#'     it is passed to the underlying RNG for reproducibility (including zero).
+#'     With `seed = NULL`, randomness follows R's RNG and `set.seed()`.}
 #'
 #'   \item{n_obs()}{Integer N, number of observations.}
 #'
