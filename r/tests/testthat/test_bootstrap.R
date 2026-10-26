@@ -170,3 +170,20 @@ test_that("Bootstrap inference coverage and p-values behave under the null", {
   fwer <- fwer_reject_count / n_sims
   expect_lt(fwer, sig_level + 0.005)
 })
+test_that("bootstrap seeds include zero and NULL follows set.seed", {
+  for (type in c("multinomial", "bayesian")) {
+    for (seed in c(0, 9001)) {
+      set.seed(32)
+      first <- get_weighted_bootstrap_draws(25L, 40L, type, seed)$weights()
+      set.seed(83)
+      expect_identical(get_weighted_bootstrap_draws(25L, 40L, type, seed)$weights(), first)
+      expect_identical(WeightedBootstrap$new(25L, 40L, type, seed)$weights(), first)
+    }
+    set.seed(123)
+    first <- get_weighted_bootstrap_draws(25L, 40L, type)$weights()
+    set.seed(123)
+    expect_identical(get_weighted_bootstrap_draws(25L, 40L, type)$weights(), first)
+    second <- get_weighted_bootstrap_draws(25L, 40L, type)$weights()
+    expect_false(identical(second, first))
+  }
+})

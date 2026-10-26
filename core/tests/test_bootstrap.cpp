@@ -198,3 +198,13 @@ TEST(BootstrapInferenceTest, RepeatedBootstrapCoverageAndPValues) {
     EXPECT_LT(fwer, sig_level + 0.005)
         << "FWER too high: " << fwer << " (sig_level=" << sig_level << ")";
 }
+TEST(BootstrapTest, ExplicitZeroAndNonzeroSeedsRepeat) {
+    for (const std::uint64_t seed : {0ULL, 9001ULL}) {
+        const MultinomialBootstrap first(25, 40, seed);
+        const MultinomialBootstrap second(25, 40, seed);
+        EXPECT_TRUE(arma::approx_equal(first.weights(), second.weights(), "absdiff", 0.0));
+        const BayesianBootstrap bayes_first(25, 40, seed);
+        const BayesianBootstrap bayes_second(25, 40, seed);
+        EXPECT_TRUE(arma::approx_equal(bayes_first.weights(), bayes_second.weights(), "absdiff", 0.0));
+    }
+}

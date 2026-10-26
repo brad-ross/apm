@@ -3,18 +3,13 @@
 #include <vector>
 #include <cmath>
 #include <limits>
+#include "random_seed.h"
 
 // mlpack support removed
 
 namespace apm {
 
 namespace {
-
-inline void seed_rng_if_requested(const std::optional<uint64_t>& seed) {
-    if (!seed.has_value()) return;
-    arma::arma_rng::set_seed(static_cast<arma::uword>(*seed));
-}
-
 
 inline double weighted_sse(const arma::mat& data,
                            const arma::vec& weights,
@@ -35,10 +30,11 @@ inline double weighted_sse(const arma::mat& data,
 
 arma::mat kpp_init(const arma::mat& data, std::size_t k, std::optional<uint64_t> seed)
 {
-    seed_rng_if_requested(seed);
+    std::mt19937_64 rng(resolve_random_seed(seed));
+    std::uniform_real_distribution<double> uniform(0.0, 1.0);
     const arma::uword T = data.n_cols;
     arma::uvec centers_idx(static_cast<arma::uword>(k));
-    centers_idx(0) = (T <= 1 ? 0u : static_cast<arma::uword>(std::floor(arma::randu() * T)));
+    centers_idx(0) = (T <= 1 ? 0u : static_cast<arma::uword>(std::floor(uniform(rng) * T)));
 
     arma::vec min_d2(T);
     for (arma::uword i = 0; i < T; ++i) {
@@ -46,7 +42,7 @@ arma::mat kpp_init(const arma::mat& data, std::size_t k, std::optional<uint64_t>
     }
     for (arma::uword c = 1; c < static_cast<arma::uword>(k); ++c) {
         const double sum_d2 = arma::accu(min_d2);
-        double r = arma::randu() * (sum_d2 > 0.0 ? sum_d2 : 1.0);
+        double r = uniform(rng) * (sum_d2 > 0.0 ? sum_d2 : 1.0);
         arma::uword pick = 0;
         for (; pick < T; ++pick) {
             r -= min_d2(pick);

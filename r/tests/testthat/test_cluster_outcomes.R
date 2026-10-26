@@ -179,3 +179,56 @@ testthat::test_that("comp_outcome_clustering vs comp_outcome_clusterings: seed c
     testthat::expect_identical(as.integer(single), as.integer(col))
   }
 })
+testthat::test_that("clustering seeds isolate randomness and agree across thread counts", {
+  df <- data.frame(
+    unit_id = rep(1:8, each = 12),
+    outcome_id = rep(1:12, times = 8),
+    y = sin(seq_len(96))
+  )
+  panel <- UnbalancedPanel$new(df, "unit_id", "outcome_id", "y")
+  cluster <- function(seed, threads, n_inits = 20L) {
+    comp_outcome_clusterings(panel, grid_size = 10L, min_k = 2L,
+                            max_k = 5L, n_inits = n_inits,
+                            seed = seed, num_threads = threads)
+  }
+  for (seed in c(0, 9001)) {
+    set.seed(11)
+    rng_before <- .Random.seed
+    testthat::expect_warning(serial <- cluster(seed, 1L), NA)
+    testthat::expect_identical(.Random.seed, rng_before)
+    set.seed(782)
+    testthat::expect_identical(cluster(seed, 1L), serial)
+    for (i in 1:3) testthat::expect_identical(cluster(seed, 4L), serial)
+    for (k in 2:5) {
+      single <- comp_outcome_clustering(panel, 10L, k, n_inits = 20L,
+                                       seed = seed, num_threads = 4L)
+      testthat::expect_identical(as.integer(single), as.integer(serial[, as.character(k)]))
+    }
+  }
+  set.seed(123)
+  testthat::expect_warning(first <- cluster(NULL, 1L), NA)
+  set.seed(123)
+  testthat::expect_identical(cluster(NULL, 4L), first)
+  # A single initialization on these overlapping outcome distributions exposes
+  # different random starts; a constant implementation would fail this check.
+  starts <- lapply(0:10, function(seed) cluster(seed, 1L, n_inits = 1L))
+  testthat::expect_gt(length(unique(starts)), 1L)
+})
+
+testthat::test_that("equal-SSE partitions select the earliest initialization", {
+  # CDF columns are (1,1), (0,1), (0,0), with equal outcome weights.
+  # Either adjacent pair can merge: both distinct partitions have SSE = 1/2.
+  df <- data.frame(unit_id = 1L, outcome_id = 1:3, y = 0:2)
+  panel <- UnbalancedPanel$new(df, "unit_id", "outcome_id", "y")
+  cluster <- function(seed, n_inits, threads) {
+    comp_outcome_clustering(panel, 2L, 2L, n_inits = n_inits,
+                           seed = seed, num_threads = threads)
+  }
+  first_starts <- lapply(0:10, function(seed) cluster(seed, 1L, 1L))
+  testthat::expect_equal(length(unique(first_starts)), 2L)
+  for (seed in 0:10) {
+    earliest <- first_starts[[seed + 1L]]
+    testthat::expect_identical(cluster(seed, 100L, 1L), earliest)
+    for (i in 1:3) testthat::expect_identical(cluster(seed, 100L, 4L), earliest)
+  }
+})

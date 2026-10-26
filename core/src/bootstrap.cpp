@@ -2,6 +2,7 @@
 #include <random>
 #include <sstream>
 #include <cmath>
+#include "random_seed.h"
 
 namespace {
 
@@ -231,12 +232,12 @@ void WeightedBootstrap::validate_indices(const arma::uvec& idx, std::size_t lim,
 
 //--------- MultinomialBootstrap ---------
 
-MultinomialBootstrap::MultinomialBootstrap(std::size_t N, std::size_t B, std::uint64_t seed)
+MultinomialBootstrap::MultinomialBootstrap(std::size_t N, std::size_t B, std::optional<std::uint64_t> seed)
     : WeightedBootstrap([&]() {
           validate_bootstrap_sizes(N, B, "MultinomialBootstrap");
           arma::mat W(N, B, arma::fill::zeros);
 
-          std::mt19937_64 gen(seed ? seed : std::random_device{}());
+          std::mt19937_64 gen(resolve_random_seed(seed));
           std::uniform_int_distribution<std::size_t> unif(0, N - 1);
 
           for (std::size_t b = 0; b < B; ++b) {
@@ -252,7 +253,7 @@ MultinomialBootstrap::MultinomialBootstrap(std::size_t N, std::size_t B, std::ui
 
 //--------- BayesianBootstrap ---------
 
-BayesianBootstrap::BayesianBootstrap(std::size_t N, std::size_t B, std::uint64_t seed)
+BayesianBootstrap::BayesianBootstrap(std::size_t N, std::size_t B, std::optional<std::uint64_t> seed)
     : WeightedBootstrap([&]() {
           validate_bootstrap_sizes(N, B, "BayesianBootstrap");
           // When building for R (via RcppArmadillo), Armadillo's RNG is wired to
@@ -260,8 +261,8 @@ BayesianBootstrap::BayesianBootstrap(std::size_t N, std::size_t B, std::uint64_t
           // arma::arma_rng::set_seed* to prevent warnings and ensure correctness.
           // Outside of R builds, we seed Armadillo's RNG directly.
           #ifndef USING_R
-          if (seed) {
-              arma::arma_rng::set_seed(seed);
+          if (seed.has_value()) {
+              arma::arma_rng::set_seed(*seed);
           } else {
               arma::arma_rng::set_seed_random();
           }
