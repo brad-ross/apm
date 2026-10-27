@@ -317,7 +317,7 @@ arma::vec count_outcomes_with_rank_overlap_per_cohort(
 //' mask <- list(`1` = c(3L))  # Remove outcome 3 from cohort 1
 //' get_masked_observed_outcome_indices(ooi, mask)
 //' # Returns: list(c(1L, 2L), c(2L, 3L, 4L))
-//' @keywords internal
+//' @export
 // [[Rcpp::export]]
 Rcpp::List get_masked_observed_outcome_indices(
     Rcpp::List observed_outcome_indices,

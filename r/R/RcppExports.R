@@ -820,7 +820,7 @@ count_outcomes_with_rank_overlap_per_cohort <- function(observed_outcome_indices
 #' mask <- list(`1` = c(3L))  # Remove outcome 3 from cohort 1
 #' get_masked_observed_outcome_indices(ooi, mask)
 #' # Returns: list(c(1L, 2L), c(2L, 3L, 4L))
-#' @keywords internal
+#' @export
 get_masked_observed_outcome_indices <- function(observed_outcome_indices, cohort_outcomes_to_mask_in = NULL) {
     .Call(`_apm_get_masked_observed_outcome_indices`, observed_outcome_indices, cohort_outcomes_to_mask_in)
 }

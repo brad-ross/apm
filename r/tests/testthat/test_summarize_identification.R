@@ -128,19 +128,20 @@ test_that("count_outcomes_with_rank_overlap_per_cohort matches expected counts",
   expect_equal(as.numeric(weighted_counts), c(10, 10, 5))
 })
 
-test_that("get_masked_observed_outcome_indices masks per cohort as expected", {
+test_that("exported outcome masking preserves per-cohort and empty-mask behavior", {
+  expect_true("get_masked_observed_outcome_indices" %in% getNamespaceExports("apm"))
   ooi <- list(c(1L, 3L), c(2L, 3L))
   # Drop outcome 3 from cohort 1 only
   mask <- list(`1` = c(3L))
-  res <- get_masked_observed_outcome_indices(ooi, mask)
+  res <- apm::get_masked_observed_outcome_indices(ooi, mask)
   expect_equal(res[[1]], c(1L))
   expect_equal(res[[2]], c(2L, 3L))
 
   # NULL mask returns unchanged
-  res2 <- get_masked_observed_outcome_indices(ooi, NULL)
+  res2 <- apm::get_masked_observed_outcome_indices(ooi, NULL)
   expect_identical(res2, ooi)
 
   # Empty mask returns unchanged
-  res3 <- get_masked_observed_outcome_indices(ooi, list())
+  res3 <- apm::get_masked_observed_outcome_indices(ooi, list())
   expect_identical(res3, ooi)
 })
