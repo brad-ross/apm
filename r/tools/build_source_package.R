@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # Build a standalone source distribution without modifying scientific sources.
-# Usage: Rscript tools/build_source_package.R --output-dir DIR [--manifest FILE]
+# Usage: Rscript r/tools/build_source_package.R --output-dir DIR [--manifest FILE]
 main <- function() {
   for (pkg in c("digest", "jsonlite")) {
     if (!requireNamespace(pkg, quietly = TRUE)) stop("Install build dependency: ", pkg)
@@ -17,7 +17,7 @@ main <- function() {
   script_arg <- grep("^--file=", commandArgs(), value = TRUE)
   if (length(script_arg) != 1L) stop("Run with Rscript")
   script <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)
-  root <- dirname(dirname(script))
+  root <- dirname(dirname(dirname(script)))
   output <- options[["output-dir"]]
   dir.create(output, recursive = TRUE, showWarnings = FALSE)
   output <- normalizePath(output, mustWork = TRUE)
@@ -43,7 +43,7 @@ main <- function() {
     path, ignore.case = TRUE)
   copy_sources <- function(from, to, core = FALSE) {
     files <- list.files(from, recursive = TRUE, all.files = TRUE, no.. = TRUE)
-    files <- files[!excluded(files)]
+    files <- files[!excluded(files) & files != "tools/build_source_package.R"]
     if (core) files <- files[grepl("\\.(cpp|cc|c|h|hpp|hh|inc)$", files)]
     for (rel in files) {
       src <- file.path(from, rel)
@@ -94,13 +94,13 @@ main <- function() {
   version <- unname(description[1L, "Version"])
   staged_files <- sort(list.files(stage, recursive = TRUE, all.files = TRUE, no.. = TRUE))
   source_hashes <- setNames(vapply(file.path(stage, staged_files), hash, character(1L)), staged_files)
-  patch <- git("diff", "--binary", "HEAD", "--", "r", "core/src")
+  patch <- git("diff", "--binary", "HEAD", "--", "r", "core/src", shQuote(":(exclude)r/tools/build_source_package.R"))
   provenance <- list(
     schema_version = 1L, package = package, version = version,
     repository = "https://github.com/brad-ross/apm", upstream_commit = revision,
     release_tag = NULL, release_url = NULL,
     historical_numerical_equivalence = "Not verified; no empirical analysis was rerun.",
-    packaging = list(tool = "tools/build_source_package.R", tool_sha256 = hash(script),
+    packaging = list(tool = "r/tools/build_source_package.R", tool_sha256 = hash(script),
       root_license_sha256 = hash(file.path(root, "LICENSE")),
       r_license_sha256 = hash(file.path(root, "r", "LICENSE")),
       tracked_scientific_patch_sha256 = digest::digest(paste(patch, collapse = "\n"), algo = "sha256", serialize = FALSE),
@@ -116,7 +116,7 @@ main <- function() {
   if (!is.null(attr(log, "status"))) stop("R CMD build failed")
   archive <- paste0(package, "_", version, ".tar.gz")
   members <- utils::untar(archive, list = TRUE)
-  if (any(excluded(members))) stop("Source archive contains excluded files")
+  if (any(excluded(members)) || "apm/tools/build_source_package.R" %in% members) stop("Source archive contains excluded files")
   if (!paste0(package, "/inst/APM-SOURCE.json") %in% members) stop("Missing installed provenance")
   destination <- file.path(output, archive)
   if (!file.copy(archive, destination, overwrite = TRUE)) stop("Unable to save archive")
